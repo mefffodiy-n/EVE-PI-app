@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>EVE PI Planner</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="text/javascript" src="/eel.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap');
+        
+        body {
+            font-family: 'Rajdhani', sans-serif;
+            background-color: #060a14;
+            color: #8a9bb3;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        .font-mono-eve { font-family: 'Share Tech Mono', monospace; }
+
+        /* Стилизация панелей "под терминал" */
+        .eve-panel {
+            position: relative;
+            background-color: rgba(11, 17, 26, 0.75);
+            border: 1px solid #1a2639;
+        }
+
+        /* Угловые маркеры (как на скриншоте) */
+        .eve-panel::before, .eve-panel::after {
+            content: '';
+            position: absolute;
+            width: 6px;
+            height: 6px;
+            pointer-events: none;
+        }
+        .eve-panel::before {
+            top: -1px; left: -1px;
+            border-top: 1px solid #38bdf8;
+            border-left: 1px solid #38bdf8;
+        }
+        .eve-panel::after {
+            bottom: -1px; right: -1px;
+            border-bottom: 1px solid #38bdf8;
+            border-right: 1px solid #38bdf8;
+        }
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #1a2639;
+            padding: 8px 12px;
+            background: linear-gradient(90deg, rgba(26, 38, 57, 0.4) 0%, transparent 100%);
+        }
+
+        .panel-header h2 {
+            color: #38bdf8;
+            font-size: 13px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .panel-header h2::before {
+            content: '';
+            display: inline-block;
+            width: 4px;
+            height: 4px;
+            background-color: #38bdf8;
+        }
+
+        /* Элементы управления */
+        .eve-input {
+            background-color: #03050a;
+            border: 1px solid #1a2639;
+            color: #e2e8f0;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 13px;
+            width: 100%;
+            padding: 8px 12px;
+            transition: border-color 0.2s, box-shadow 0.2s;
+            outline: none;
+        }
+
+        .eve-input:focus {
+            border-color: #38bdf8;
+            box-shadow: inset 0 0 8px rgba(56, 189, 248, 0.15);
+        }
+
+        .eve-btn {
+            background: transparent;
+            border: 1px solid #1a2639;
+            color: #8a9bb3;
+            width: 100%;
+            padding: 10px;
+            font-weight: 600;
+            transition: all 0.2s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+        }
+
+        .eve-btn:hover {
+            border-color: #38bdf8;
+            color: #38bdf8;
+            background: rgba(56, 189, 248, 0.05);
+        }
+
+        /* Специфичная кнопка SSO из референса */
+        .sso-btn {
+            border-color: #0f4a73;
+            color: #38bdf8;
+        }
+        .sso-btn:hover { background: rgba(15, 74, 115, 0.3); }
+
+        /* Зеленый статус */
+        .status-dot {
+            width: 8px; height: 8px;
+            background-color: #4ade80;
+            border-radius: 50%;
+            display: inline-block;
+            box-shadow: 0 0 8px #4ade80;
+        }
+
+        /* Скроллбар */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #03050a; }
+        ::-webkit-scrollbar-thumb { background: #1a2639; }
+        ::-webkit-scrollbar-thumb:hover { background: #38bdf8; }
+    </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden">
+
+    <!-- Верхняя навигационная панель (как в браузере R-UNI) -->
+    <header class="border-b border-[#1a2639] bg-[#0b111a] p-3 flex justify-between items-center shrink-0">
+        <div class="flex items-center gap-4">
+            <div class="w-3 h-3 rounded-full bg-[#38bdf8] shadow-[0_0_8px_#38bdf8]"></div>
+            <h1 class="text-lg font-bold text-white tracking-widest">PI DIRECTOR <span class="text-[#38bdf8] font-normal mx-2">·</span> [LOGISTICS PORTAL]</h1>
+        </div>
+        <div class="flex items-center gap-6 font-mono-eve text-xs text-[#5c708a]">
+            <span>REGION <span class="text-white">Fountain</span></span>
+            <span>CORP <span class="text-white">SOTA</span></span>
+            <div class="flex items-center gap-2">
+                <span class="status-dot"></span>
+                <span class="text-[#4ade80] font-bold tracking-widest">OPERATIONAL</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Основная сетка -->
+    <div class="flex-1 p-4 grid grid-cols-12 gap-4 overflow-hidden">
+        
+        <!-- Левая колонка (Управление / Авторизация) -->
+        <div class="col-span-3 flex flex-col gap-4 overflow-y-auto">
+            
+            <!-- Блок Авторизации -->
+            <div class="eve-panel">
+                <div class="panel-header">
+                    <h2>ДОСТУП</h2>
+                    <span class="font-mono-eve text-[10px] text-[#5c708a]">SECURE · ESI V2</span>
+                </div>
+                <div class="p-4">
+                    <button class="eve-btn sso-btn mb-3">
+                        <span class="flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                            ВОЙТИ ЧЕРЕЗ EVE SSO
+                        </span>
+                        <span>→</span>
+                    </button>
+                    <p class="text-[10px] text-[#5c708a] normal-case leading-relaxed">Авторизация через EVE Online SSO. Права и профили навыков (CCU, IC) выдаются автоматически.</p>
+                </div>
+            </div>
+
+            <!-- Блок Настроек Логистики -->
+            <div class="eve-panel">
+                <div class="panel-header">
+                    <h2>ПАРАМЕТРЫ ЛОГИСТИКИ</h2>
+                </div>
+                <div class="p-4 space-y-4">
+                    <div>
+                        <label class="block text-[10px] text-[#5c708a] mb-1">Домашнее созвездие</label>
+                        <select id="baseSelect" class="eve-input">
+                            <option value="ALL">-- ВЕСЬ РЕГИОН --</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] text-[#38bdf8] mb-1 font-bold">Система сборки (P2-P4)</label>
+                        <select id="factorySystem" class="eve-input border-[#0f4a73]">
+                            <option value="">-- ВЫБЕРИТЕ СИСТЕМУ --</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] text-[#5c708a] mb-1">Целевой продукт</label>
+                        <select id="prodSelect" class="eve-input"></select>
+                    </div>
+                    
+                    <button onclick="calculate()" class="eve-btn mt-2">
+                        <span>СГЕНЕРИРОВАТЬ ПЛАН</span>
+                        <span class="text-[#38bdf8]">→</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Центральная и Правая колонки (Результаты) -->
+        <div class="col-span-9 flex flex-col gap-4">
+            
+            <div id="resultBox" class="eve-panel flex-1 flex flex-col overflow-hidden">
+                <div class="panel-header">
+                    <h2>РАСПРЕДЕЛЕНИЕ ПЕРСОНАЖЕЙ</h2>
+                    <span class="font-mono-eve text-[10px] text-[#5c708a]">NODES STATUS · OK</span>
+                </div>
+                
+                <!-- Контейнер для строк расчета -->
+                <div id="setupContent" class="p-4 flex-1 overflow-y-auto space-y-2">
+                    <!-- Заглушка, пока нет расчетов -->
+                    <div class="flex items-center justify-center h-full border border-dashed border-[#1a2639] text-[#5c708a] text-sm">
+                        ОЖИДАНИЕ ВВОДА ПАРАМЕТРОВ...
+                    </div>
+                </div>
+
+                <!-- Подвал панели с кнопкой экспорта -->
+                <div class="border-t border-[#1a2639] p-3 flex justify-between items-center bg-[#070b12]">
+                    <span class="font-mono-eve text-[10px] text-[#5c708a]" id="logStatus">SYS · READY</span>
+                    <button onclick="exportExcel()" class="font-mono-eve text-[11px] text-[#8a9bb3] hover:text-[#38bdf8] transition-colors border border-[#1a2639] px-4 py-1 hover:border-[#38bdf8]">
+                        [ EXPORT TO EXCEL ]
+                    </button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+    let currentPlan = null;
+
+    async function init() {
+        let res = await eel.get_initial_data()();
+        let baseSel = document.getElementById('baseSelect');
+        let prodSel = document.getElementById('prodSelect');
+        
+        res.bases.forEach(b => baseSel.innerHTML += `<option value="${b}">${b}</option>`);
+        res.products.forEach(p => prodSel.innerHTML += `<option value="${p}">${p}</option>`);
+        
+        baseSel.addEventListener('change', async (e) => {
+            let sysSel = document.getElementById('factorySystem');
+            sysSel.innerHTML = '<option value="">-- ВЫБЕРИТЕ СИСТЕМУ --</option>';
+            if(e.target.value !== 'ALL') {
+                let sys = await eel.get_systems(e.target.value)();
+                sys.forEach(s => sysSel.innerHTML += `<option value="${s}">${s}</option>`);
+            }
+        });
+    }
+
+    async function calculate() {
+        let base = document.getElementById('baseSelect').value;
+        let sys = document.getElementById('factorySystem').value;
+        let prod = document.getElementById('prodSelect').value;
+        
+        if(!sys) return alert("Выберите хаб для переработки!");
+        
+        document.getElementById('setupContent').innerHTML = '<div class="text-[#38bdf8] p-4 font-mono-eve">CALCULATING ROUTES...</div>';
+        
+        let res = await eel.calculate_plan(base, sys, prod)();
+        if(res.status === "success") {
+            currentPlan = res.data;
+            let html = '';
+            res.data.forEach(p => {
+                let color = p.role.includes("Переработка") ? "text-[#38bdf8]" : "text-[#4ade80]";
+                html += `
+                <div class="bg-[#03050a] border border-[#1a2639] p-3 flex justify-between items-center">
+                    <div class="w-1/4"><span class="text-white font-bold">${p.character}</span><br><span class="text-[#5c708a] text-[10px]">${p.role}</span></div>
+                    <div class="w-1/4 text-center text-[#8a9bb3] text-xs">${p.system}<br><span class="text-[10px]">${p.planet}</span></div>
+                    <div class="w-1/2 text-right font-mono-eve text-[11px]">
+                        IN: <span class="text-[#5c708a]">${p.res_in}</span><br>
+                        OUT: <span class="${color} font-bold">${p.res_out}</span>
+                    </div>
+                </div>`;
+            });
+            document.getElementById('setupContent').innerHTML = html;
+            document.getElementById('logStatus').innerText = "SYS · PLAN GENERATED";
+            document.getElementById('logStatus').className = "font-mono-eve text-[10px] text-[#4ade80]";
+        }
+    }
+
+    async function exportExcel() {
+        if(!currentPlan) return alert("Сначала сгенерируйте план!");
+        let res = await eel.export_plan_excel(currentPlan)();
+        if(res.status === "success") alert("План успешно выгружен в Excel!");
+    }
+
+    window.onload = init;
+    </script>
+</body>
+</html>
