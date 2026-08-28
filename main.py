@@ -68,7 +68,6 @@ PI_TYPE_IDS = {}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Логика при запуске (startup)
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(
@@ -84,9 +83,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print("[ERROR] ESI:", e)
         
-    yield # Сервер работает
-    
-    # Логика при остановке (shutdown)
+    yield 
     PI_TYPE_IDS.clear()
 
 app = FastAPI(title="PI Director API", lifespan=lifespan)
@@ -111,6 +108,8 @@ def load_planet_data():
     df = pd.read_csv('planet industry.csv', sep=';', skiprows=1, encoding='utf-8')
     df = df.dropna(subset=['Constellation'])
     df = df[df['Constellation'] != 'max P2']
+    # Исключаем констелляцию PHOENIX
+    df = df[df['Constellation'].str.upper() != 'PHOENIX']
     return df
 
 @app.get("/api/auth/callback")
@@ -214,7 +213,6 @@ def calculate_plan(req: PlanRequest):
         total_f_planets = len(f_slots)
         total_m_planets = len(m_slots)
         
-        # 1. СЧИТАЕМ БАЗОВУЮ КОРЗИНУ ПО ВСЕМ ПРОДУКТАМ
         req_f_base = 0
         req_m_base = 0
         
@@ -231,7 +229,6 @@ def calculate_plan(req: PlanRequest):
             req_f_base += math.ceil(ht_base / 16) + math.ceil(adv_base / 24)
             req_m_base += math.ceil(p1_base / 12)
 
-        # 2. ГЛОБАЛЬНЫЙ МНОЖИТЕЛЬ
         if req_f_base > 0 and req_m_base > 0:
             k_f = total_f_planets // req_f_base
             k_all = (total_f_planets + total_m_planets) // (req_f_base + req_m_base)
@@ -240,7 +237,6 @@ def calculate_plan(req: PlanRequest):
         else:
             chain_multiplier = 1
 
-        # 3. СТРОИМ ИТОГОВЫЕ ЦЕПОЧКИ (ИЗОЛИРОВАННО ДЛЯ КАЖДОГО ПРОДУКТА)
         combined_prod_reqs = {}
         for target in req.target_products:
             target_ptype = recipes.get(target, {}).get('type', 'P4')
@@ -291,12 +287,19 @@ def calculate_plan(req: PlanRequest):
         for t in factory_tasks:
             char = f_slots.pop(0) if f_slots else {"name": "Нет альта", "ccu": 5, "character_id": 1}
             plan.append({
-                "constellation": req.constellation, "system": req.factory_sys, "planet": "Любая Barren",
-                "character": char['name'], "char_id": char['character_id'],
+                "constellation": req.constellation, 
+                "system": req.factory_sys, 
+                "planet": "Любая Barren",
+                "character": char['name'], 
+                "char_id": char['character_id'],
                 "assignment": f"Сборка {t['type']} ({t['ins']})",
-                "res_out": t['prod'], "type_id": PI_TYPE_IDS.get(t['prod'], 0),
+                "res_out": t['prod'], 
+                "type_id": PI_TYPE_IDS.get(t['prod'], 0),
                 "structures": f"{t['facts']} заводов",
-                "role": f"🏭 Переработка {t['type']} (x{chain_multiplier})", "res_in": t['ins'], "pg_load": 95, "cpu_load": 95
+                "role": f"🏭 Переработка {t['type']} (x{chain_multiplier})", 
+                "res_in": t['ins'], 
+                "cc_type": "1x Barren Command Center", # ДОБАВЛЕН КОМАНДНЫЙ ЦЕНТР ДЛЯ ФАБРИК
+                "pg_load": 95, "cpu_load": 95
             })
 
         combined_m_slots = m_slots + f_slots
@@ -352,12 +355,19 @@ def calculate_plan(req: PlanRequest):
                 char = combined_m_slots.pop(0) if combined_m_slots else {"name": "Нет альта", "ccu": 0, "character_id": 1}
                 out_p1 = p0_needs[p0]['p1']
                 plan.append({
-                    "constellation": bp['Constellation'], "system": bp['System'], "planet": f"Planet {bp['Planet']} ({bp['Type']})",
-                    "character": char['name'], "char_id": char['character_id'],
+                    "constellation": bp['Constellation'], 
+                    "system": bp['System'], 
+                    "planet": f"Planet {bp['Planet']} ({bp['Type']})",
+                    "character": char['name'], 
+                    "char_id": char['character_id'],
                     "assignment": f"Добыча P0 -> P1 ({p0})",
-                    "res_out": out_p1, "type_id": PI_TYPE_IDS.get(out_p1, 0),
+                    "res_out": out_p1, 
+                    "type_id": PI_TYPE_IDS.get(out_p1, 0),
                     "structures": "Экстрактор + 12 Basic Factories",
-                    "role": role_text, "res_in": "-", "pg_load": 85, "cpu_load": 75
+                    "role": role_text, 
+                    "res_in": "-", 
+                    "cc_type": f"1x {bp['Type']} Command Center", # ДОБАВЛЕН КОМАНДНЫЙ ЦЕНТР ДЛЯ ШАХТЕРОВ
+                    "pg_load": 85, "cpu_load": 75
                 })
                 
         return {"status": "success", "data": plan, "warning": warning}
@@ -369,22 +379,58 @@ def calculate_plan(req: PlanRequest):
 def export_plan(req: ExportRequest):
     try:
         formatted_data = []
+        cc_summary = {} # Словарь для подсчета
+        
         for row in req.plan_data:
+            cc_type = row.get('cc_type', '')
+            if cc_type:
+                cc_name = cc_type.replace("1x ", "")
+                cc_summary[cc_name] = cc_summary.get(cc_name, 0) + 1
+                
             formatted_data.append({
-                "Констелляция": row.get('constellation', ''), "Система": row.get('system', ''),
-                "Планета": row.get('planet', ''), "Персонаж": row.get('character', ''),
-                "Назначение": row.get('assignment', ''), "Выходной ресурс": row.get('res_out', ''),
-                "Количество заводов": row.get('structures', '')
+                "Констелляция": row.get('constellation', ''), 
+                "Система": row.get('system', ''),
+                "Планета": row.get('planet', ''), 
+                "Персонаж": row.get('character', ''),
+                "Назначение": row.get('assignment', ''), 
+                "Выходной ресурс": row.get('res_out', ''),
+                "Количество заводов": row.get('structures', ''),
+                "Командный центр": cc_type # ВЫГРУЖАЕМ В EXCEL
             })
-        df = pd.DataFrame(formatted_data)
+            
+        df_plan = pd.DataFrame(formatted_data)
+        
+        summary_data = [{"Тип Командного Центра": k, "Количество": v} for k, v in cc_summary.items()]
+        df_summary = pd.DataFrame(summary_data)
+
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df.to_excel(writer, index=False, sheet_name='PI Plan')
-            ws = writer.sheets['PI Plan']
+            df_plan.to_excel(writer, index=False, sheet_name='PI Plan')
+            ws_plan = writer.sheets['PI Plan']
             fill_h = PatternFill(start_color="548235", end_color="548235", fill_type="solid")
-            for c in ws[1]: c.fill, c.font = fill_h, Font(color="FFFFFF", bold=True)
-            for col in ws.columns: ws.column_dimensions[col[0].column_letter].width = max((len(str(c.value)) for c in col if c.value), default=0) + 2
+            for c in ws_plan[1]: c.fill, c.font = fill_h, Font(color="FFFFFF", bold=True)
+            for col in ws_plan.columns: 
+                ws_plan.column_dimensions[col[0].column_letter].width = max((len(str(c.value)) for c in col if c.value), default=0) + 2
+                
+            # Генерируем вторую вкладку со списком покупок
+            if not df_summary.empty:
+                df_summary.to_excel(writer, index=False, sheet_name='Shopping List')
+                ws_summary = writer.sheets['Shopping List']
+                fill_shop = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
+                for c in ws_summary[1]: c.fill, c.font = fill_shop, Font(color="FFFFFF", bold=True)
+                for col in ws_summary.columns: 
+                    ws_summary.column_dimensions[col[0].column_letter].width = max((len(str(c.value)) for c in col if c.value), default=0) + 2
+
         output.seek(0)
-        return StreamingResponse(output, headers={'Content-Disposition': 'attachment; filename="PI_Plan.xlsx"'}, media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        return StreamingResponse(
+            output, 
+            headers={'Content-Disposition': 'attachment; filename="PI_Plan.xlsx"'}, 
+            media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
     except Exception as e:
+        print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
+
+if __name__ == '__main__':
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
