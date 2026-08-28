@@ -61,7 +61,10 @@ PI_TYPE_NAMES = [
     "Precious Metals", "Chiral Structures", "Biomass", "Oxidizing Compound", "Plasmoids",
     "Aqueous Liquids", "Autotrophs", "Base Metals", "Carbon Compounds", "Complex Organisms", 
     "Felsic Magma", "Heavy Metals", "Ionic Solutions", "Microorganisms", "Noble Gas", 
-    "Noble Metals", "Non-CS Crystals", "Planktic Colonies", "Reactive Gas", "Suspended Plasma"
+    "Noble Metals", "Non-CS Crystals", "Planktic Colonies", "Reactive Gas", "Suspended Plasma",
+    "Barren Command Center", "Gas Command Center", "Ice Command Center", 
+    "Lava Command Center", "Oceanic Command Center", "Plasma Command Center", 
+    "Storm Command Center", "Temperate Command Center"
 ]
 
 PI_TYPE_IDS = {}
