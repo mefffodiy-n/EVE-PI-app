@@ -99,10 +99,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+class SystemRequest(BaseModel):
+    constellations: List[str]
+
 class PlanRequest(BaseModel):
-    constellation: str
+    constellations: List[str] # Изменено с constellation: str на список
     factory_sys: str
-    target_products: List[str] 
+    target_products: List[str]
 
 class ExportRequest(BaseModel):
     plan_data: list
@@ -111,8 +114,7 @@ def load_planet_data():
     df = pd.read_csv('planet industry.csv', sep=';', skiprows=1, encoding='utf-8')
     df = df.dropna(subset=['Constellation'])
     df = df[df['Constellation'] != 'max P2']
-    # Исключаем констелляцию PHOENIX
-    df = df[df['Constellation'].str.upper() != 'PHOENIX']
+    # Больше ничего не удаляем, база загружается целиком
     return df
 
 @app.get("/api/auth/callback")
@@ -160,11 +162,14 @@ async def get_best_production():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/systems/{constellation}")
-def get_systems(constellation: str):
+@app.post("/api/systems")
+def get_systems(req: SystemRequest):
     df = load_planet_data()
-    if constellation == "ALL": sys = sorted(list(df['System'].dropna().unique()))
-    else: sys = sorted(list(df[df['Constellation'] == constellation]['System'].dropna().unique()))
+    # Если список пуст или пользователь не выбрал ничего, отдаем пустой список
+    if not req.constellations:
+        return {"status": "success", "systems": []}
+        
+    sys = sorted(list(df[df['Constellation'].isin(req.constellations)]['System'].dropna().unique()))
     return {"status": "success", "systems": sys}
 
 @app.post("/api/calculate")
@@ -269,9 +274,14 @@ def calculate_plan(req: PlanRequest):
         elif req_total_m_planets > available_m:
             warning = f"⚠️ ДЕФИЦИТ СЫРЬЯ: Требуется еще {req_total_m_planets - available_m} добывающих планет."
 
+        # Было: search_df = df.copy() if req.constellation == "ALL" else ...
+        # Стало:
         df = load_planet_data()
-        search_df = df.copy() if req.constellation == "ALL" else df[df['Constellation'] == req.constellation].copy()
+        search_df = df[df['Constellation'].isin(req.constellations)].copy() if req.constellations else df.copy()
         
+        # Автоматически находим созвездие, к которому принадлежит система заводов
+        factory_const_series = df[df['System'] == req.factory_sys]['Constellation']
+        factory_const = factory_const_series.iloc[0] if not factory_const_series.empty else "Unknown"
         plan = []
         factory_tasks = []
         for p, d in combined_prod_reqs.items():
@@ -290,9 +300,10 @@ def calculate_plan(req: PlanRequest):
         for t in factory_tasks:
             char = f_slots.pop(0) if f_slots else {"name": "Нет альта", "ccu": 5, "character_id": 1}
             plan.append({
-                "constellation": req.constellation, 
+                "constellation": factory_const, # <-- Изменено здесь
                 "system": req.factory_sys, 
                 "planet": "Любая Barren",
+                # ... остальной код словаря без изменений
                 "character": char['name'], 
                 "char_id": char['character_id'],
                 "assignment": f"Сборка {t['type']} ({t['ins']})",
