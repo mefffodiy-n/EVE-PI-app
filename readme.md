@@ -19,7 +19,7 @@ Production Chain Generator: Recursively unfolds complex items (P2, P3, P4) down 
 Excel Export with Native Dialog: Saves structured logistics plans (.xlsx) containing character nicknames, systems, input/output resources, and planet types using native system dialog windows.
 
 Tech Stack
-Backend: Python, Eel (bridging Python and web UI), Pandas (data processing)
+Backend: Python, Pandas (data processing)
 
 Frontend: HTML5, Tailwind CSS, Google Fonts (Rajdhani, Share Tech Mono)
 
@@ -43,7 +43,7 @@ EVE PI Manager (PI Director) — это продвинутое веб-прило
 Нативный экспорт в Excel: Сохранение структурированных отчетов (.xlsx) с выбором пути через стандартное системное окно. Отчет содержит ник персонажа, систему, входящие и исходящие ресурсы.
 
 Технологический стек
-Бэкенд: Python, Eel, Pandas
+Бэкенд: Python, Pandas
 
 Фронтенд: HTML5, Tailwind CSS, Google Fonts (Rajdhani, Share Tech Mono)
 
