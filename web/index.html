@@ -50,60 +50,6 @@
 </head>
 <body class="h-screen flex flex-col overflow-hidden select-none">
 
-    <!-- HELP MODAL -->
-    <div id="helpModal" class="fixed inset-0 bg-black/80 z-[100] hidden flex items-center justify-center backdrop-blur-sm transition-opacity">
-        <div class="bg-[var(--bg-main)] border border-[var(--accent)] w-full max-w-3xl p-6 shadow-[0_0_30px_rgba(56,189,248,0.15)] relative">
-            <div class="flex justify-between items-center border-b border-dynamic pb-3 mb-4">
-                <h2 class="text-[var(--accent)] font-bold tracking-widest text-lg flex items-center gap-3">
-                    <span class="w-2 h-2 bg-[var(--accent)]"></span> 
-                    <span class="ru-text">РУКОВОДСТВО ПО ЭКСПЛУАТАЦИИ</span>
-                    <span class="en-text">OPERATIONAL MANUAL (HELP)</span>
-                </h2>
-                <button onclick="closeHelp()" class="text-white-dynamic hover:text-[#ef4444] font-mono-eve text-xl transition-colors">✖</button>
-            </div>
-            <!-- Russian Text -->
-            <div class="space-y-4 text-[13px] text-white-dynamic leading-relaxed font-mono-eve tracking-wide ru-text">
-                <p><span class="text-[var(--accent)]">01. АВТОРИЗАЦИЯ:</span> Во вкладке "Настройки & Рынок" нажмите "Войти через EVE SSO". Система загрузит ваших персонажей и профилирует их по навыку Command Center Upgrades (CCU).</p>
-                <p><span class="text-[var(--accent)]">02. АНАЛИЗ РЫНКА:</span> Кнопка "Алгоритм оценки выгоды" свяжется с Fuzzwork (рынок Житы), отсортирует товары по максимальной цене скупки и выберет лучший продукт.</p>
-                <p><span class="text-[var(--accent)]">03. ПЛАНИРОВАНИЕ:</span> Выберите созвездие для добычи, систему для сборки (Фабрики) и укажите целевые продукты. Нажмите "Сгенерировать производственный план".</p>
-                <p><span class="text-[var(--accent)]">04. УПРАВЛЕНИЕ ДАШБОРДОМ:</span> Результаты появятся во вкладке "Дашборд". Используйте иконки в верхней панели для переключения видов (Details, List, Grid). Меню сортировки поможет быстро вывести наверх заводы с истекающим циклом таймера (By expiry time).</p>
-                <p><span class="text-[var(--accent)]">05. ЗАКУПКИ И ЭКСПОРТ:</span> Ниже списка планет на дашборде формируется "Shopping List" с подсчетом нужных командных центров. Как только план будет успешно сгенерирован, в верхней панели загорится зеленая кнопка "ЭКСПОРТ (EXCEL)".</p>
-            </div>
-            <!-- English Text -->
-            <div class="space-y-4 text-[13px] text-white-dynamic leading-relaxed font-mono-eve tracking-wide en-text">
-                <p><span class="text-[var(--accent)]">01. AUTHORIZATION:</span> In the "Settings & Market" tab, click "Login via EVE SSO". The system will load your characters and profile their Command Center Upgrades (CCU) skills.</p>
-                <p><span class="text-[var(--accent)]">02. MARKET INTELLIGENCE:</span> The "Profitability Algorithm" connects to Fuzzwork (Jita market), sorts items by max buy price, and selects the most profitable product automatically.</p>
-                <p><span class="text-[var(--accent)]">03. PLANNING:</span> Select an extraction constellation, a factory system, and target products. Click "Generate Production Plan".</p>
-                <p><span class="text-[var(--accent)]">04. DASHBOARD CONTROL:</span> Results will appear in the "Dashboard" tab. Use the top toolbar icons to switch views (Details, List, Grid). Use the sorting menu to quickly float expiring factories to the top (Sort by expiry time).</p>
-                <p><span class="text-[var(--accent)]">05. PURCHASING & EXPORT:</span> Below the planetary list on the dashboard, a "Shopping List" dynamically calculates the required Command Centers. Once a plan is successfully generated, a green "EXPORT TO EXCEL" button will activate.</p>
-            </div>
-            <div class="mt-6 pt-4 border-t border-dynamic text-right">
-                <button onclick="closeHelp()" class="eve-btn w-auto inline-block px-8 border-[var(--accent)] text-[var(--accent)]">
-                    <span class="ru-text">ЗАКРЫТЬ</span><span class="en-text">CLOSE</span>
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- DETAILS MODAL (EVE UI) -->
-    <div id="detailsModal" class="fixed inset-0 bg-black/80 z-[100] hidden flex items-center justify-center backdrop-blur-sm transition-opacity">
-        <div class="bg-[var(--bg-main)] border border-[var(--border-color)] w-full max-w-3xl h-[80vh] flex flex-col shadow-2xl relative rounded overflow-hidden">
-            <div class="flex justify-between items-center p-3 border-b border-dynamic bg-header-dynamic">
-                <div class="flex items-center gap-3">
-                    <img id="modalCharAvatar" src="" class="w-10 h-10 rounded-full border border-dynamic">
-                    <div>
-                        <div id="modalCharName" class="text-white-dynamic font-bold text-sm"></div>
-                        <div id="modalPlanetName" class="text-xs text-pink-600 font-mono-eve"></div>
-                    </div>
-                </div>
-                <button onclick="closeDetailsModal()" class="eve-btn w-auto px-4 py-1 text-xs border-[var(--accent)] text-[var(--accent)] font-mono-eve">
-                    <span class="ru-text">ЗАКРЫТЬ</span><span class="en-text">CLOSE</span>
-                </button>
-            </div>
-            <div id="modalBody" class="flex-1 overflow-y-auto p-4 space-y-2 custom-scroll font-mono-eve"></div>
-        </div>
-    </div>
-
     <!-- HEADER -->
     <header class="bg-header-dynamic border-b p-2.5 flex justify-between items-center shrink-0 z-20">
         <div class="flex items-center gap-6">
@@ -112,7 +58,6 @@
                 <h1 class="text-lg font-bold text-white-dynamic tracking-widest">PI DIRECTOR</h1>
             </div>
             
-            <!-- TABS & EXPORT BUTTON -->
             <nav class="flex items-center gap-2 font-mono-eve text-xs">
                 <button onclick="switchTab('dashboard')" id="tab-btn-dashboard" class="px-3 py-1.5 border border-[var(--accent)] text-[var(--accent)] bg-[var(--accent-hover)] rounded transition-all">
                     <span class="ru-text">ДАШБОРД</span><span class="en-text">DASHBOARD</span>
@@ -128,25 +73,20 @@
             </nav>
         </div>
         
-        <!-- DASHBOARD CONTROLS (VIEWS & SORTING) -->
         <div class="flex items-center gap-4 font-mono-eve text-xs">
             <div id="viewControls" class="flex items-center gap-1.5 bg-[var(--bg-input)] border border-dynamic p-1 rounded">
-                <!-- Details View -->
                 <button onclick="setViewMode('details')" id="view-btn-details" data-title-en="Details view" data-title-ru="Детальный вид" class="p-1 text-[var(--accent)] bg-[var(--accent-hover)] rounded hover:text-white">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
                 </button>
-                <!-- List View -->
                 <button onclick="setViewMode('list')" id="view-btn-list" data-title-en="List view" data-title-ru="Вид списком" class="p-1 text-[var(--text-main)] rounded hover:text-white">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" d="M4 6h16M4 10h16M4 14h16M4 18h16"></path></svg>
                 </button>
-                <!-- Grid View -->
                 <button onclick="setViewMode('grid')" id="view-btn-grid" data-title-en="Grid view" data-title-ru="Вид сеткой" class="p-1 text-[var(--text-main)] rounded hover:text-white">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zM14 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"></path></svg>
                 </button>
 
                 <div class="h-4 w-[1px] bg-[var(--border-color)] mx-1"></div>
 
-                <!-- Sort Menu -->
                 <div class="relative">
                     <button onclick="toggleSortMenu(event)" data-title-en="Sort by" data-title-ru="Сортировка" class="p-1 text-[var(--text-main)] hover:text-white rounded flex items-center gap-1">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"></path></svg>
@@ -168,11 +108,9 @@
                 </div>
             </div>
 
-            <!-- Global Toggles -->
             <button onclick="toggleLang()" class="hover:text-[var(--accent)] transition-colors">
                 <span class="ru-text">[ 🌐 RU ]</span><span class="en-text">[ 🌐 EN ]</span>
             </button>
-            <button onclick="openHelp()" class="hover:text-[var(--accent)] transition-colors">[ ❓ HELP ]</button>
             <button onclick="toggleTheme()" class="hover:text-[var(--accent)] transition-colors">[ 🌓 THEME ]</button>
         </div>
     </header>
@@ -182,6 +120,11 @@
         
         <!-- ================= TAB 1: DASHBOARD ================= -->
         <div id="tab-dashboard-content" class="absolute inset-0 p-4 overflow-y-auto custom-scroll flex flex-col">
+            
+            <!-- AI ADVISOR CONTAINER -->
+            <div id="recommendationContainer"></div>
+            
+            <!-- WARNINGS CONTAINER -->
             <div id="warningContainer"></div>
             
             <div id="dashboardViewContainer" class="flex-1 flex flex-col">
@@ -191,42 +134,13 @@
                 </div>
             </div>
 
-            <!-- Shopping List Section (Appears after calculation) -->
             <div id="shoppingListContainer" class="mt-6 border-t border-dynamic pt-4 hidden"></div>
         </div>
 
         <!-- ================= TAB 2: SETTINGS & MARKET ================= -->
         <div id="tab-settings-content" class="absolute inset-0 p-6 overflow-y-auto custom-scroll hidden bg-[var(--bg-main)]">
             <div class="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-12 gap-6 pb-12">
-                
-                <!-- Left Column: Settings -->
                 <div class="md:col-span-5 flex flex-col gap-6">
-                    <!-- Global Interface Preferences -->
-                    <div class="eve-panel rounded">
-                        <div class="panel-header">
-                            <h2 class="ru-text">НАСТРОЙКИ ИНТЕРФЕЙСА</h2>
-                            <h2 class="en-text">GLOBAL PREFERENCES</h2>
-                        </div>
-                        <div class="p-4 flex flex-col gap-2 font-mono-eve text-xs">
-                            <button onclick="toggleLang()" class="eve-btn">
-                                <span class="ru-text">ЯЗЫК: РУССКИЙ (СМЕНИТЬ НА EN)</span>
-                                <span class="en-text">LANGUAGE: ENGLISH (SWITCH TO RU)</span>
-                                <span>🌐</span>
-                            </button>
-                            <button onclick="toggleTheme()" class="eve-btn">
-                                <span class="ru-text">ТЕМА: ПЕРЕКЛЮЧИТЬ (СВЕТЛАЯ/ТЕМНАЯ)</span>
-                                <span class="en-text">THEME: TOGGLE (LIGHT/DARK)</span>
-                                <span>🌓</span>
-                            </button>
-                            <button onclick="openHelp()" class="eve-btn text-[var(--accent)] border-[var(--accent)]">
-                                <span class="ru-text">ОТКРЫТЬ РУКОВОДСТВО (HELP)</span>
-                                <span class="en-text">OPEN OPERATIONAL MANUAL (HELP)</span>
-                                <span>❓</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- SSO Access Panel -->
                     <div class="eve-panel rounded">
                         <div class="panel-header">
                             <h2 class="ru-text">УПРАВЛЕНИЕ ДОСТУПОМ (EVE SSO)</h2>
@@ -239,7 +153,6 @@
                         </div>
                     </div>
 
-                    <!-- Market Intelligence Panel -->
                     <div class="eve-panel rounded">
                         <div class="panel-header">
                             <h2>MARKET INTELLIGENCE (JITA)</h2>
@@ -256,7 +169,6 @@
                     </div>
                 </div>
 
-                <!-- Right Column: Logistics Configuration -->
                 <div class="md:col-span-7 flex flex-col gap-6">
                     <div class="eve-panel rounded">
                         <div class="panel-header">
@@ -264,22 +176,18 @@
                             <h2 class="en-text">LOGISTICS PARAMETERS</h2>
                         </div>
                         <div class="p-5 space-y-4">
-                            <!-- Constellations (Multi-select) -->
                             <div>
                                 <label class="block text-[11px] mb-1 ru-text">Созвездия для добычи сырья</label>
                                 <label class="block text-[11px] mb-1 en-text">Extraction Constellations</label>
                                 <div class="relative" id="customConstDropdown">
                                     <div id="customConstHeader" class="eve-input flex items-center justify-between cursor-pointer rounded">
-                                        <div id="constSelectedText" class="flex flex-wrap items-center gap-1 overflow-hidden h-6 text-white-dynamic font-mono-eve text-[12px]">
-                                            <!-- Текст будет генерироваться через JS -->
-                                        </div>
+                                        <div id="constSelectedText" class="flex flex-wrap items-center gap-1 overflow-hidden h-6 text-white-dynamic font-mono-eve text-[12px]"></div>
                                         <span class="text-[10px] text-[var(--accent)]">▼</span>
                                     </div>
                                     <div id="customConstOptions" class="absolute z-50 w-full bg-[var(--bg-panel)] border border-dynamic mt-1 hidden max-h-64 overflow-y-auto shadow-2xl backdrop-blur-md custom-scroll rounded"></div>
                                 </div>
                             </div>
 
-                            <!-- Factory System -->
                             <div>
                                 <label class="block text-[11px] text-[var(--accent)] mb-1 font-bold ru-text">Система для заводов переработки (Factory)</label>
                                 <label class="block text-[11px] text-[var(--accent)] mb-1 font-bold en-text">Processing Factory System</label>
@@ -289,7 +197,6 @@
                                 </select>
                             </div>
 
-                            <!-- Multi-Product Dropdown -->
                             <div>
                                 <label class="block text-[11px] mb-1 text-[var(--accent)] font-bold ru-text">Целевые продукты (Мультивыбор с иконками)</label>
                                 <label class="block text-[11px] mb-1 text-[var(--accent)] font-bold en-text">Target Products (Multi-select)</label>
@@ -317,6 +224,25 @@
 
     </main>
 
+    <!-- DETAILS MODAL -->
+    <div id="detailsModal" class="fixed inset-0 bg-black/80 z-[100] hidden flex items-center justify-center backdrop-blur-sm transition-opacity">
+        <div class="bg-[var(--bg-main)] border border-[var(--border-color)] w-full max-w-3xl h-[80vh] flex flex-col shadow-2xl relative rounded overflow-hidden">
+            <div class="flex justify-between items-center p-3 border-b border-dynamic bg-header-dynamic">
+                <div class="flex items-center gap-3">
+                    <img id="modalCharAvatar" src="" class="w-10 h-10 rounded-full border border-dynamic">
+                    <div>
+                        <div id="modalCharName" class="text-white-dynamic font-bold text-sm"></div>
+                        <div id="modalPlanetName" class="text-xs text-pink-600 font-mono-eve"></div>
+                    </div>
+                </div>
+                <button onclick="closeDetailsModal()" class="eve-btn w-auto px-4 py-1 text-xs border-[var(--accent)] text-[var(--accent)] font-mono-eve">
+                    <span class="ru-text">ЗАКРЫТЬ</span><span class="en-text">CLOSE</span>
+                </button>
+            </div>
+            <div id="modalBody" class="flex-1 overflow-y-auto p-4 space-y-2 custom-scroll font-mono-eve"></div>
+        </div>
+    </div>
+
     <script>
         const API_BASE = 'http://localhost:8000/api';
         let currentPlan = null;
@@ -342,7 +268,6 @@
             'https://images.evetech.net/types/2016/icon?size=64'
         ];
 
-        // --- INIT & LOGISTICS DATA ---
         async function init() {
             let token = localStorage.getItem('eve_token');
             if (token) renderAuthUser();
@@ -365,24 +290,30 @@
 
         async function onConstellationChange() {
             let sysSel = document.getElementById('factorySystem');
+            let currentVal = sysSel.value; // Сохраняем выбранную систему перед перерисовкой
+            
             sysSel.innerHTML = `<option value="">${isEnglish ? '-- SELECT SYSTEM --' : '-- ВЫБЕРИТЕ СИСТЕМУ --'}</option>`;
             
             if (selectedConstellations.length === 0) return;
 
             try {
                 let sysRes = await fetch(`${API_BASE}/systems`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ constellations: selectedConstellations })
                 });
                 let sysData = await sysRes.json();
+                
                 if (sysData.systems) {
                     sysData.systems.forEach(s => sysSel.innerHTML += `<option value="${s}">${s}</option>`);
+                    
+                    // Если сохраненная система есть в новом списке, возвращаем её
+                    if (currentVal && sysData.systems.includes(currentVal)) {
+                        sysSel.value = currentVal;
+                    }
                 }
             } catch (e) { console.error('Fetch systems error:', e); }
         }
 
-        // --- MULTI-SELECT DROPDOWN LOGIC ---
         function renderDropdownList() {
             let html = '';
             allProductsList.forEach(p => {
@@ -390,17 +321,11 @@
                 let isSel = selectedProducts.includes(p);
                 let iconHtml = tid ? `<img src="https://images.evetech.net/types/${tid}/icon?size=64" class="w-6 h-6 rounded border border-dynamic shrink-0 bg-black/50" />` : '';
                 let bgClass = isSel ? 'bg-[var(--accent-hover)] border-l-2 border-[var(--accent)]' : 'border-l-2 border-transparent';
-                
                 html += `
-                    <div class="flex items-center gap-3 p-2 hover:bg-[var(--accent-hover)] cursor-pointer border-b border-dynamic last:border-none transition-colors ${bgClass}"
-                         onclick="toggleProduct('${p}', event)">
-                        <div class="w-3.5 h-3.5 border border-dynamic flex items-center justify-center shrink-0">
-                            ${isSel ? '<div class="w-2 h-2 bg-[var(--accent)]"></div>' : ''}
-                        </div>
-                        ${iconHtml}
-                        <span class="text-white-dynamic font-mono-eve text-[12px]">${p}</span>
-                    </div>
-                `;
+                    <div class="flex items-center gap-3 p-2 hover:bg-[var(--accent-hover)] cursor-pointer border-b border-dynamic last:border-none transition-colors ${bgClass}" onclick="toggleProduct('${p}', event)">
+                        <div class="w-3.5 h-3.5 border border-dynamic flex items-center justify-center shrink-0">${isSel ? '<div class="w-2 h-2 bg-[var(--accent)]"></div>' : ''}</div>
+                        ${iconHtml} <span class="text-white-dynamic font-mono-eve text-[12px]">${p}</span>
+                    </div>`;
             });
             document.getElementById('customProdOptions').innerHTML = html;
             
@@ -413,8 +338,7 @@
                     let tid = globalProductIds[p];
                     if (tid) textHtml += `<img src="https://images.evetech.net/types/${tid}/icon?size=64" class="w-5 h-5 rounded border border-dynamic shrink-0 bg-black/50" title="${p}" />`;
                 });
-                let selText = isEnglish ? `Selected: ${selectedProducts.length}` : `Выбрано: ${selectedProducts.length}`;
-                textHtml += `<span class="ml-2 text-[10px] text-white-dynamic">${selText}</span>`;
+                textHtml += `<span class="ml-2 text-[10px] text-white-dynamic">${isEnglish ? `Selected: ${selectedProducts.length}` : `Выбрано: ${selectedProducts.length}`}</span>`;
                 textEl.innerHTML = textHtml;
             }
         }
@@ -429,51 +353,33 @@
 
         function renderConstDropdown() {
             let isAllSelected = selectedConstellations.length === allConstellationsList.length;
-            
             let html = `
-                <div class="flex items-center gap-3 p-2 hover:bg-[var(--accent-hover)] cursor-pointer border-b border-dynamic transition-colors"
-                     onclick="toggleAllConstellations(event)">
-                    <div class="w-3.5 h-3.5 border border-dynamic flex items-center justify-center shrink-0">
-                        ${isAllSelected ? '<div class="w-2 h-2 bg-[var(--accent)]"></div>' : ''}
-                    </div>
-                    <span class="text-[var(--accent)] font-bold text-[12px] uppercase">
-                        ${isEnglish ? 'SELECT / DESELECT ALL' : 'ВЫБРАТЬ / УБРАТЬ ВСЕ'}
-                    </span>
-                </div>
-            `;
+                <div class="flex items-center gap-3 p-2 hover:bg-[var(--accent-hover)] cursor-pointer border-b border-dynamic transition-colors" onclick="toggleAllConstellations(event)">
+                    <div class="w-3.5 h-3.5 border border-dynamic flex items-center justify-center shrink-0">${isAllSelected ? '<div class="w-2 h-2 bg-[var(--accent)]"></div>' : ''}</div>
+                    <span class="text-[var(--accent)] font-bold text-[12px] uppercase">${isEnglish ? 'SELECT / DESELECT ALL' : 'ВЫБРАТЬ / УБРАТЬ ВСЕ'}</span>
+                </div>`;
             
             allConstellationsList.forEach(c => {
                 let isSel = selectedConstellations.includes(c);
                 let bgClass = isSel ? 'bg-[var(--accent-hover)] border-l-2 border-[var(--accent)]' : 'border-l-2 border-transparent';
                 html += `
-                    <div class="flex items-center gap-3 p-2 hover:bg-[var(--accent-hover)] cursor-pointer border-b border-dynamic last:border-none transition-colors ${bgClass}"
-                         onclick="toggleConstellation('${c}', event)">
-                        <div class="w-3.5 h-3.5 border border-dynamic flex items-center justify-center shrink-0">
-                            ${isSel ? '<div class="w-2 h-2 bg-[var(--accent)]"></div>' : ''}
-                        </div>
+                    <div class="flex items-center gap-3 p-2 hover:bg-[var(--accent-hover)] cursor-pointer border-b border-dynamic last:border-none transition-colors ${bgClass}" onclick="toggleConstellation('${c}', event)">
+                        <div class="w-3.5 h-3.5 border border-dynamic flex items-center justify-center shrink-0">${isSel ? '<div class="w-2 h-2 bg-[var(--accent)]"></div>' : ''}</div>
                         <span class="text-white-dynamic font-mono-eve text-[12px]">${c}</span>
-                    </div>
-                `;
+                    </div>`;
             });
             document.getElementById('customConstOptions').innerHTML = html;
             
             let textEl = document.getElementById('constSelectedText');
-            if (selectedConstellations.length === 0) {
-                textEl.innerHTML = `<span class="ru-text text-[#ef4444]">Ничего не выбрано</span><span class="en-text text-[#ef4444]">None selected</span>`;
-            } else if (isAllSelected) {
-                textEl.innerHTML = `<span class="ru-text">ВЕСЬ РЕГИОН (${selectedConstellations.length})</span><span class="en-text">ENTIRE REGION (${selectedConstellations.length})</span>`;
-            } else {
-                textEl.innerHTML = `<span class="ru-text">Выбрано: ${selectedConstellations.length}</span><span class="en-text">Selected: ${selectedConstellations.length}</span>`;
-            }
+            if (selectedConstellations.length === 0) textEl.innerHTML = `<span class="ru-text text-[#ef4444]">Ничего не выбрано</span><span class="en-text text-[#ef4444]">None selected</span>`;
+            else if (isAllSelected) textEl.innerHTML = `<span class="ru-text">ВЕСЬ РЕГИОН (${selectedConstellations.length})</span><span class="en-text">ENTIRE REGION (${selectedConstellations.length})</span>`;
+            else textEl.innerHTML = `<span class="ru-text">Выбрано: ${selectedConstellations.length}</span><span class="en-text">Selected: ${selectedConstellations.length}</span>`;
         }
 
         window.toggleAllConstellations = function(event) {
             if (event) event.stopPropagation();
-            if (selectedConstellations.length === allConstellationsList.length) {
-                selectedConstellations = []; 
-            } else {
-                selectedConstellations = [...allConstellationsList]; 
-            }
+            if (selectedConstellations.length === allConstellationsList.length) selectedConstellations = []; 
+            else selectedConstellations = [...allConstellationsList]; 
             renderConstDropdown();
             onConstellationChange();
         }
@@ -487,15 +393,9 @@
             onConstellationChange();
         }
 
-        document.getElementById('customProdHeader').addEventListener('click', (e) => {
-            e.stopPropagation(); document.getElementById('customProdOptions').classList.toggle('hidden');
-        });
-        
-        document.getElementById('customConstHeader').addEventListener('click', (e) => {
-            e.stopPropagation(); document.getElementById('customConstOptions').classList.toggle('hidden');
-        });
+        document.getElementById('customProdHeader').addEventListener('click', (e) => { e.stopPropagation(); document.getElementById('customProdOptions').classList.toggle('hidden'); });
+        document.getElementById('customConstHeader').addEventListener('click', (e) => { e.stopPropagation(); document.getElementById('customConstOptions').classList.toggle('hidden'); });
 
-        // --- MARKET INTELLIGENCE ---
         async function analyzeMarket(event) {
             let btn = event.currentTarget; let original = btn.innerHTML;
             btn.innerHTML = '<span class="animate-pulse">SYNCING FUZZWORK...</span>';
@@ -522,7 +422,6 @@
             finally { btn.innerHTML = original; }
         }
 
-        // --- SSO AUTH ---
         async function loginSSO() {
             let callRes = await fetch(`${API_BASE}/auth/callback?code=mock_code`);
             let authData = await callRes.json();
@@ -547,7 +446,7 @@
                     <img src="${avatarUrl}" class="w-8 h-8 rounded-full border border-dynamic" />
                     <div class="flex-1 flex justify-between items-center">
                         <span class="text-white-dynamic font-bold text-[11px]">${c.name}</span>
-                        <span class="${roleColor} text-[10px] font-mono-eve">${c.ccu === 5 ? 'FACTORY (CCU 5)' : 'MINING (CCU <5)'}</span>
+                        <span class="${roleColor} text-[10px] font-mono-eve">${c.ccu === 5 ? 'FACTORY' : 'MINING'}</span>
                     </div>
                 </div>`;
             });
@@ -555,10 +454,9 @@
             container.innerHTML = html;
         }
 
-        // --- PLAN CALCULATION ---
+        // --- PLAN CALCULATION & AI ADVISOR ---
         async function calculate() {
             let sys = document.getElementById('factorySystem').value;
-            
             if (selectedConstellations.length === 0) return alert(isEnglish ? "Select at least one extraction constellation" : "Выберите хотя бы одно созвездие для добычи");
             if (!sys) return alert(isEnglish ? "Please select a factory system" : "Выберите систему сборки");
             if (selectedProducts.length === 0) return alert(isEnglish ? "Select at least one product" : "Выберите хотя бы один продукт");
@@ -568,22 +466,13 @@
             
             try {
                 let response = await fetch(`${API_BASE}/calculate`, {
-                    method: 'POST', 
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        constellations: selectedConstellations,
-                        factory_sys: sys, 
-                        target_products: selectedProducts 
-                    })
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ constellations: selectedConstellations, factory_sys: sys, target_products: selectedProducts })
                 });
                 let res = await response.json();
                 
                 if (res.status === "success") {
-                    currentPlan = res.data.map((p, i) => ({
-                        ...p,
-                        id: `planet_${i}`,
-                        hours_left: (Math.random() * 22) + 0.75
-                    }));
+                    currentPlan = res.data.map((p, i) => ({ ...p, id: `planet_${i}`, hours_left: (Math.random() * 22) + 0.75 }));
                     
                     let btnExport = document.getElementById('btn-export-excel');
                     if (btnExport) {
@@ -592,6 +481,7 @@
                     }
 
                     renderWarning(res.warning);
+                    renderRecommendation(res.recommendation);
                     renderDashboard();
                     renderShoppingList(res.data);
                 }
@@ -604,39 +494,78 @@
         function renderWarning(warning) {
             let warnEl = document.getElementById('warningContainer');
             if (!warning) { warnEl.innerHTML = ''; return; }
-            let text = warning;
-            if (isEnglish) {
-                text = text.replace("ДЕФИЦИТ СБОРКИ:", "FACTORY DEFICIT:")
-                           .replace("Требуется еще", "Required additionally:")
-                           .replace("планет под заводы.", "factory planets.")
-                           .replace("ДЕФИЦИТ СЫРЬЯ:", "RAW MATERIAL DEFICIT:")
-                           .replace("добывающих планет.", "extraction planets.")
-                           .replace("КРИТИЧЕСКИЙ ДЕФИЦИТ:", "CRITICAL DEFICIT:")
-                           .replace("Нет планет для добычи:", "No planets available for extracting:");
-            }
-            warnEl.innerHTML = `<div class="bg-red-900/30 border border-red-600 text-red-400 p-2.5 text-[11px] font-bold mb-3 rounded flex gap-2 items-center"><span class="animate-ping">!</span> <span>${text}</span></div>`;
+            
+            // Подготавливаем английскую версию через глобальную замену (RegEx)
+            let textEn = warning.replace(/ДЕФИЦИТ СБОРКИ:/g, "FACTORY DEFICIT:")
+                                .replace(/Требуется еще/g, "Required additionally:")
+                                .replace(/планет под заводы/g, "factory planets")
+                                .replace(/ДЕФИЦИТ СЫРЬЯ:/g, "RAW MATERIAL DEFICIT:")
+                                .replace(/добывающих планет/g, "extraction planets")
+                                .replace(/КРИТИЧЕСКИЙ ДЕФИЦИТ:/g, "CRITICAL DEFICIT:")
+                                .replace(/Нет планет для добычи:/g, "No planets available for extracting:");
+            
+            // Используем универсальные цвета (красный с прозрачностью 10%), которые читаются в обеих темах
+            warnEl.innerHTML = `
+                <div class="bg-[#ef4444]/10 border border-[#ef4444] text-[#ef4444] p-2.5 text-[11px] font-bold mb-3 rounded flex gap-2 items-center">
+                    <span class="animate-ping">!</span> 
+                    <span class="ru-text">${warning}</span>
+                    <span class="en-text">${textEn}</span>
+                </div>`;
         }
+
+        function renderRecommendation(rec) {
+            let recEl = document.getElementById('recommendationContainer');
+            if (!rec) { recEl.innerHTML = ''; return; }
+            
+            let colorBorder = rec.type === 'deficit' ? 'border-orange-500' : 'border-[#4ade80]';
+            let colorBg = rec.type === 'deficit' ? 'bg-[#f97316]/10' : 'bg-[#4ade80]/10'; // 10% opacity работает везде
+            let colorText = rec.type === 'deficit' ? 'text-orange-500' : 'text-[#4ade80]';
+            
+            // Используем var(--text-main) для основного текста, чтобы он становился темным в светлой теме
+            recEl.innerHTML = `
+                <div class="${colorBorder} ${colorBg} border p-3 text-[11px] mb-3 rounded flex justify-between items-center transition-all" id="ai-advisor-banner">
+                    <div class="flex-1 pr-4">
+                        <div class="${colorText} font-bold tracking-widest mb-1 flex items-center gap-2">
+                            <span class="animate-pulse">💡</span> AI LOGISTICS ADVISOR
+                        </div>
+                        <div class="text-[var(--text-main)] font-mono-eve leading-relaxed">
+                            <span class="ru-text">${rec.message_ru}</span>
+                            <span class="en-text">${rec.message_en}</span>
+                        </div>
+                    </div>
+                    <div class="flex flex-col gap-2 shrink-0">
+                        <button onclick="applyRecommendation('${rec.product}')" class="px-4 py-1.5 bg-[var(--accent)] hover:bg-blue-400 text-white font-bold font-mono-eve rounded transition-colors shadow-[0_0_10px_rgba(56,189,248,0.3)]">
+                            <span class="ru-text">ПРИМЕНИТЬ ПЛАН</span>
+                            <span class="en-text">APPLY PLAN</span>
+                        </button>
+                        <button onclick="document.getElementById('ai-advisor-banner').style.display='none'" class="px-4 py-1.5 border border-dynamic text-[var(--text-main)] hover:text-[var(--accent)] font-mono-eve rounded transition-colors">
+                            <span class="ru-text">ИГНОРИРОВАТЬ</span>
+                            <span class="en-text">IGNORE</span>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        window.applyRecommendation = function(product) {
+            selectedProducts = [product];
+            renderDropdownList();
+            calculate();
+        };
 
         // --- DASHBOARD RENDERERS (RIFT UI) ---
         function renderDashboard() {
             if (!currentPlan || currentPlan.length === 0) return;
-            
             let sorted = currentPlan.slice().sort((a, b) => {
                 if (sortBy === 'name') return a.character.localeCompare(b.character);
                 if (sortBy === 'expiry') return a.hours_left - b.hours_left;
                 if (sortBy === 'status') return b.role.localeCompare(a.role);
                 return 0;
             });
-
             let container = document.getElementById('dashboardViewContainer');
-            
-            if (viewMode === 'details') {
-                renderDetailsView(sorted, container);
-            } else if (viewMode === 'list') {
-                renderListView(sorted, container);
-            } else if (viewMode === 'grid') {
-                renderGridView(sorted, container);
-            }
+            if (viewMode === 'details') renderDetailsView(sorted, container);
+            else if (viewMode === 'list') renderListView(sorted, container);
+            else if (viewMode === 'grid') renderGridView(sorted, container);
         }
 
         function renderDetailsView(data, container) {
@@ -648,6 +577,14 @@
                 let numFactories = extractNumber(p.structures);
                 let texture = planetTextures[p.planet.length % planetTextures.length];
 
+                // Локализация роли и статуса избытка
+                let displayRole = p.role;
+                if (isEnglish) {
+                    displayRole = displayRole.replace("Переработка", "Processing")
+                                             .replace("Добыча (Избыток)", "Mining (Excess)")
+                                             .replace("Добыча", "Mining");
+                }
+
                 html += `
                 <div class="flex items-center gap-3 p-2 bg-[var(--bg-input)] border border-dynamic hover:border-[var(--accent)] rounded transition">
                     <div class="relative w-11 h-11 shrink-0">
@@ -658,7 +595,8 @@
                         <div class="text-white-dynamic font-bold text-xs truncate">${p.character}</div>
                         <div class="text-[10px] font-mono-eve flex items-center gap-2 mt-0.5">
                             <span class="text-pink-600 font-bold">${p.system}</span>
-                            <span class="text-gray-500">${isExtraction ? 'Mining' : 'Factory'}</span>
+                            <!-- ВЫВОДИМ ПОЛНУЮ РОЛЬ ВМЕСТО ПРОСТО 'Mining' -->
+                            <span class="text-gray-400 font-bold">${displayRole}</span>
                         </div>
                     </div>
                     <div class="flex-1 flex flex-wrap items-center gap-1.5">
@@ -667,21 +605,11 @@
                             <div class="w-1.5 h-1.5 rounded-full bg-gray-400"></div>
                         </div>
                         <div class="w-9 h-9 rounded-full border border-[#0284c7] flex items-center justify-center relative">
-                            <svg class="absolute inset-0 w-full h-full -rotate-90"><circle cx="18" cy="18" r="15" fill="none" stroke="#0284c7" stroke-width="2" stroke-dasharray="80 100"></circle></svg>
-                            <span class="text-[10px] text-[#0284c7]">🚀</span>
+                            <svg class="absolute inset-0 w-full h-full -rotate-90"><circle cx="18" cy="18" r="15" fill="none" stroke="#0284c7" stroke-width="2" stroke-dasharray="80 100"></circle></svg><span class="text-[10px] text-[#0284c7]">🚀</span>
                         </div>
-                        <div class="w-9 h-9 rounded-full border flex items-center justify-center relative ${isExtraction ? 'border-orange-500' : 'border-teal-500'}" title="${p.res_out}">
-                            ${prodIcon ? `<img src="${prodIcon}" class="w-5 h-5 rounded" />` : ''}
-                        </div>
+                        <div class="w-9 h-9 rounded-full border flex items-center justify-center relative ${isExtraction ? 'border-orange-500' : 'border-teal-500'}" title="${p.res_out}">${prodIcon ? `<img src="${prodIcon}" class="w-5 h-5 rounded" />` : ''}</div>
                         <div class="flex items-center gap-1">
-                            ${Array(Math.min(numFactories, 8)).fill(0).map(() => `
-                                <div class="w-9 h-9 rounded-full border border-yellow-600 flex items-center justify-center relative">
-                                    <svg class="absolute inset-0 w-full h-full -rotate-90 spin-slow">
-                                        <circle cx="18" cy="18" r="15" fill="none" stroke="#eab308" stroke-width="2" stroke-dasharray="15 8 15 8 15 8 8 100"></circle>
-                                    </svg>
-                                    <span class="text-[9px] text-yellow-500 spin-slow-reverse">⚙</span>
-                                </div>
-                            `).join('')}
+                            ${Array(Math.min(numFactories, 8)).fill(0).map(() => `<div class="w-9 h-9 rounded-full border border-yellow-600 flex items-center justify-center relative"><svg class="absolute inset-0 w-full h-full -rotate-90 spin-slow"><circle cx="18" cy="18" r="15" fill="none" stroke="#eab308" stroke-width="2" stroke-dasharray="15 8 15 8 15 8 8 100"></circle></svg><span class="text-[9px] text-yellow-500 spin-slow-reverse">⚙</span></div>`).join('')}
                             ${numFactories > 8 ? `<span class="text-xs text-yellow-600 font-mono-eve font-bold">+${numFactories - 8}</span>` : ''}
                         </div>
                     </div>
@@ -698,25 +626,17 @@
 
         function renderListView(data, container) {
             const groups = {};
-            data.forEach(p => {
-                if (!groups[p.char_id]) groups[p.char_id] = { name: p.character, id: p.char_id, planets: [] };
-                groups[p.char_id].planets.push(p);
-            });
-
+            data.forEach(p => { if (!groups[p.char_id]) groups[p.char_id] = { name: p.character, id: p.char_id, planets: [] }; groups[p.char_id].planets.push(p); });
             let html = '<div class="space-y-4">';
             Object.values(groups).forEach(g => {
                 let avatar = `https://images.evetech.net/characters/${g.id > 100000 ? g.id : 1}/portrait?size=64`;
                 html += `
                 <div class="flex items-start gap-4 p-3 bg-[var(--bg-input)] border border-dynamic rounded">
-                    <div class="w-14 shrink-0 flex flex-col items-center">
-                        <img src="${avatar}" class="w-12 h-12 rounded-full border border-dynamic mb-1">
-                        <div class="text-[9px] text-center text-gray-400 font-bold truncate w-full">${g.name}</div>
-                    </div>
+                    <div class="w-14 shrink-0 flex flex-col items-center"><img src="${avatar}" class="w-12 h-12 rounded-full border border-dynamic mb-1"><div class="text-[9px] text-center text-gray-400 font-bold truncate w-full">${g.name}</div></div>
                     <div class="flex-1 flex flex-wrap gap-3">
                         ${g.planets.map(p => `
                             <div onclick="openDetailsModal('${p.id}')" class="relative w-14 h-14 rounded-full border-2 flex items-center justify-center cursor-pointer hover:scale-105 transition-transform ${p.role.includes('Добыча') ? 'border-[#0284c7]' : 'border-[#d97706]'}">
-                                <img src="${planetTextures[p.planet.length % planetTextures.length]}" class="absolute inset-0 w-full h-full rounded-full opacity-40 object-cover p-0.5">
-                                <img src="https://images.evetech.net/types/${p.type_id || 0}/icon?size=32" class="w-7 h-7 rounded relative z-10">
+                                <img src="${planetTextures[p.planet.length % planetTextures.length]}" class="absolute inset-0 w-full h-full rounded-full opacity-40 object-cover p-0.5"><img src="https://images.evetech.net/types/${p.type_id || 0}/icon?size=32" class="w-7 h-7 rounded relative z-10">
                                 <div class="absolute -top-1 -left-1.5 px-1 py-0.2 rounded text-[8px] font-mono-eve font-bold ${p.hours_left < 2 ? 'bg-red-900 text-red-300' : 'bg-black/80 text-gray-300'}">${formatTimeShort(p.hours_left)}</div>
                             </div>
                         `).join('')}
@@ -731,12 +651,9 @@
             let html = '<div class="flex flex-wrap gap-3 p-1">';
             data.forEach(p => {
                 let charAvatar = `https://images.evetech.net/characters/${p.char_id > 100000 ? p.char_id : 1}/portrait?size=64`;
-                let isMining = p.role.includes("Добыча");
                 html += `
-                <div onclick="openDetailsModal('${p.id}')" class="relative w-14 h-14 rounded-full border-2 flex items-center justify-center cursor-pointer hover:scale-110 transition-transform ${isMining ? 'border-[#0284c7]' : 'border-[#d97706]'}" title="${p.character} - ${p.planet}">
-                    <img src="${planetTextures[p.planet.length % planetTextures.length]}" class="absolute inset-0 w-full h-full rounded-full opacity-40 object-cover p-0.5">
-                    <img src="https://images.evetech.net/types/${p.type_id || 0}/icon?size=32" class="w-7 h-7 rounded relative z-10">
-                    <img src="${charAvatar}" class="absolute -bottom-1 -right-1 w-5 h-5 rounded-full border border-black shadow z-20">
+                <div onclick="openDetailsModal('${p.id}')" class="relative w-14 h-14 rounded-full border-2 flex items-center justify-center cursor-pointer hover:scale-110 transition-transform ${p.role.includes('Добыча') ? 'border-[#0284c7]' : 'border-[#d97706]'}" title="${p.character} - ${p.planet}">
+                    <img src="${planetTextures[p.planet.length % planetTextures.length]}" class="absolute inset-0 w-full h-full rounded-full opacity-40 object-cover p-0.5"><img src="https://images.evetech.net/types/${p.type_id || 0}/icon?size=32" class="w-7 h-7 rounded relative z-10"><img src="${charAvatar}" class="absolute -bottom-1 -right-1 w-5 h-5 rounded-full border border-black shadow z-20">
                     <div class="absolute -top-1 -left-1 px-1 rounded text-[8px] font-mono-eve font-bold ${p.hours_left < 2 ? 'bg-red-900 text-red-300' : 'bg-black/80 text-gray-300'}">${formatTimeShort(p.hours_left)}</div>
                 </div>`;
             });
@@ -744,89 +661,46 @@
             container.innerHTML = html;
         }
 
-        // --- SHOPPING LIST ---
         function renderShoppingList(data) {
             let ccCounts = {};
-            data.forEach(p => {
-                if (p.cc_type) {
-                    let baseType = p.cc_type.replace("1x ", "").replace(" Command Center", "");
-                    ccCounts[baseType] = (ccCounts[baseType] || 0) + 1;
-                }
+            data.forEach(p => { 
+                if (p.cc_type) { 
+                    let b = p.cc_type.replace("1x ", "").replace(" Command Center", ""); 
+                    ccCounts[b] = (ccCounts[b] || 0) + 1; 
+                } 
             });
-
             let listEl = document.getElementById('shoppingListContainer');
             if (Object.keys(ccCounts).length === 0) { listEl.classList.add('hidden'); return; }
             
-            let html = `
-                <div class="text-[11px] text-[var(--accent)] font-bold mb-3 tracking-widest flex items-center gap-2">
-                    <span class="w-2 h-2 bg-[var(--accent)]"></span> SHOPPING LIST : COMMAND CENTERS
-                </div>
-                <div class="flex flex-wrap gap-4">`;
-                
+            let html = `<div class="text-[11px] text-[var(--accent)] font-bold mb-3 tracking-widest flex items-center gap-2"><span class="w-2 h-2 bg-[var(--accent)]"></span> SHOPPING LIST : COMMAND CENTERS</div><div class="flex flex-wrap gap-4">`;
+            
             for (const [type, count] of Object.entries(ccCounts)) {
-                let ccFullName = type + " Command Center";
-                let ccId = globalProductIds[ccFullName] || 0;
-                let ccIcon = `https://images.evetech.net/types/${ccId}/icon?size=64`;
-                
+                let ccId = globalProductIds[type + " Command Center"] || 0;
                 html += `
                     <div class="flex items-center gap-3 bg-[var(--bg-input)] border border-dynamic p-2 rounded w-44">
-                        <img src="${ccIcon}" class="w-8 h-8 border border-dynamic rounded bg-black/50" onerror="this.style.opacity='0'" />
+                        <img src="https://images.evetech.net/types/${ccId}/icon?size=64" class="w-8 h-8 border border-dynamic rounded bg-black/50" onerror="this.style.opacity='0'" />
                         <div class="flex flex-col">
                             <span class="text-[10px] text-white-dynamic font-bold uppercase">${type} CC</span>
-                            <span class="text-[12px] font-mono-eve text-[#4ade80]">x${count} ${isEnglish ? 'pcs' : 'шт.'}</span>
+                            <span class="text-[12px] font-mono-eve text-[#4ade80]">x${count} <span class="ru-text">шт.</span><span class="en-text">pcs</span></span>
                         </div>
-                    </div>
-                `;
+                    </div>`;
             }
-            html += `</div>`;
-            listEl.innerHTML = html;
+            html += `</div>`; 
+            listEl.innerHTML = html; 
             listEl.classList.remove('hidden');
         }
 
-        // --- DETAILS / HELP MODAL LOGIC ---
         function openDetailsModal(id) {
             let colony = currentPlan.find(p => p.id === id);
             if (!colony) return;
-
             document.getElementById('modalCharAvatar').src = `https://images.evetech.net/characters/${colony.char_id > 100000 ? colony.char_id : 1}/portrait?size=64`;
             document.getElementById('modalCharName').innerText = colony.character;
             document.getElementById('modalPlanetName').innerText = `${colony.system} • ${colony.planet}`;
-
             let numFactories = extractNumber(colony.structures);
-            let modalBody = document.getElementById('modalBody');
-            
-            modalBody.innerHTML = `
-                <div class="flex items-center gap-3 p-2 bg-[var(--bg-input)] rounded border border-dynamic">
-                    <div class="w-8 h-8 rounded-full border-2 border-teal-500 flex items-center justify-center text-teal-400">◎</div>
-                    <div class="flex-1">
-                        <div class="text-xs text-white-dynamic font-bold">${colony.cc_type}</div>
-                        <div class="flex gap-4 text-[10px] text-gray-400 mt-0.5"><span>CPU: 77.6%</span> <span>POWER: 97.7%</span></div>
-                    </div>
-                </div>
-                <div class="flex items-center gap-3 p-2 bg-[var(--bg-input)] rounded border border-dynamic">
-                    <div class="w-8 h-8 rounded-full border-2 border-blue-500 flex items-center justify-center text-blue-400">🚀</div>
-                    <div class="text-xs text-white-dynamic font-bold">Launchpad (Storage: 3,996 / 10,000 m3)</div>
-                </div>
-                ${Array(numFactories).fill(0).map((_, i) => `
-                    <div class="flex items-center justify-between p-2 bg-[var(--bg-input)] rounded border border-dynamic">
-                        <div class="flex items-center gap-3">
-                            <div class="w-8 h-8 rounded-full border-2 border-yellow-500 flex items-center justify-center text-yellow-400">⚙</div>
-                            <div>
-                                <div class="text-xs text-white-dynamic font-bold">${colony.role.includes('Добыча') ? 'Basic Industry Facility' : 'Advanced Industry Facility'} #${i+1}</div>
-                                <div class="text-[10px] text-gray-500">Waiting for resources • Idle for 19h 54m</div>
-                            </div>
-                        </div>
-                        <div class="flex items-center gap-3">
-                            <div class="text-right">
-                                <div class="text-[9px] text-gray-500 uppercase">Producing</div>
-                                <div class="text-[11px] text-[#4ade80] font-bold">${colony.res_out}</div>
-                            </div>
-                            <img src="https://images.evetech.net/types/${colony.type_id || 0}/icon?size=32" class="w-7 h-7 rounded border border-dynamic bg-black/50">
-                        </div>
-                    </div>
-                `).join('')}
-            `;
-
+            document.getElementById('modalBody').innerHTML = `
+                <div class="flex items-center gap-3 p-2 bg-[var(--bg-input)] rounded border border-dynamic"><div class="w-8 h-8 rounded-full border-2 border-teal-500 flex items-center justify-center text-teal-400">◎</div><div class="flex-1"><div class="text-xs text-white-dynamic font-bold">${colony.cc_type}</div><div class="flex gap-4 text-[10px] text-gray-400 mt-0.5"><span>CPU: 77.6%</span> <span>POWER: 97.7%</span></div></div></div>
+                <div class="flex items-center gap-3 p-2 bg-[var(--bg-input)] rounded border border-dynamic"><div class="w-8 h-8 rounded-full border-2 border-blue-500 flex items-center justify-center text-blue-400">🚀</div><div class="text-xs text-white-dynamic font-bold">Launchpad (Storage: 3,996 / 10,000 m3)</div></div>
+                ${Array(numFactories).fill(0).map((_, i) => `<div class="flex items-center justify-between p-2 bg-[var(--bg-input)] rounded border border-dynamic"><div class="flex items-center gap-3"><div class="w-8 h-8 rounded-full border-2 border-yellow-500 flex items-center justify-center text-yellow-400">⚙</div><div><div class="text-xs text-white-dynamic font-bold">${colony.role.includes('Добыча') ? 'Basic Industry Facility' : 'Advanced Industry Facility'} #${i+1}</div><div class="text-[10px] text-gray-500">Waiting for resources • Idle for 19h 54m</div></div></div><div class="flex items-center gap-3"><div class="text-right"><div class="text-[9px] text-gray-500 uppercase">Producing</div><div class="text-[11px] text-[#4ade80] font-bold">${colony.res_out}</div></div><img src="https://images.evetech.net/types/${colony.type_id || 0}/icon?size=32" class="w-7 h-7 rounded border border-dynamic bg-black/50"></div></div>`).join('')}`;
             document.getElementById('detailsModal').classList.remove('hidden');
         }
 
@@ -834,101 +708,42 @@
         function openHelp() { document.getElementById('helpModal').classList.remove('hidden'); }
         function closeHelp() { document.getElementById('helpModal').classList.add('hidden'); }
 
-        // --- TAB & VIEW SWITCHING UTILS ---
         function switchTab(tab) {
             currentTab = tab;
             document.getElementById('tab-dashboard-content').classList.toggle('hidden', tab !== 'dashboard');
             document.getElementById('tab-settings-content').classList.toggle('hidden', tab !== 'settings');
-
-            document.getElementById('tab-btn-dashboard').className = tab === 'dashboard' 
-                ? 'px-3 py-1.5 border border-[var(--accent)] text-[var(--accent)] bg-[var(--accent-hover)] rounded transition-all'
-                : 'px-3 py-1.5 border border-dynamic text-[var(--text-main)] hover:border-[var(--accent)] rounded transition-all';
-
-            document.getElementById('tab-btn-settings').className = tab === 'settings' 
-                ? 'px-3 py-1.5 border border-[var(--accent)] text-[var(--accent)] bg-[var(--accent-hover)] rounded transition-all'
-                : 'px-3 py-1.5 border border-dynamic text-[var(--text-main)] hover:border-[var(--accent)] rounded transition-all';
+            document.getElementById('tab-btn-dashboard').className = tab === 'dashboard' ? 'px-3 py-1.5 border border-[var(--accent)] text-[var(--accent)] bg-[var(--accent-hover)] rounded transition-all' : 'px-3 py-1.5 border border-dynamic text-[var(--text-main)] hover:border-[var(--accent)] rounded transition-all';
+            document.getElementById('tab-btn-settings').className = tab === 'settings' ? 'px-3 py-1.5 border border-[var(--accent)] text-[var(--accent)] bg-[var(--accent-hover)] rounded transition-all' : 'px-3 py-1.5 border border-dynamic text-[var(--text-main)] hover:border-[var(--accent)] rounded transition-all';
         }
 
         function setViewMode(mode) {
             viewMode = mode;
-            ['details', 'list', 'grid'].forEach(m => {
-                let btn = document.getElementById(`view-btn-${m}`);
-                if (m === mode) btn.className = 'p-1 text-[var(--accent)] bg-[var(--accent-hover)] rounded hover:text-white';
-                else btn.className = 'p-1 text-[var(--text-main)] rounded hover:text-white';
-            });
+            ['details', 'list', 'grid'].forEach(m => document.getElementById(`view-btn-${m}`).className = m === mode ? 'p-1 text-[var(--accent)] bg-[var(--accent-hover)] rounded hover:text-white' : 'p-1 text-[var(--text-main)] rounded hover:text-white');
             renderDashboard();
         }
 
-        function toggleSortMenu(e) {
-            e.stopPropagation();
-            document.getElementById('sortDropdown').classList.toggle('hidden');
-        }
-
-        function setSortBy(crit) {
-            sortBy = crit;
-            document.getElementById('sortDropdown').classList.add('hidden');
-            renderDashboard();
-        }
-
+        function toggleSortMenu(e) { e.stopPropagation(); document.getElementById('sortDropdown').classList.toggle('hidden'); }
+        function setSortBy(crit) { sortBy = crit; document.getElementById('sortDropdown').classList.add('hidden'); renderDashboard(); }
         document.addEventListener('click', (e) => {
-            if (!document.getElementById('customProdDropdown').contains(e.target)) {
-                document.getElementById('customProdOptions').classList.add('hidden');
-            }
-            if (!document.getElementById('customConstDropdown').contains(e.target)) {
-                document.getElementById('customConstOptions').classList.add('hidden');
-            }
+            if (!document.getElementById('customProdDropdown').contains(e.target)) document.getElementById('customProdOptions').classList.add('hidden');
+            if (!document.getElementById('customConstDropdown').contains(e.target)) document.getElementById('customConstOptions').classList.add('hidden');
             document.getElementById('sortDropdown')?.classList.add('hidden');
         });
 
         function toggleTheme() { document.body.classList.toggle('light-theme'); }
         function toggleLang() {
-            document.body.classList.toggle('lang-en');
-            isEnglish = document.body.classList.contains('lang-en');
-            localStorage.setItem('appLang', isEnglish ? 'en' : 'ru');
-            renderDropdownList();
-            renderConstDropdown();
-            onConstellationChange();
-            updateTooltips();
-            renderDashboard();
+            document.body.classList.toggle('lang-en'); isEnglish = document.body.classList.contains('lang-en'); localStorage.setItem('appLang', isEnglish ? 'en' : 'ru');
+            renderDropdownList(); renderConstDropdown(); onConstellationChange(); updateTooltips(); renderDashboard();
         }
-
-        function updateTooltips() {
-            document.querySelectorAll('[data-title-en]').forEach(el => {
-                el.title = isEnglish ? el.getAttribute('data-title-en') : el.getAttribute('data-title-ru');
-            });
-        }
-
-        function formatTime(decimalHours) {
-            const hrs = Math.floor(decimalHours);
-            const mins = Math.floor((decimalHours - hrs) * 60);
-            return `${hrs}h ${mins}m`;
-        }
-
-        function formatTimeShort(decimalHours) {
-            return `${Math.floor(decimalHours)}h`;
-        }
-
-        function extractNumber(str) {
-            if (!str) return 0;
-            const match = str.match(/\d+/);
-            return match ? parseInt(match[0], 10) : 0;
-        }
+        function updateTooltips() { document.querySelectorAll('[data-title-en]').forEach(el => el.title = isEnglish ? el.getAttribute('data-title-en') : el.getAttribute('data-title-ru')); }
+        function formatTime(decimalHours) { const hrs = Math.floor(decimalHours); const mins = Math.floor((decimalHours - hrs) * 60); return `${hrs}h ${mins}m`; }
+        function formatTimeShort(decimalHours) { return `${Math.floor(decimalHours)}h`; }
+        function extractNumber(str) { if (!str) return 0; const match = str.match(/\d+/); return match ? parseInt(match[0], 10) : 0; }
 
         async function exportExcel() {
             if (!currentPlan) return;
-            let response = await fetch(`${API_BASE}/export`, { 
-                method: 'POST', 
-                headers: { 'Content-Type': 'application/json' }, 
-                body: JSON.stringify({ plan_data: currentPlan }) 
-            });
-            let blob = await response.blob(); 
-            let url = window.URL.createObjectURL(blob);
-            let a = document.createElement('a'); 
-            a.href = url; 
-            a.download = "PI_Plan.xlsx"; 
-            document.body.appendChild(a); 
-            a.click(); 
-            a.remove();
+            let response = await fetch(`${API_BASE}/export`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ plan_data: currentPlan }) });
+            let blob = await response.blob(); let url = window.URL.createObjectURL(blob); let a = document.createElement('a'); a.href = url; a.download = "PI_Plan.xlsx"; document.body.appendChild(a); a.click(); a.remove();
         }
 
         window.onload = init;
