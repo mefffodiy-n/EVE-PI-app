@@ -67,7 +67,7 @@
                 <p><span class="text-[var(--accent)]">02. АНАЛИЗ РЫНКА:</span> Кнопка "Алгоритм оценки выгоды" свяжется с Fuzzwork (рынок Житы), отсортирует товары по максимальной цене скупки и выберет лучший продукт.</p>
                 <p><span class="text-[var(--accent)]">03. ПЛАНИРОВАНИЕ:</span> Выберите созвездие для добычи, систему для сборки (Фабрики) и укажите целевые продукты. Нажмите "Сгенерировать производственный план".</p>
                 <p><span class="text-[var(--accent)]">04. УПРАВЛЕНИЕ ДАШБОРДОМ:</span> Результаты появятся во вкладке "Дашборд". Используйте иконки в верхней панели для переключения видов (Details, List, Grid). Меню сортировки поможет быстро вывести наверх заводы с истекающим циклом таймера (By expiry time).</p>
-                <p><span class="text-[var(--accent)]">05. ЗАКУПКИ И ЭКСПОРТ:</span> Ниже списка планет формируется "Shopping List" с подсчетом командных центров. Кнопка "Export to Excel" выгрузит полную таблицу для закупки и логистики.</p>
+                <p><span class="text-[var(--accent)]">05. ЗАКУПКИ И ЭКСПОРТ:</span> Ниже списка планет на дашборде формируется "Shopping List" с подсчетом нужных командных центров. Как только план будет успешно сгенерирован, в верхней панели загорится зеленая кнопка "ЭКСПОРТ (EXCEL)".</p>
             </div>
             <!-- English Text -->
             <div class="space-y-4 text-[13px] text-white-dynamic leading-relaxed font-mono-eve tracking-wide en-text">
@@ -75,7 +75,7 @@
                 <p><span class="text-[var(--accent)]">02. MARKET INTELLIGENCE:</span> The "Profitability Algorithm" connects to Fuzzwork (Jita market), sorts items by max buy price, and selects the most profitable product automatically.</p>
                 <p><span class="text-[var(--accent)]">03. PLANNING:</span> Select an extraction constellation, a factory system, and target products. Click "Generate Production Plan".</p>
                 <p><span class="text-[var(--accent)]">04. DASHBOARD CONTROL:</span> Results will appear in the "Dashboard" tab. Use the top toolbar icons to switch views (Details, List, Grid). Use the sorting menu to quickly float expiring factories to the top (Sort by expiry time).</p>
-                <p><span class="text-[var(--accent)]">05. PURCHASING & EXPORT:</span> Below the planetary list, a "Shopping List" dynamically calculates the required Command Centers. The "Export to Excel" button downloads a complete logistics spreadsheet.</p>
+                <p><span class="text-[var(--accent)]">05. PURCHASING & EXPORT:</span> Below the planetary list on the dashboard, a "Shopping List" dynamically calculates the required Command Centers. Once a plan is successfully generated, a green "EXPORT TO EXCEL" button will activate.</p>
             </div>
             <div class="mt-6 pt-4 border-t border-dynamic text-right">
                 <button onclick="closeHelp()" class="eve-btn w-auto inline-block px-8 border-[var(--accent)] text-[var(--accent)]">
@@ -112,13 +112,18 @@
                 <h1 class="text-lg font-bold text-white-dynamic tracking-widest">PI DIRECTOR</h1>
             </div>
             
-            <!-- TABS -->
-            <nav class="flex gap-2 font-mono-eve text-xs">
+            <!-- TABS & EXPORT BUTTON -->
+            <nav class="flex items-center gap-2 font-mono-eve text-xs">
                 <button onclick="switchTab('dashboard')" id="tab-btn-dashboard" class="px-3 py-1.5 border border-[var(--accent)] text-[var(--accent)] bg-[var(--accent-hover)] rounded transition-all">
                     <span class="ru-text">ДАШБОРД</span><span class="en-text">DASHBOARD</span>
                 </button>
                 <button onclick="switchTab('settings')" id="tab-btn-settings" class="px-3 py-1.5 border border-dynamic text-[var(--text-main)] hover:border-[var(--accent)] rounded transition-all">
                     <span class="ru-text">НАСТРОЙКИ & РЫНОК</span><span class="en-text">SETTINGS & MARKET</span>
+                </button>
+                
+                <button onclick="exportExcel()" id="btn-export-excel" disabled class="ml-2 px-3 py-1.5 border border-dynamic text-gray-600 cursor-not-allowed rounded transition-all flex items-center gap-2">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                    <span class="ru-text">ЭКСПОРТ (EXCEL)</span><span class="en-text">EXPORT TO EXCEL</span>
                 </button>
             </nav>
         </div>
@@ -188,14 +193,6 @@
 
             <!-- Shopping List Section (Appears after calculation) -->
             <div id="shoppingListContainer" class="mt-6 border-t border-dynamic pt-4 hidden"></div>
-
-            <!-- Footer Toolbar -->
-            <div class="border-t border-dynamic p-3 flex justify-between items-center bg-[var(--bg-input)] mt-6 shrink-0 rounded">
-                <span class="font-mono-eve text-[11px] text-[#4ade80]" id="logStatus">SYS · READY</span>
-                <button onclick="exportExcel()" class="font-mono-eve text-[11px] hover:text-[var(--accent)] px-4 py-1 border border-dynamic">
-                    [ EXPORT TO EXCEL ]
-                </button>
-            </div>
         </div>
 
         <!-- ================= TAB 2: SETTINGS & MARKET ================= -->
@@ -267,14 +264,19 @@
                             <h2 class="en-text">LOGISTICS PARAMETERS</h2>
                         </div>
                         <div class="p-5 space-y-4">
-                            <!-- Constellation -->
+                            <!-- Constellations (Multi-select) -->
                             <div>
-                                <label class="block text-[11px] mb-1 ru-text">Домашнее созвездие добычи</label>
-                                <label class="block text-[11px] mb-1 en-text">Home Constellation (Extraction)</label>
-                                <select id="baseSelect" class="eve-input rounded" onchange="onConstellationChange()">
-                                    <option value="ALL" class="ru-text">-- ВЕСЬ РЕГИОН (ВСЯ ВСЕЛЕННАЯ) --</option>
-                                    <option value="ALL" class="en-text">-- ENTIRE REGION (ALL UNIVERSE) --</option>
-                                </select>
+                                <label class="block text-[11px] mb-1 ru-text">Созвездия для добычи сырья</label>
+                                <label class="block text-[11px] mb-1 en-text">Extraction Constellations</label>
+                                <div class="relative" id="customConstDropdown">
+                                    <div id="customConstHeader" class="eve-input flex items-center justify-between cursor-pointer rounded">
+                                        <div id="constSelectedText" class="flex flex-wrap items-center gap-1 overflow-hidden h-6 text-white-dynamic font-mono-eve text-[12px]">
+                                            <!-- Текст будет генерироваться через JS -->
+                                        </div>
+                                        <span class="text-[10px] text-[var(--accent)]">▼</span>
+                                    </div>
+                                    <div id="customConstOptions" class="absolute z-50 w-full bg-[var(--bg-panel)] border border-dynamic mt-1 hidden max-h-64 overflow-y-auto shadow-2xl backdrop-blur-md custom-scroll rounded"></div>
+                                </div>
                             </div>
 
                             <!-- Factory System -->
@@ -320,6 +322,8 @@
         let currentPlan = null;
         let globalProductIds = {};
         let selectedProducts = [];
+        let allConstellationsList = [];
+        let selectedConstellations = [];
         let allProductsList = [];
         
         let currentTab = 'dashboard';
@@ -347,28 +351,30 @@
                 let response = await fetch(`${API_BASE}/initial-data`);
                 let res = await response.json();
                 
-                let baseSel = document.getElementById('baseSelect');
                 globalProductIds = res.product_ids || {};
                 allProductsList = res.products || [];
+                allConstellationsList = res.bases || [];
+                selectedConstellations = [...allConstellationsList];
                 
-                res.bases.forEach(b => {
-                    let opt = new Option(b, b);
-                    baseSel.add(opt);
-                });
-                
+                renderConstDropdown();
                 renderDropdownList();
                 await onConstellationChange(); 
-                updateTooltips(); // ДОБАВЛЕНО
+                updateTooltips();
             } catch (error) { console.error('Init error:', error); }
         }
 
         async function onConstellationChange() {
-            let base = document.getElementById('baseSelect').value;
             let sysSel = document.getElementById('factorySystem');
             sysSel.innerHTML = `<option value="">${isEnglish ? '-- SELECT SYSTEM --' : '-- ВЫБЕРИТЕ СИСТЕМУ --'}</option>`;
             
+            if (selectedConstellations.length === 0) return;
+
             try {
-                let sysRes = await fetch(`${API_BASE}/systems/${base}`);
+                let sysRes = await fetch(`${API_BASE}/systems`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ constellations: selectedConstellations })
+                });
                 let sysData = await sysRes.json();
                 if (sysData.systems) {
                     sysData.systems.forEach(s => sysSel.innerHTML += `<option value="${s}">${s}</option>`);
@@ -421,13 +427,72 @@
             renderDropdownList();
         }
 
+        function renderConstDropdown() {
+            let isAllSelected = selectedConstellations.length === allConstellationsList.length;
+            
+            let html = `
+                <div class="flex items-center gap-3 p-2 hover:bg-[var(--accent-hover)] cursor-pointer border-b border-dynamic transition-colors"
+                     onclick="toggleAllConstellations(event)">
+                    <div class="w-3.5 h-3.5 border border-dynamic flex items-center justify-center shrink-0">
+                        ${isAllSelected ? '<div class="w-2 h-2 bg-[var(--accent)]"></div>' : ''}
+                    </div>
+                    <span class="text-[var(--accent)] font-bold text-[12px] uppercase">
+                        ${isEnglish ? 'SELECT / DESELECT ALL' : 'ВЫБРАТЬ / УБРАТЬ ВСЕ'}
+                    </span>
+                </div>
+            `;
+            
+            allConstellationsList.forEach(c => {
+                let isSel = selectedConstellations.includes(c);
+                let bgClass = isSel ? 'bg-[var(--accent-hover)] border-l-2 border-[var(--accent)]' : 'border-l-2 border-transparent';
+                html += `
+                    <div class="flex items-center gap-3 p-2 hover:bg-[var(--accent-hover)] cursor-pointer border-b border-dynamic last:border-none transition-colors ${bgClass}"
+                         onclick="toggleConstellation('${c}', event)">
+                        <div class="w-3.5 h-3.5 border border-dynamic flex items-center justify-center shrink-0">
+                            ${isSel ? '<div class="w-2 h-2 bg-[var(--accent)]"></div>' : ''}
+                        </div>
+                        <span class="text-white-dynamic font-mono-eve text-[12px]">${c}</span>
+                    </div>
+                `;
+            });
+            document.getElementById('customConstOptions').innerHTML = html;
+            
+            let textEl = document.getElementById('constSelectedText');
+            if (selectedConstellations.length === 0) {
+                textEl.innerHTML = `<span class="ru-text text-[#ef4444]">Ничего не выбрано</span><span class="en-text text-[#ef4444]">None selected</span>`;
+            } else if (isAllSelected) {
+                textEl.innerHTML = `<span class="ru-text">ВЕСЬ РЕГИОН (${selectedConstellations.length})</span><span class="en-text">ENTIRE REGION (${selectedConstellations.length})</span>`;
+            } else {
+                textEl.innerHTML = `<span class="ru-text">Выбрано: ${selectedConstellations.length}</span><span class="en-text">Selected: ${selectedConstellations.length}</span>`;
+            }
+        }
+
+        window.toggleAllConstellations = function(event) {
+            if (event) event.stopPropagation();
+            if (selectedConstellations.length === allConstellationsList.length) {
+                selectedConstellations = []; 
+            } else {
+                selectedConstellations = [...allConstellationsList]; 
+            }
+            renderConstDropdown();
+            onConstellationChange();
+        }
+
+        window.toggleConstellation = function(constName, event) {
+            if (event) event.stopPropagation();
+            let idx = selectedConstellations.indexOf(constName);
+            if (idx > -1) selectedConstellations.splice(idx, 1);
+            else selectedConstellations.push(constName);
+            renderConstDropdown();
+            onConstellationChange();
+        }
+
         document.getElementById('customProdHeader').addEventListener('click', (e) => {
             e.stopPropagation(); document.getElementById('customProdOptions').classList.toggle('hidden');
         });
-        document.addEventListener('click', (e) => {
-            if (!document.getElementById('customProdDropdown').contains(e.target)) {
-                document.getElementById('customProdOptions').classList.add('hidden');
-            }
+        
+        document.getElementById('customConstHeader').addEventListener('click', (e) => {
+            e.stopPropagation(); document.getElementById('customConstOptions').classList.toggle('hidden');
         });
 
         // --- MARKET INTELLIGENCE ---
@@ -492,9 +557,9 @@
 
         // --- PLAN CALCULATION ---
         async function calculate() {
-            let base = document.getElementById('baseSelect').value;
             let sys = document.getElementById('factorySystem').value;
             
+            if (selectedConstellations.length === 0) return alert(isEnglish ? "Select at least one extraction constellation" : "Выберите хотя бы одно созвездие для добычи");
             if (!sys) return alert(isEnglish ? "Please select a factory system" : "Выберите систему сборки");
             if (selectedProducts.length === 0) return alert(isEnglish ? "Select at least one product" : "Выберите хотя бы один продукт");
             
@@ -505,7 +570,11 @@
                 let response = await fetch(`${API_BASE}/calculate`, {
                     method: 'POST', 
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ constellation: base, factory_sys: sys, target_products: selectedProducts })
+                    body: JSON.stringify({ 
+                        constellations: selectedConstellations,
+                        factory_sys: sys, 
+                        target_products: selectedProducts 
+                    })
                 });
                 let res = await response.json();
                 
@@ -516,6 +585,12 @@
                         hours_left: (Math.random() * 22) + 0.75
                     }));
                     
+                    let btnExport = document.getElementById('btn-export-excel');
+                    if (btnExport) {
+                        btnExport.disabled = false;
+                        btnExport.className = "ml-2 px-3 py-1.5 border border-[#4ade80] text-[#4ade80] hover:bg-[#4ade80] hover:bg-opacity-10 cursor-pointer rounded transition-all flex items-center gap-2";
+                    }
+
                     renderWarning(res.warning);
                     renderDashboard();
                     renderShoppingList(res.data);
@@ -795,7 +870,13 @@
             renderDashboard();
         }
 
-        document.addEventListener('click', () => {
+        document.addEventListener('click', (e) => {
+            if (!document.getElementById('customProdDropdown').contains(e.target)) {
+                document.getElementById('customProdOptions').classList.add('hidden');
+            }
+            if (!document.getElementById('customConstDropdown').contains(e.target)) {
+                document.getElementById('customConstOptions').classList.add('hidden');
+            }
             document.getElementById('sortDropdown')?.classList.add('hidden');
         });
 
@@ -805,9 +886,10 @@
             isEnglish = document.body.classList.contains('lang-en');
             localStorage.setItem('appLang', isEnglish ? 'en' : 'ru');
             renderDropdownList();
+            renderConstDropdown();
             onConstellationChange();
-            updateTooltips(); // Обновляем подсказки при смене языка
-            renderDashboard(); // Перерисовываем дашборд, чтобы обновить тексты внутри карточек
+            updateTooltips();
+            renderDashboard();
         }
 
         function updateTooltips() {
