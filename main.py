@@ -15,7 +15,10 @@ import traceback
 import time
 
 DB_FILE = "pi_director.db"
-MARKET_CACHE = {"data": {}, "time": 0} # Кэш для рынка Житы
+MARKET_CACHE = {"data": {}, "time": 0}
+
+# ГЛОБАЛЬНЫЙ КЭШ: Сюда загрузим базу планет и рецепты при старте
+STATIC_DATA = {"planets": None, "recipes": None}
 
 def init_db():
     conn = sqlite3.connect(DB_FILE)
@@ -42,43 +45,39 @@ def get_db_connection():
     return conn
 
 PI_TYPE_NAMES = [
-    "Broadcast Node", "Integrity Response Drones", "Nano-Factory", 
-    "Organic Mortar Applicators", "Recursive Computing Module", 
-    "Self-Harmonizing Power Core", "Sterile Conduits", "Wetware Mainframe",
-    "Biotech Research Reports", "Camera Drones", "Condensates", 
-    "Cryoprotectant Solution", "Data Chips", "Gel-Matrix Biopaste", 
-    "Guidance Systems", "Hazmat Detection Systems", "Hermetic Membranes", 
-    "High-Tech Transmitters", "Industrial Explosives", "Neocoms", 
-    "Nuclear Reactors", "Planetary Vehicles", "Robotics", 
-    "Smartfab Units", "Supercomputers", "Synthetic Synapses", 
-    "Transcranial Microcontrollers", "Ukomi Superconductors", "Vaccines",
-    "Biocells", "Construction Blocks", "Consumer Electronics", "Coolant", 
-    "Enriched Uranium", "Fertilizer", "Genetically Enhanced Livestock", 
-    "Livestock", "Mechanical Parts", "Microfiber Shielding", "Miniature Electronics", 
-    "Nanites", "Oxides", "Polyaramids", "Polytextiles", "Rocket Fuel", 
-    "Silicate Glass", "Superconductors", "Supertensile Plastics", "Synthetic Oil", 
-    "Test Cultures", "Transmitter", "Viral Agent", "Water-Cooled CPU",
-    "Water", "Industrial Fibers", "Reactive Metals", "Biofuels", "Proteins", 
-    "Silicon", "Toxic Metals", "Electrolytes", "Bacteria", "Oxygen", 
-    "Precious Metals", "Chiral Structures", "Biomass", "Oxidizing Compound", "Plasmoids",
-    "Aqueous Liquids", "Autotrophs", "Base Metals", "Carbon Compounds", "Complex Organisms", 
-    "Felsic Magma", "Heavy Metals", "Ionic Solutions", "Microorganisms", "Noble Gas", 
-    "Noble Metals", "Non-CS Crystals", "Planktic Colonies", "Reactive Gas", "Suspended Plasma",
-    "Barren Command Center", "Gas Command Center", "Ice Command Center", 
-    "Lava Command Center", "Oceanic Command Center", "Plasma Command Center", 
-    "Storm Command Center", "Temperate Command Center"
+    "Broadcast Node", "Integrity Response Drones", "Nano-Factory", "Organic Mortar Applicators", "Recursive Computing Module", "Self-Harmonizing Power Core", "Sterile Conduits", "Wetware Mainframe",
+    "Biotech Research Reports", "Camera Drones", "Condensates", "Cryoprotectant Solution", "Data Chips", "Gel-Matrix Biopaste", "Guidance Systems", "Hazmat Detection Systems", "Hermetic Membranes", "High-Tech Transmitters", "Industrial Explosives", "Neocoms", "Nuclear Reactors", "Planetary Vehicles", "Robotics", "Smartfab Units", "Supercomputers", "Synthetic Synapses", "Transcranial Microcontrollers", "Ukomi Superconductors", "Vaccines",
+    "Biocells", "Construction Blocks", "Consumer Electronics", "Coolant", "Enriched Uranium", "Fertilizer", "Genetically Enhanced Livestock", "Livestock", "Mechanical Parts", "Microfiber Shielding", "Miniature Electronics", "Nanites", "Oxides", "Polyaramids", "Polytextiles", "Rocket Fuel", "Silicate Glass", "Superconductors", "Supertensile Plastics", "Synthetic Oil", "Test Cultures", "Transmitter", "Viral Agent", "Water-Cooled CPU",
+    "Water", "Industrial Fibers", "Reactive Metals", "Biofuels", "Proteins", "Silicon", "Toxic Metals", "Electrolytes", "Bacteria", "Oxygen", "Precious Metals", "Chiral Structures", "Biomass", "Oxidizing Compound", "Plasmoids",
+    "Aqueous Liquids", "Autotrophs", "Base Metals", "Carbon Compounds", "Complex Organisms", "Felsic Magma", "Heavy Metals", "Ionic Solutions", "Microorganisms", "Noble Gas", "Noble Metals", "Non-CS Crystals", "Planktic Colonies", "Reactive Gas", "Suspended Plasma",
+    "Barren Command Center", "Gas Command Center", "Ice Command Center", "Lava Command Center", "Oceanic Command Center", "Plasma Command Center", "Storm Command Center", "Temperate Command Center"
 ]
 
 PI_TYPE_IDS = {}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # 1. ЗАГРУЗКА ЛОКАЛЬНЫХ ДАННЫХ В ПАМЯТЬ ОДИН РАЗ ПРИ СТАРТЕ СЕРВЕРА
+    try:
+        df = pd.read_csv('planet industry.csv', sep=';', skiprows=1, encoding='utf-8')
+        df = df.dropna(subset=['Constellation'])
+        df['Constellation'] = df['Constellation'].astype(str).str.strip()
+        df = df[df['Constellation'] != 'max P2']
+        df = df[~df['Constellation'].str.contains('#REF', case=False, na=False)]
+        STATIC_DATA["planets"] = df
+        
+        with open('recipes.json', 'r', encoding='utf-8') as f:
+            STATIC_DATA["recipes"] = json.load(f)
+        print("[OK] База планет и рецепты успешно загружены в оперативную память.")
+    except Exception as e:
+        print("[ERROR] Ошибка загрузки локальных файлов данных:", e)
+
+    # 2. СИНХРОНИЗАЦИЯ С ESI
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(
                 "https://esi.evetech.net/latest/universe/ids/",
-                json=PI_TYPE_NAMES,
-                headers={'Accept-Language': 'en'}
+                json=PI_TYPE_NAMES, headers={'Accept-Language': 'en'}
             )
             data = response.json()
             if 'inventory_types' in data:
@@ -87,11 +86,17 @@ async def lifespan(app: FastAPI):
                 print(f"[OK] Загружены TypeID для {len(PI_TYPE_IDS)} товаров.")
     except Exception as e:
         print("[ERROR] ESI:", e)
+        
     yield 
+    
+    # Очистка памяти при выключении сервера
     PI_TYPE_IDS.clear()
+    STATIC_DATA["planets"] = None
+    STATIC_DATA["recipes"] = None
 
 app = FastAPI(title="PI Director API", lifespan=lifespan)
 
+# ВАЖНО ДЛЯ ПРОДАКШЕНА: Замените "*" на ваш домен (например, ["https://eve-pi.com"]), когда он появится
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"]
 )
@@ -100,23 +105,8 @@ class SystemRequest(BaseModel): constellations: List[str]
 class PlanRequest(BaseModel): constellations: List[str]; factory_sys: str; target_products: List[str]
 class ExportRequest(BaseModel): plan_data: list
 
-def load_planet_data():
-    df = pd.read_csv('planet industry.csv', sep=';', skiprows=1, encoding='utf-8')
-    df = df.dropna(subset=['Constellation'])
-    
-    # Принудительно переводим в строку и обрезаем скрытые пробелы по краям
-    df['Constellation'] = df['Constellation'].astype(str).str.strip()
-    
-    df = df[df['Constellation'] != 'max P2']
-    
-    # Фильтруем любые варианты ошибок Excel (#REF!, #reference, #REFERENCE), игнорируя регистр
-    df = df[~df['Constellation'].str.contains('#REF', case=False, na=False)]
-    
-    return df
-
 async def get_market_prices():
     now = time.time()
-    # Кэшируем цены на 1 час, чтобы не спамить Fuzzwork
     if now - MARKET_CACHE["time"] < 3600 and MARKET_CACHE["data"]:
         return MARKET_CACHE["data"]
     type_ids_str = ",".join(str(v) for v in PI_TYPE_IDS.values())
@@ -149,10 +139,9 @@ def auth_callback(code: str):
 
 @app.get("/api/initial-data")
 def get_initial_data():
-    df = load_planet_data()
+    df = STATIC_DATA["planets"]
+    recipes = STATIC_DATA["recipes"]
     bases = sorted(list(df['Constellation'].unique()))
-    with open('recipes.json', 'r', encoding='utf-8') as f:
-        recipes = json.load(f)
     products = [k for k, v in recipes.items() if v.get('type') in ['P2', 'P3', 'P4']]
     return {"status": "success", "bases": bases, "products": sorted(products), "product_ids": PI_TYPE_IDS}
 
@@ -166,7 +155,7 @@ async def get_best_production():
 
 @app.post("/api/systems")
 def get_systems(req: SystemRequest):
-    df = load_planet_data()
+    df = STATIC_DATA["planets"]
     if not req.constellations: return {"status": "success", "systems": []}
     sys = sorted(list(df[df['Constellation'].isin(req.constellations)]['System'].dropna().unique()))
     return {"status": "success", "systems": sys}
@@ -176,7 +165,7 @@ async def calculate_plan(req: PlanRequest):
     try:
         if not req.target_products: return {"status": "success", "data": [], "warning": "Выберите хотя бы один продукт."}
             
-        with open('recipes.json', 'r', encoding='utf-8') as f: recipes = json.load(f)
+        recipes = STATIC_DATA["recipes"]
             
         def build_chain(prod, requested_factories):
             rec = recipes.get(prod)
@@ -253,7 +242,6 @@ async def calculate_plan(req: PlanRequest):
         is_excess = not is_deficit and (total_f_planets - req_total_f_planets >= 1) and (available_m - req_total_m_planets >= 2)
         warning = " | ⚠️ ".join(["⚠️ " + w for w in warnings_list]) if warnings_list else None
 
-        # --- LOGISTICS ADVISOR LOGIC ---
         recommendation = None
         if (is_deficit or is_excess) and total_f_planets > 0:
             prices = await get_market_prices()
@@ -293,7 +281,7 @@ async def calculate_plan(req: PlanRequest):
                                     "message_en": f"You have idle capacity. You can produce «{best_alt}» for higher profit and better utilization of your planets."
                                 }
 
-        df = load_planet_data()
+        df = STATIC_DATA["planets"]
         search_df = df[df['Constellation'].isin(req.constellations)].copy() if req.constellations else df.copy()
         factory_const_series = df[df['System'] == req.factory_sys]['Constellation']
         factory_const = factory_const_series.iloc[0] if not factory_const_series.empty else "Unknown"
