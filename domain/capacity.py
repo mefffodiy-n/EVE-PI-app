@@ -1,31 +1,28 @@
 """
-Расчёт загрузки CPU и Powergrid планеты по шаблонам застройки.
+Расчёт загрузки CPU и Powergrid планеты.
 
-ИСТОЧНИК ДАННЫХ: data/pi_reference.json, выгружен из README репозитория
-https://github.com/DalShooth/EVE_PI_Templates (раздел "Best Estimate
-Template PG and CPU Usage"). Автор источника называет числа "best estimate";
-их внутренняя согласованность проверена (суммы структур сходятся с
-заявленными total, остатки — с ёмкостью CC по уровням CCU).
+ИСТОЧНИК: data/pi_reference.json (структуры, ёмкость CC, модель линков),
+выведено из https://github.com/DalShooth/EVE_PI_Templates и разбора
+реальных JSON-шаблонов (см. domain/templates.py).
 
-МОДЕЛЬ РАСЧЁТА (в v1 отсутствовала — там были константы 95/85/75):
-
-    потребление = структуры шаблона(ов)
-                + головы экстракторов (только для добывающего шаблона)
-                + линки (зависят от РАДИУСА планеты)
-
+МОДЕЛЬ:
+    потребление = сумма(структуры) + головы экстракторов + линки(радиус)
     лимит       = ёмкость Command Center при уровне Command Center Upgrades
 
-Ключевое следствие: одна и та же застройка влезает на маленькую планету
-и не влезает на большую — потому что линки дорожают с радиусом. Именно
-этот эффект readme v1 обещал ("radius penalties"), но код его не считал,
-хотя колонку "Radius [km]" из CSV читал.
+Линки считаются ПО ФОРМУЛЕ, а не интерполяцией таблиц:
+    L   = 0.012 * radius + 1          (длина линка)
+    cpu = (15  + 0.2  * L) * link_count
+    pg  = (10  + 0.15 * L) * link_count
+Формула воспроизводит все 60 точек пяти таблиц README с отклонением < 1
+(округление) и, в отличие от таблиц, работает при любом числе линков —
+в частности для 00-шаблона майнера с 10 линками, которого в README нет.
 
-ДВА ШАБЛОНА НА ПЛАНЕТУ: для P2/P3 и P4 существуют варианты на 1 и на 2
-фабрики. Вариант на 2 требует Command Center Upgrades V (min_ccu_level=5
-в справочнике) — планировщик обязан это проверять, а не назначать вслепую.
+ЧТО ИЗМЕНИЛОСЬ ОТНОСИТЕЛЬНО v1: там pg_load/cpu_load были константами
+95/85/75 независимо от застройки, планеты и скиллов.
 
-ОГРАНИЧЕНИЯ ПО ТИПУ ПЛАНЕТЫ: P4-шаблоны ставятся только на Barren и
-Temperate (allowed_planet_types в справочнике).
+ОГРАНИЧЕНИЯ, которые проверяются явно:
+  - шаблон на 2 фабрики требует Command Center Upgrades V;
+  - P4-шаблоны ставятся только на Barren и Temperate.
 """
 
 from __future__ import annotations
@@ -38,6 +35,10 @@ from pathlib import Path
 DEFAULT_REFERENCE_PATH = Path(__file__).resolve().parent.parent / "data" / "pi_reference.json"
 
 
+class UnsupportedSetup(ValueError):
+    """Комбинация шаблона, планеты и уровня скилла недопустима в принципе."""
+
+
 @dataclass(frozen=True)
 class Load:
     cpu: float
@@ -46,18 +47,22 @@ class Load:
     def __add__(self, other: "Load") -> "Load":
         return Load(self.cpu + other.cpu, self.pg + other.pg)
 
+    def __mul__(self, k: float) -> "Load":
+        return Load(self.cpu * k, self.pg * k)
+
 
 @dataclass(frozen=True)
 class Template:
     key: str
     label: str
-    role: str            # "extraction" | "processing"
-    produces_tier: str   # "P1" | "P2_P3" | "P4"
-    factory_count: int   # 1 или 2 шаблона на планету
-    min_ccu_level: int   # 5 для вариантов на 2 фабрики
-    link_profile: str
-    total: Load
-    allowed_planet_types: tuple[str, ...] | None  # None = любая планета
+    role: str                 # "extraction" | "processing"
+    produces_tier: str        # "P1" | "P2_P3" | "P4"
+    template_count: int       # сколько шаблонов ставится на планету (1 или 2)
+    min_ccu_level: int
+    link_count: int
+    extractor_heads: int
+    structures: dict[str, int]
+    allowed_planet_types: tuple[str, ...] | None
 
 
 @dataclass(frozen=True)
@@ -87,10 +92,6 @@ class ColonyLoad:
         return self.used.cpu <= self.capacity.cpu and self.used.pg <= self.capacity.pg
 
 
-class UnsupportedSetup(ValueError):
-    """Комбинация шаблона, планеты и уровня скилла недопустима в принципе."""
-
-
 @lru_cache(maxsize=1)
 def _reference(path: Path = DEFAULT_REFERENCE_PATH) -> dict:
     return json.loads(Path(path).read_text(encoding="utf-8"))
@@ -98,86 +99,73 @@ def _reference(path: Path = DEFAULT_REFERENCE_PATH) -> dict:
 
 @lru_cache(maxsize=1)
 def load_templates() -> dict[str, Template]:
-    """Каталог шаблонов застройки из data/pi_reference.json."""
+    """Каталог шаблонов застройки."""
     raw = _reference()["templates"]
     result: dict[str, Template] = {}
     for key, t in raw.items():
+        if key.startswith("_"):
+            continue
         allowed = t.get("allowed_planet_types")
         result[key] = Template(
             key=key,
             label=t["label"],
             role=t["role"],
             produces_tier=t["produces_tier"],
-            factory_count=t["factory_count"],
-            min_ccu_level=t["min_ccu_level"],
-            link_profile=t["link_profile"],
-            total=Load(float(t["total_cpu"]), float(t["total_pg"])),
+            template_count=int(t["template_count"]),
+            min_ccu_level=int(t["min_ccu_level"]),
+            link_count=int(t["link_count"]),
+            extractor_heads=int(t.get("extractor_heads", 0)),
+            structures=dict(t["structures"]),
             allowed_planet_types=tuple(allowed) if allowed else None,
         )
     return result
 
 
 def command_center_capacity(ccu_level: int) -> Load:
-    """Доступные CPU/PG командного центра при данном уровне Command Center Upgrades."""
     table = _reference()["command_center_capacity"]
     key = str(int(ccu_level))
     if key not in table:
         raise UnsupportedSetup(f"Неизвестный уровень Command Center Upgrades: {ccu_level}")
-    entry = table[key]
-    return Load(float(entry["cpu"]), float(entry["pg"]))
+    e = table[key]
+    return Load(float(e["cpu"]), float(e["pg"]))
+
+
+def structures_load(structures: dict[str, int]) -> Load:
+    """Суммарное потребление набора структур."""
+    catalog = _reference()["structures"]
+    total = Load(0.0, 0.0)
+    for name, count in structures.items():
+        if name not in catalog:
+            raise UnsupportedSetup(f"Неизвестная структура: {name}")
+        unit = catalog[name]
+        total = total + Load(float(unit["cpu"]) * count, float(unit["pg"]) * count)
+    return total
 
 
 def extractor_heads_load(head_count: int) -> Load:
-    """
-    Потребление голов экстрактора. Линейно по количеству
-    (в источнике: x1 = 110/550, x10 = 1100/5500, x16 = 1760/8800).
-    """
     if head_count < 0:
         raise ValueError("Количество голов экстрактора не может быть отрицательным")
-    head = _reference()["extractor_head"]
+    head = _reference()["structures"]["extractor_head"]
     return Load(float(head["cpu"]) * head_count, float(head["pg"]) * head_count)
 
 
-def link_load(link_profile: str, planet_radius_km: float) -> Load:
+def link_length(planet_radius_km: float) -> float:
+    m = _reference()["link_model"]
+    return m["length_per_radius_km"] * planet_radius_km + m["length_offset"]
+
+
+def link_load(link_count: int, planet_radius_km: float) -> Load:
     """
-    Потребление линков для профиля шаблона на планете заданного радиуса.
+    Потребление всех линков шаблона.
 
-    Между узлами таблицы источника (шаг 2500 км) значения интерполируются
-    линейно; за пределами таблицы берётся ближайший край с экстраполяцией
-    по последнему шагу — это приближение, и оно помечено как таковое.
-
-    Это первое место в проекте, где радиус планеты вообще влияет на расчёт:
+    Первое место в проекте, где радиус планеты вообще влияет на расчёт:
     в v1 колонка "Radius [km]" читалась из CSV и не использовалась.
     """
-    profiles = _reference()["link_usage_by_radius"]
-    if link_profile not in profiles:
-        raise UnsupportedSetup(f"Неизвестный профиль линков: {link_profile}")
-
-    table = {int(r): v for r, v in profiles[link_profile].items() if r.isdigit()}
-    radii = sorted(table)
-
-    if planet_radius_km <= radii[0]:
-        e = table[radii[0]]
-        return Load(float(e["cpu"]), float(e["pg"]))
-    if planet_radius_km >= radii[-1]:
-        # Экстраполяция по наклону последнего интервала.
-        r1, r2 = radii[-2], radii[-1]
-        e1, e2 = table[r1], table[r2]
-        step = (planet_radius_km - r2) / (r2 - r1)
-        return Load(
-            e2["cpu"] + (e2["cpu"] - e1["cpu"]) * step,
-            e2["pg"] + (e2["pg"] - e1["pg"]) * step,
-        )
-
-    for r1, r2 in zip(radii, radii[1:]):
-        if r1 <= planet_radius_km <= r2:
-            e1, e2 = table[r1], table[r2]
-            k = (planet_radius_km - r1) / (r2 - r1)
-            return Load(
-                e1["cpu"] + (e2["cpu"] - e1["cpu"]) * k,
-                e1["pg"] + (e2["pg"] - e1["pg"]) * k,
-            )
-    raise UnsupportedSetup(f"Не удалось определить нагрузку линков для радиуса {planet_radius_km}")
+    m = _reference()["link_model"]
+    length = link_length(planet_radius_km)
+    per_cpu = m["cpu_base"] + m["cpu_per_length"] * length
+    per_pg = m["pg_base"] + m["pg_per_length"] * length
+    return Load(per_cpu * link_count, per_pg * link_count)
 
 
 def calculate_colony_load(
@@ -185,17 +173,13 @@ def calculate_colony_load(
     ccu_level: int,
     planet_radius_km: float,
     planet_type: str | None = None,
-    extractor_head_count: int = 0,
+    extractor_head_count: int | None = None,
 ) -> ColonyLoad:
     """
-    Полный расчёт загрузки планеты. Заменяет захардкоженные
-    pg_load=95 / cpu_load=95 из main.py v1.
+    Полный расчёт загрузки планеты по шаблону застройки.
 
-    Бросает UnsupportedSetup, если комбинация невозможна:
-      - шаблон на 2 фабрики при CCU < 5;
-      - P4-шаблон на планете не Barren/Temperate.
-    Это именно ошибки конфигурации, а не "просто не влезло" —
-    их нельзя маскировать высоким процентом загрузки.
+    extractor_head_count=None -> берётся значение из шаблона
+    (для 00-майнера это 10 голов).
     """
     templates = load_templates()
     if template_key not in templates:
@@ -215,15 +199,15 @@ def calculate_colony_load(
                 f"'{planet_type}' (допустимы: {', '.join(tpl.allowed_planet_types)})"
             )
 
-    heads = extractor_heads_load(extractor_head_count) if extractor_head_count else Load(0.0, 0.0)
+    heads = tpl.extractor_heads if extractor_head_count is None else extractor_head_count
 
     return ColonyLoad(
         template_key=template_key,
         planet_radius_km=planet_radius_km,
         ccu_level=ccu_level,
-        structures=tpl.total,
-        extractor_heads=heads,
-        links=link_load(tpl.link_profile, planet_radius_km),
+        structures=structures_load(tpl.structures),
+        extractor_heads=extractor_heads_load(heads),
+        links=link_load(tpl.link_count, planet_radius_km),
         capacity=command_center_capacity(ccu_level),
     )
 
@@ -231,19 +215,16 @@ def calculate_colony_load(
 def max_planet_radius_that_fits(
     template_key: str,
     ccu_level: int,
-    extractor_head_count: int = 0,
+    extractor_head_count: int | None = None,
     step_km: int = 100,
-    search_limit_km: int = 40000,
+    search_limit_km: int = 200000,
 ) -> float | None:
     """
     Наибольший радиус планеты, на котором застройка ещё влезает.
 
-    Практическая функция для планировщика: позволяет заранее отсеять
-    слишком большие планеты (в первую очередь Gas — в источнике прямо
-    сказано, что для P2/P3 они не рекомендуются из-за размера),
-    не перебирая их по одной.
-
-    Возвращает None, если не влезает даже на минимальном радиусе.
+    Нужна планировщику, чтобы заранее отсеивать слишком большие планеты
+    (в первую очередь Gas — в источнике прямо сказано, что для P2/P3 они
+    не рекомендуются из-за размера). None — не влезает нигде.
     """
     last_ok: float | None = None
     for radius in range(step_km, search_limit_km + step_km, step_km):
@@ -255,3 +236,21 @@ def max_planet_radius_that_fits(
         else:
             break
     return last_ok
+
+
+def available_templates_for(ccu_level: int, planet_type: str | None = None) -> list[Template]:
+    """
+    Какие шаблоны доступны персонажу с данной прокачкой на данной планете.
+
+    Именно здесь реализовано правило «2 шаблона на планету только при CCU V»:
+    у персонажа с CCU IV варианты *_2factory просто не попадут в выдачу.
+    """
+    result = []
+    for tpl in load_templates().values():
+        if ccu_level < tpl.min_ccu_level:
+            continue
+        if tpl.allowed_planet_types and planet_type is not None:
+            if planet_type not in tpl.allowed_planet_types:
+                continue
+        result.append(tpl)
+    return result
