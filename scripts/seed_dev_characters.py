@@ -1,20 +1,17 @@
 """
 Dev-заглушки персонажей для отладки planner.py без действующих ESI-токенов.
 
-Контекст (см. roadmap.md, раздел 0, пункт 4): на момент разработки нет
-действующих ESI client_id/secret и токенов персонажей. Это нормально —
-но заглушка не должна жить внутри боевого auth-эндпоинта, как это было
-в main.py v1 (там /api/auth/callback просто вставлял мок-персонажей
-в БД вместо реального обмена OAuth-кода на токен).
+Контекст (см. roadmap.md, раздел 0, пункт 4): действующих ESI client_id/
+secret пока нет. Это нормально, но заглушка не должна жить внутри боевого
+auth-эндпоинта, как в main.py v1 (там /api/auth/callback вставлял мок-
+персонажей вместо реального обмена OAuth-кода на токен).
 
 Этот скрипт:
-  - запускается ТОЛЬКО вручную и ТОЛЬКО при ENV=dev (см. infra/config.py,
-    появится вместе с реальной БД в Фазе 1);
-  - пишет тестовых персонажей в ту же таблицу characters, которую в Фазе 3
-    будет заполнять реальный ESI SSO callback — poэтому domain.planner
-    не должен и не будет знать, откуда взялся персонаж;
-  - никогда не импортируется и не вызывается из api/ (это гарантирует,
-    что заглушка физически не может утечь в прод).
+  - запускается ТОЛЬКО вручную и ТОЛЬКО при ENV=dev;
+  - пишет персонажей в ту же таблицу characters, которую в Фазе 3 будет
+    заполнять реальный ESI SSO callback — поэтому domain.planner не знает
+    и не должен знать, откуда взялся персонаж;
+  - никогда не импортируется из api/ (заглушка физически не может утечь в прод).
 
 Использование (после появления infra/db в Фазе 1):
     python -m scripts.seed_dev_characters
@@ -22,14 +19,27 @@ Dev-заглушки персонажей для отладки planner.py бе�
 
 from __future__ import annotations
 
-# TODO(Фаза 1): заменить на реальный доступ к БД, когда появится infra/db.
-# Пока — только описание формы данных, которые ожидает domain.planner.CharacterSlot.
+# Уровни скиллов взяты из раздела "Skill Recommendations" источника шаблонов
+# (https://github.com/DalShooth/EVE_PI_Templates):
+#   Miner:   Command Center Upgrades V, Interplanetary Consolidation IV
+#   Factory: Command Center Upgrades V, Interplanetary Consolidation V
+#
+# Важно для проверки логики: Command Center Upgrades V — обязательное условие
+# для варианта "2 шаблона на одну планету". Поэтому в наборе намеренно есть
+# и персонажи с CCU 4 — чтобы planner.py гарантированно проходил ветку, где
+# доступны только одиночные шаблоны, а не только счастливый путь.
 
 DEV_CHARACTERS = [
-    # (character_id, name, ccu_level, ic_level)
-    (90001, "Dev Factory Chief 1", 5, 5),
-    (90002, "Dev Factory Chief 2", 5, 5),
-    *[(90004 + i, f"Dev Miner {i + 1}", 4, 5) for i in range(10)],
+    # (character_id, name, ccu_level, ic_level, комментарий)
+    (90001, "Dev Factory Chief 1", 5, 5, "может ставить 2 шаблона на планету"),
+    (90002, "Dev Factory Chief 2", 5, 5, "может ставить 2 шаблона на планету"),
+    (90003, "Dev Miner Full",      5, 4, "рекомендованная прокачка майнера"),
+    (90004, "Dev Miner Partial",   4, 4, "CCU IV — только одиночные шаблоны"),
+    (90005, "Dev Miner Rookie",    3, 2, "низкая прокачка, мало слотов планет"),
+    *[
+        (90010 + i, f"Dev Miner {i + 1}", 5, 4, "рекомендованная прокачка майнера")
+        for i in range(8)
+    ],
 ]
 
 
@@ -38,7 +48,7 @@ def seed() -> None:
     Записать DEV_CHARACTERS в БД (dev-окружение).
 
     TODO(Фаза 1):
-      1. проверить infra.config.ENV == "dev", иначе — явный RuntimeError
+      1. проверить infra.config.ENV == "dev", иначе — RuntimeError
          ("seed_dev_characters запрещён вне dev-окружения");
       2. записать в таблицу characters через тот же слой доступа к БД,
          которым будет пользоваться будущий ESI SSO callback.
