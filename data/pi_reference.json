@@ -1,11 +1,13 @@
 {
   "_source": {
-    "url": "https://github.com/DalShooth/EVE_PI_Templates",
-    "section": "README.md -> 'Best Estimate Template PG and CPU Usage'",
-    "note": "Автор README называет числа 'best estimate'. Все суммы и остатки проверены на внутреннюю согласованность (13 проверок, расхождений нет).",
+    "templates_repo": "https://github.com/DalShooth/EVE_PI_Templates",
+    "readme_section": "Best Estimate Template PG and CPU Usage",
+    "template_files": "Разобраны реальные JSON-шаблоны (см. data/templates/). Копии шаблонов также опубликованы на https://wiki.eveuniversity.org/PI_Templates с разрешения автора.",
     "checked_on": "2026-09-07",
-    "known_discrepancy": "README предупреждает: 'CCU5 + 16 голов экстрактора -> PG перегрузка на планетах больше 15k'. Пересчёт по таблицам того же README даёт предел ~26000 км (5700+8800 PG структур и голов, остаток 400 PG, линки miner_7x превышают его только после ~26000 км). Второе предупреждение README (2 фабрики P2/P3 -> перегрузка выше 12500 км) с таблицами СОВПАДАЕТ точно. Вывод: либо предупреждение #1 намеренно консервативно, либо miner-шаблон включает что-то, не отражённое в таблице структур. Требует сверки с самими JSON-файлами шаблонов. До выяснения планировщику безопаснее держать консервативный порог из README.",
-    "miner_p1_json_mismatch": "Файл templates/miner_p1.json в репозитории EVE-PI-app содержал total_cpu=12400, total_pg=16800 под названием 'Miner + 10 Basic Factories'. Это не соответствует источнику: 12400 — полный CPU шаблона p4_1factory, 16800 — PG от 24 Advanced-фабрик (p2p3_2factory). Настоящий miner-шаблон: 5700 CPU / 9800 PG. Прежние числа использовать нельзя."
+    "validation": "Стоимости структур выведены из сводных таблиц README и сходятся точно во всех 6 проверках. Формула линков воспроизводит все 60 точек 5 таблиц README с отклонением < 1 (округление).",
+    "ls_variant_excluded": "Репозиторий содержит два варианта майнера: LS (2 экстрактора, 4 basic-фабрики, 7 линков) и 00 (1 экстрактор с 10 головами, 8 basic-фабрик, 10 линков). ВАЖНО: сводная таблица 'Miner + P1 Template' в README описывает ВАРИАНТ LS (5700 CPU / 9800 PG), а не 00. По решению проекта используется только 00, поэтому здесь заведён miner_00 с его собственными числами.",
+    "readme_warning_discrepancy": "README предупреждает: 'CCU5 + 16 голов экстрактора -> PG-перегрузка на планетах больше 15k'. Пересчёт по структурам и формуле линков даёт для LS-майнера предел ~26000 км, а не 15000. Второе предупреждение README (2 фабрики P2/P3 -> перегрузка выше 12500 км) сходится точно. Поскольку 00-шаблон использует 10 голов (а не 16), на выбранную конфигурацию это расхождение не влияет.",
+    "diam_vs_radius": "В JSON-шаблонах поле называется 'Diam', а таблицы README подписаны 'Radius'. Значения из 'Diam' совпадают по порядку и по конкретным величинам с колонкой 'Radius [km]' в planet_industry.csv (например, 11860 встречается в обоих). Шкала одна и та же, величины напрямую сравнимы; физический смысл названия не выяснен и на расчёт не влияет."
   },
   "command_center_capacity": {
     "_comment": "Доступные CPU/PG командного центра по уровню Command Center Upgrades.",
@@ -34,141 +36,176 @@
       "pg": 19000
     }
   },
-  "extractor_head": {
-    "_comment": "Стоимость ОДНОЙ головы экстрактора. Линейна: x10 = 1100/5500, x16 = 1760/8800.",
-    "cpu": 110,
-    "pg": 550
+  "structures": {
+    "_comment": "Стоимость ОДНОЙ структуры. Выведено из сводных таблиц README; все суммы сходятся точно.",
+    "extractor_control_unit": {
+      "cpu": 400,
+      "pg": 2600
+    },
+    "basic_industry_facility": {
+      "cpu": 200,
+      "pg": 800
+    },
+    "advanced_industry_facility": {
+      "cpu": 500,
+      "pg": 700
+    },
+    "high_tech_industry_facility": {
+      "cpu": 1100,
+      "pg": 400
+    },
+    "storage_facility": {
+      "cpu": 500,
+      "pg": 700
+    },
+    "launchpad": {
+      "cpu": 3600,
+      "pg": 700
+    },
+    "extractor_head": {
+      "cpu": 110,
+      "pg": 550
+    }
+  },
+  "link_model": {
+    "_comment": "Стоимость ОДНОГО линка как функция радиуса планеты. Выведено из таблиц README: длина линка L = 0.012*radius + 1 (README: 31 при 2500 км, 361 при 30000 км), затем cpu = 15 + 0.2*L, pg = 10 + 0.15*L. Формула лучше табличной интерполяции тем, что работает при ЛЮБОМ числе линков — в частности для 00-шаблона майнера с 10 линками, которого в таблицах README нет.",
+    "length_per_radius_km": 0.012,
+    "length_offset": 1.0,
+    "cpu_base": 15.0,
+    "cpu_per_length": 0.2,
+    "pg_base": 10.0,
+    "pg_per_length": 0.15
+  },
+  "pin_type_ids": {
+    "_comment": "Соответствие type_id пина в JSON-шаблоне категории структуры. Один и тот же тип структуры имеет РАЗНЫЕ type_id на разных типах планет — при разборе шаблона нельзя опираться на одно значение. Список собран из разобранных шаблонов и требует пополнения по мере встречи новых типов планет.",
+    "extractor_control_unit": [
+      3060,
+      3061,
+      3062,
+      3063,
+      3064,
+      3067,
+      3068,
+      2848
+    ],
+    "basic_industry_facility": [
+      2469,
+      2471,
+      2473,
+      2481,
+      2483,
+      2490,
+      2492,
+      2493
+    ],
+    "advanced_industry_facility": [
+      2474
+    ],
+    "high_tech_industry_facility": [
+      2472
+    ],
+    "storage_facility": [
+      2535,
+      2536,
+      2541,
+      2557,
+      2558,
+      2560,
+      2561,
+      2562
+    ],
+    "launchpad": [
+      2256,
+      2542,
+      2543,
+      2544,
+      2552,
+      2555,
+      2556
+    ]
   },
   "templates": {
-    "miner_p1": {
-      "label": "Miner + P1 Factories",
+    "_comment": "Разобрано из реальных JSON-шаблонов. Используется ТОЛЬКО вариант 00 (LS исключён решением проекта).",
+    "miner_00": {
+      "label": "Miner 00 + P1 Factories",
       "role": "extraction",
       "produces_tier": "P1",
-      "factory_count": 1,
+      "template_count": 1,
       "min_ccu_level": 0,
-      "link_profile": "miner_7x",
-      "structures": [
-        {
-          "name": "Extractor Control Units",
-          "cpu": 800,
-          "pg": 5200
-        },
-        {
-          "name": "Basic Industry Facilities",
-          "cpu": 800,
-          "pg": 3200
-        },
-        {
-          "name": "Storage",
-          "cpu": 500,
-          "pg": 700
-        },
-        {
-          "name": "Launchpad (Starport)",
-          "cpu": 3600,
-          "pg": 700
-        }
-      ],
-      "total_cpu": 5700,
-      "total_pg": 9800,
+      "link_count": 10,
+      "extractor_heads": 10,
+      "structures": {
+        "extractor_control_unit": 1,
+        "basic_industry_facility": 8,
+        "storage_facility": 1,
+        "launchpad": 1
+      },
       "allowed_planet_types": null,
-      "_note": "Головы экстракторов НЕ включены в total — добавляются отдельно (см. extractor_head). Репозиторий содержит варианты 00 и Lowsec с разным числом экстракторов/фабрик; какой из них соответствует этим суммам — требует сверки с самими JSON-файлами."
+      "source_file": "Miner - 00 - Bacteria.json",
+      "_note": "8 фабрик x 144000 единиц P0 в сутки = 1152000 — ровно то, что README указывает как потребность 00-майнера. Один экстрактор с 10 головами.",
+      "_derived_min_ccu": "РАСЧЁТНОЕ ОГРАНИЧЕНИЕ (не указано в источнике явно): при Command Center Upgrades III и ниже шаблон перегружает PG (107.7% при CCU III) на планете ЛЮБОГО размера — структуры 6100/10400 плюс 10 голов 1100/5500 уже дают 15900 PG при лимите 15000. Фактический минимум — CCU IV (95.0% PG). Поле min_ccu_level оставлено равным 0, потому что это ограничение выводится расчётом, а не является свойством шаблона; планировщик обязан проверять его через calculate_colony_load(...).fits.",
+      "_radius_headroom": "При CCU V шаблон влезает на планету любого радиуса вплоть до ~166500 км — то есть на все планеты региона из planet_industry.csv (максимум там 149390 км, Gas). Ограничивающий ресурс — PG (85% при CCU V), а не радиус."
     },
     "p2p3_1factory": {
-      "label": "P2/P3 Factory (1 factory, 12 links)",
+      "label": "P2/P3 Factory (1 шаблон, 12 линков)",
       "role": "processing",
       "produces_tier": "P2_P3",
-      "factory_count": 1,
+      "template_count": 1,
       "min_ccu_level": 0,
-      "link_profile": "p2p3_12x",
-      "structures": [
-        {
-          "name": "Advanced Industry Facility x12",
-          "cpu": 6000,
-          "pg": 8400
-        },
-        {
-          "name": "Launchpad (Starport)",
-          "cpu": 3600,
-          "pg": 700
-        }
-      ],
-      "total_cpu": 9600,
-      "total_pg": 9100,
+      "link_count": 12,
+      "extractor_heads": 0,
+      "structures": {
+        "advanced_industry_facility": 12,
+        "launchpad": 1
+      },
       "allowed_planet_types": null,
-      "_note": "Ставится на любой тип планеты. Gas не рекомендуется из-за большого радиуса (дорогие линки)."
+      "source_file": "Factory - Barren - Biocells.json",
+      "_note": "Ставится на любой тип планеты. Gas не рекомендуется из-за большого радиуса."
     },
     "p2p3_2factory": {
-      "label": "P2/P3 Factory (2 factories, 24 links)",
+      "label": "P2/P3 Factory (2 шаблона, 24 линка)",
       "role": "processing",
       "produces_tier": "P2_P3",
-      "factory_count": 2,
+      "template_count": 2,
       "min_ccu_level": 5,
-      "link_profile": "p2p3_24x",
-      "structures": [
-        {
-          "name": "Advanced Industry Facility x24",
-          "cpu": 12000,
-          "pg": 16800
-        },
-        {
-          "name": "Launchpad (Starport) x2",
-          "cpu": 5200,
-          "pg": 1400
-        }
-      ],
-      "total_cpu": 17200,
-      "total_pg": 18200,
+      "link_count": 24,
+      "extractor_heads": 0,
+      "structures": {
+        "advanced_industry_facility": 24,
+        "launchpad": 2
+      },
       "allowed_planet_types": null,
       "_note": "Два шаблона на одной планете требуют Command Center Upgrades V."
     },
     "p4_1factory": {
-      "label": "P4 Factory (1 factory, 8 links)",
+      "label": "P4 Factory (1 шаблон, 8 линков)",
       "role": "processing",
       "produces_tier": "P4",
-      "factory_count": 1,
+      "template_count": 1,
       "min_ccu_level": 0,
-      "link_profile": "p4_8x",
-      "structures": [
-        {
-          "name": "High-Tech Industry Facility x8",
-          "cpu": 8800,
-          "pg": 3200
-        },
-        {
-          "name": "Launchpad (Starport)",
-          "cpu": 3600,
-          "pg": 700
-        }
-      ],
-      "total_cpu": 12400,
-      "total_pg": 3900,
+      "link_count": 8,
+      "extractor_heads": 0,
+      "structures": {
+        "high_tech_industry_facility": 8,
+        "launchpad": 1
+      },
       "allowed_planet_types": [
         "Barren",
         "Temperate"
       ]
     },
     "p4_2factory": {
-      "label": "P4 Factory (2 factories, 16 links)",
+      "label": "P4 Factory (2 шаблона, 16 линков)",
       "role": "processing",
       "produces_tier": "P4",
-      "factory_count": 2,
+      "template_count": 2,
       "min_ccu_level": 5,
-      "link_profile": "p4_16x",
-      "structures": [
-        {
-          "name": "High-Tech Industry Facility x16",
-          "cpu": 17600,
-          "pg": 6400
-        },
-        {
-          "name": "Launchpad (Starport) x2",
-          "cpu": 5200,
-          "pg": 1400
-        }
-      ],
-      "total_cpu": 22800,
-      "total_pg": 7800,
+      "link_count": 16,
+      "extractor_heads": 0,
+      "structures": {
+        "high_tech_industry_facility": 16,
+        "launchpad": 2
+      },
       "allowed_planet_types": [
         "Barren",
         "Temperate"
@@ -176,261 +213,8 @@
       "_note": "Два шаблона на одной планете требуют Command Center Upgrades V."
     }
   },
-  "link_usage_by_radius": {
-    "_comment": "Суммарное потребление ВСЕХ линков шаблона в зависимости от радиуса планеты (км). Между узлами таблицы значения интерполируются линейно.",
-    "miner_7x": {
-      "2500": {
-        "cpu": 149,
-        "pg": 103
-      },
-      "5000": {
-        "cpu": 191,
-        "pg": 135
-      },
-      "7500": {
-        "cpu": 233,
-        "pg": 166
-      },
-      "10000": {
-        "cpu": 275,
-        "pg": 198
-      },
-      "12500": {
-        "cpu": 317,
-        "pg": 229
-      },
-      "15000": {
-        "cpu": 359,
-        "pg": 261
-      },
-      "17500": {
-        "cpu": 401,
-        "pg": 292
-      },
-      "20000": {
-        "cpu": 443,
-        "pg": 324
-      },
-      "22500": {
-        "cpu": 485,
-        "pg": 355
-      },
-      "25000": {
-        "cpu": 527,
-        "pg": 387
-      },
-      "27500": {
-        "cpu": 569,
-        "pg": 418
-      },
-      "30000": {
-        "cpu": 611,
-        "pg": 450
-      }
-    },
-    "p2p3_12x": {
-      "2500": {
-        "cpu": 255,
-        "pg": 176
-      },
-      "5000": {
-        "cpu": 327,
-        "pg": 230
-      },
-      "7500": {
-        "cpu": 399,
-        "pg": 284
-      },
-      "10000": {
-        "cpu": 471,
-        "pg": 338
-      },
-      "12500": {
-        "cpu": 543,
-        "pg": 392
-      },
-      "15000": {
-        "cpu": 615,
-        "pg": 446
-      },
-      "17500": {
-        "cpu": 687,
-        "pg": 500
-      },
-      "20000": {
-        "cpu": 759,
-        "pg": 554
-      },
-      "22500": {
-        "cpu": 831,
-        "pg": 608
-      },
-      "25000": {
-        "cpu": 903,
-        "pg": 662
-      },
-      "27500": {
-        "cpu": 975,
-        "pg": 716
-      },
-      "30000": {
-        "cpu": 1047,
-        "pg": 770
-      }
-    },
-    "p2p3_24x": {
-      "2500": {
-        "cpu": 509,
-        "pg": 352
-      },
-      "5000": {
-        "cpu": 653,
-        "pg": 460
-      },
-      "7500": {
-        "cpu": 797,
-        "pg": 568
-      },
-      "10000": {
-        "cpu": 941,
-        "pg": 676
-      },
-      "12500": {
-        "cpu": 1085,
-        "pg": 784
-      },
-      "15000": {
-        "cpu": 1229,
-        "pg": 892
-      },
-      "17500": {
-        "cpu": 1373,
-        "pg": 1000
-      },
-      "20000": {
-        "cpu": 1517,
-        "pg": 1108
-      },
-      "22500": {
-        "cpu": 1661,
-        "pg": 1216
-      },
-      "25000": {
-        "cpu": 1805,
-        "pg": 1324
-      },
-      "27500": {
-        "cpu": 1949,
-        "pg": 1432
-      },
-      "30000": {
-        "cpu": 2093,
-        "pg": 1540
-      }
-    },
-    "p4_8x": {
-      "2500": {
-        "cpu": 170,
-        "pg": 118
-      },
-      "5000": {
-        "cpu": 218,
-        "pg": 154
-      },
-      "7500": {
-        "cpu": 266,
-        "pg": 190
-      },
-      "10000": {
-        "cpu": 314,
-        "pg": 226
-      },
-      "12500": {
-        "cpu": 362,
-        "pg": 262
-      },
-      "15000": {
-        "cpu": 410,
-        "pg": 298
-      },
-      "17500": {
-        "cpu": 458,
-        "pg": 334
-      },
-      "20000": {
-        "cpu": 506,
-        "pg": 370
-      },
-      "22500": {
-        "cpu": 554,
-        "pg": 406
-      },
-      "25000": {
-        "cpu": 602,
-        "pg": 442
-      },
-      "27500": {
-        "cpu": 650,
-        "pg": 478
-      },
-      "30000": {
-        "cpu": 698,
-        "pg": 514
-      }
-    },
-    "p4_16x": {
-      "2500": {
-        "cpu": 340,
-        "pg": 235
-      },
-      "5000": {
-        "cpu": 436,
-        "pg": 307
-      },
-      "7500": {
-        "cpu": 532,
-        "pg": 379
-      },
-      "10000": {
-        "cpu": 628,
-        "pg": 451
-      },
-      "12500": {
-        "cpu": 724,
-        "pg": 523
-      },
-      "15000": {
-        "cpu": 820,
-        "pg": 595
-      },
-      "17500": {
-        "cpu": 916,
-        "pg": 667
-      },
-      "20000": {
-        "cpu": 1012,
-        "pg": 739
-      },
-      "22500": {
-        "cpu": 1108,
-        "pg": 811
-      },
-      "25000": {
-        "cpu": 1204,
-        "pg": 883
-      },
-      "27500": {
-        "cpu": 1300,
-        "pg": 955
-      },
-      "30000": {
-        "cpu": 1396,
-        "pg": 1027
-      }
-    }
-  },
   "throughput": {
-    "_comment": "Из раздела 'Factory - Max Input/Outputs'. Одна фабрика потребляет 3000 единиц P0 за 30 минут и выдаёт 20 единиц P1.",
+    "_comment": "Из раздела README 'Factory - Max Input/Outputs'.",
     "p0_per_factory_per_30min": 3000,
     "p1_per_factory_per_30min": 20,
     "p0_input_per_factory_per_day": 144000,
@@ -438,7 +222,7 @@
     "storage_capacity_units": 2400000
   },
   "recommended_skills": {
-    "_comment": "Из раздела 'Skill Recommendations'.",
+    "_comment": "Из раздела README 'Skill Recommendations'.",
     "miner": {
       "command_center_upgrades": 5,
       "interplanetary_consolidation": 4,
