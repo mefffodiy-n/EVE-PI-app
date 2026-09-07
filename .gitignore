@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Виртуальные окружения
+.venv/
+venv/
+
+# Локальные базы данных (см. roadmap.md: pi_director.db не должен жить в git)
+*.db
+*.sqlite3
+
+# Секреты/конфиг окружения
+.env
+.env.*
+
+# IDE
+.vscode/
+.idea/

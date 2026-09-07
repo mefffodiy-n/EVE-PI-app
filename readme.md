@@ -1,50 +1,56 @@
-EVE PI Manager (PI Director)
-English | Русский
+# PI Director v2 — скелет проекта (Фаза 1)
 
-🚀 English
-Overview
-EVE PI Manager (also known as PI Director) is an advanced logistics and automation web application designed for EVE Online players to efficiently manage Planetary Industry (PI)[cite: 1, 3] across multiple characters and systems. It combines ESI skill profiling, local JSON template management[cite: 3], concentrated resource scanning, and automated production chain planning with direct Excel export capabilities.
+Это скелет структуры, описанной в `roadmap.md` (раздел 3), для Фазы 1 —
+"Фундамент (без ESI вообще)". Файлы содержат сигнатуры, докстринги и
+`TODO(Фаза N: ...)` вместо реализации — это каркас, который нужно наполнить
+логикой, перенесённой и переработанной из `main.py` прошлой версии.
 
-Key Features
-Capsuleer-Style Interface: Designed with a strict, immersive dark-theme UI inspired by EVE Online terminals (featuring custom fonts, precise borders, and terminal aesthetics).
+## Как использовать этот архив
 
-Automated Character Profiling: Simulates/reads ESI skill levels (such as Command Center Upgrades and Interplanetary Consolidation) to automatically assign high-skill characters to industrial processing and lower-skill characters to raw resource extraction.
+1. Распакуйте поверх (или рядом с) текущим репозиторием `EVE-PI-app`.
+2. Скопируйте `planet industry.csv` из старого репозитория в
+   `data/planet_industry.csv` (см. `data/README.md` — я намеренно не
+   фабриковал недостающие строки этого файла). Это единственный файл,
+   которого здесь не хватает: `recipes.json`, `templates/miner_p1.json`
+   и `web/index.html` уже на месте.
+3. Удалите из старого репозитория: `__pycache__/`, `pi_director.db` —
+   они не должны попадать в git (см. новый `.gitignore`).
+4. Установите зависимости: `pip install -r requirements.txt`.
+5. Начинайте реализацию с `domain/recipes.py` и `domain/planets.py` —
+   это единственные модули без внешних зависимостей друг от друга,
+   на них не завязаны ни `capacity.py`, ни `planner.py`.
 
-Local JSON Templates: Supports configuration templates from repositories like EVE_PI_Templates to calculate CPU and Powergrid (PG) consumption accurately[cite: 3].
+## Что уже реализовано и проверено
 
-Constellation & System Logistics: Scans regional PI databases to locate optimal planetary hubs, applying advanced distance and radius penalties to prevent powergrid overloads.
+- `domain/recipes.py` — загрузка и валидация `recipes.json`. Проверено:
+  69 рецептов (8×P4, 22×P3, 24×P2, 15×P1), все входы разрешаются
+  в известные продукты или R0-сырьё.
+- `domain/capacity.py::load_templates()` — чтение JSON-шаблонов застройки
+  из `data/templates/`. Проверено на `miner_p1.json`. Это первое место
+  в проекте, где эти шаблоны вообще используются: в v1 они лежали
+  в репозитории, но их не читал ни бэкенд, ни фронтенд.
+- `web/index.html` — перенесён как есть; `api/main.py` монтирует его
+  через `StaticFiles`, маршруты API совпадают с теми, что зовёт фронт.
+- Тесты: `test_recipes.py` (3 проходят), `test_capacity.py` (2 проходят).
+  Тест на дубликаты рецептов **падает намеренно** — он нашёл реальную
+  проблему в данных: `Positron Cord` и `Ukomi Superconductors` имеют
+  идентичный состав входов. Удалять запись без вашего решения нельзя.
 
-Production Chain Generator: Recursively unfolds complex items (P2, P3, P4) down to raw P0/R0 materials using a built-in recipes.json database.
+Расчётная часть (`planner.py`, проценты загрузки в `capacity.py`,
+`link_penalty.py`) — не реализована: см. следующий раздел.
 
-Excel Export with Native Dialog: Saves structured logistics plans (.xlsx) containing character nicknames, systems, input/output resources, and planet types using native system dialog windows.
+## Что сознательно не включено на этом этапе
 
-Tech Stack
-Backend: Python, Pandas (data processing)
+- `workers/`, `infra/db`, `infra/crypto.py` — появятся в Фазе 2–3, когда
+  дойдёт очередь до реального ESI SSO и планировщика.
+- `COMMAND_CENTER_CAPACITY` в `domain/capacity.py` (лимиты CPU/PG по типу
+  Command Center и уровню CCU) и формула в `link_penalty.py` — оставлены
+  пустыми намеренно. Шаблон застройки даёт только потребление
+  (`total_cpu`/`total_pg`), но не лимит; считать проценты от выдуманного
+  лимита хуже, чем не считать вовсе. Нужен проверенный источник.
+- Расширенный формат шаблонов (разбивка по структурам, привязка к типу CC) —
+  текущего формата не хватает, чтобы пересчитать застройку под другой
+  уровень CCU или под другую планету.
 
-Frontend: HTML5, Tailwind CSS, Google Fonts (Rajdhani, Share Tech Mono)
-
-Data Formats: CSV (planet industry.csv[cite: 1]), JSON (recipes.json, template files[cite: 3])
-
-🚀 Русский
-Обзор
-EVE PI Manager (PI Director) — это продвинутое веб-приложение для автоматизации и управления планетарной индустрией (PI)[cite: 1, 3] в EVE Online. Программа создана для удобного распределения персонажей (альтов) по системам и планетам, расчета мощностей по шаблонам, анализа концентрации ресурсов и генерации готовых логистических отчетов.
-
-Ключевые особенности
-Капсулирский интерфейс: Строгий темный дизайн в стиле игровых терминалов EVE Online (фирменные шрифты, неоновые акценты, угловые маркеры и панели мониторинга).
-
-Профилирование персонажей: Автоматическое распределение ролей на основе навыков (Command Center Upgrades и Interplanetary Consolidation): персонажи с максимальными уровнями направляются на переработку, а развивающиеся альты — на добычу сырья[cite: 3].
-
-Поддержка JSON-шаблонов: Чтение локальных шаблонов застройки (например, из репозитория EVE_PI_Templates) для точного расчета потребления CPU и Powergrid (PG)[cite: 3].
-
-Логистический сканер созвездий: Поиск оптимальных систем для размещения производственных хабов с учетом штрафов на радиус планет (во избежание дефицита мощности линков).
-
-Генератор производственных цепочек: Рекурсивный разбор сложных продуктов (P2, P3, P4) до базового сырья (P0/R0) на основе файла recipes.json.
-
-Нативный экспорт в Excel: Сохранение структурированных отчетов (.xlsx) с выбором пути через стандартное системное окно. Отчет содержит ник персонажа, систему, входящие и исходящие ресурсы.
-
-Технологический стек
-Бэкенд: Python, Pandas
-
-Фронтенд: HTML5, Tailwind CSS, Google Fonts (Rajdhani, Share Tech Mono)
-
-Форматы данных: CSV (planet industry.csv[cite: 1]), JSON (recipes.json, локальные шаблоны[cite: 3])
+См. `roadmap.md` в корне репозитория `EVE-PI-app` — там же зафиксирован
+полный план по фазам и связь каждого модуля с конкретными проблемами v1.
