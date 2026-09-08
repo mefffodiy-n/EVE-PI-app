@@ -99,14 +99,32 @@ class PlanetBook:
         ]
         return subset.sort_values(RADIUS_COLUMN, na_position="last")
 
-    def planets_with_resource(self, resource_name: str, constellations: list[str] | None = None) -> pd.DataFrame:
+    def planets_with_resource(
+        self, resource_name: str, constellations: list[str] | None = None
+    ) -> pd.DataFrame:
         """
-        Планеты, где есть ненулевая плотность заданного R0-ресурса.
+        Планеты с ненулевой плотностью заданного R0-сырья,
+        отсортированные по убыванию плотности.
 
-        Заменяет разрозненные dropna()/sort_values() вызовы, разбросанные
+        Сортировка по плотности, а не по радиусу: у добывающего шаблона
+        запас по CPU/PG велик (он помещается на планету практически
+        любого размера), поэтому решает выход сырья, а не стоимость линков.
+
+        Заменяет разрозненные dropna()/sort_values(), разбросанные
         по calculate_plan() в старом main.py.
         """
-        raise NotImplementedError("TODO(Фаза 1)")
+        if resource_name not in self._df.columns:
+            return self._df.iloc[0:0]
+
+        subset = self._df
+        if constellations:
+            subset = subset[subset["Constellation"].isin(constellations)]
+
+        values = pd.to_numeric(subset[resource_name], errors="coerce")
+        subset = subset[values.notna() & (values > 0)]
+        return subset.assign(_density=values[values.notna() & (values > 0)]).sort_values(
+            "_density", ascending=False
+        )
 
     def best_direct_p2_planet(self, p2_product: str, constellations: list[str] | None = None) -> pd.Series | None:
         """
