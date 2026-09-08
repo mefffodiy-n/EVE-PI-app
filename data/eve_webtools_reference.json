@@ -194,5 +194,14 @@
     "Storm Command Center": 2550,
     "Temperate Command Center": 2254,
     "_comment": "type_id командных центров. Нужны фронтенду для иконок в списке закупки. В шаблонах застройки их нет: командный центр не является пином. Источник: eveinfo.com/itemsdb/t/1322/command-centers. Barren (2524) сверен независимо с Adam4EVE и EVE Ref; последний заодно подтверждает CPU Output 1675 tf и Powergrid Output 6000 MW — третье подтверждение нашей таблицы ёмкости."
+  },
+  "structure_icon_type_ids": {
+    "_comment": "Представительный type_id каждой категории структур — нужен фронтенду, чтобы показывать НАСТОЯЩИЕ игровые иконки через images.evetech.net. Взяты из pin_type_ids в pi_reference.json (разобраны из шаблонов). У одной категории на разных типах планет разные id, но иконка одинаковая, поэтому достаточно одного представителя.",
+    "extractor_control_unit": 3068,
+    "basic_industry_facility": 2481,
+    "advanced_industry_facility": 2474,
+    "high_tech_industry_facility": 2475,
+    "storage_facility": 2562,
+    "launchpad": 2256
   }
 }
