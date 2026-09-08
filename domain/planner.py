@@ -117,6 +117,17 @@ class PlanRequest:
     factory_system: str
     target_products: list[str]
 
+    # Запас по добыче: во сколько раз ставить больше добывающих планет,
+    # чем даёт голая арифметика.
+    #
+    # Зачем он нужен. Плотность сырья в planet_industry.csv — статический
+    # снимок, а в игре месторождения истощаются: и нашими экстракторами,
+    # и чужими. Живых данных о выработке у нас нет и не будет, пока
+    # sync_colony_status (Фаза 3) не начнёт отдавать реальные объёмы.
+    # Поэтому запас — не расчёт, а сознательная поправка, которую владелец
+    # плана подбирает по опыту. 1.0 означает «без запаса».
+    extraction_margin: float = 1.0
+
     # Сколько шаблонов верхнего уровня на каждый целевой продукт.
     # Одна «линия» = один полный шаблон целевого продукта.
     lines_per_target: int = 1
@@ -149,6 +160,11 @@ class PlanRow:
     pg_percent: float
     hours_left: float | None = None  # None = неизвестно; НЕ подставлять случайное
 
+    # Сколько НАШИХ экстракторов тянут это же сырьё с этой же планеты.
+    # 1 означает, что колония на месторождении одна. Больше — выработка
+    # делится, и расчётные объёмы завышены.
+    shared_extraction_count: int = 1
+
     def to_dict(self) -> dict:
         return {
             "id": self.id,
@@ -170,6 +186,7 @@ class PlanRow:
             "cpu_percent": self.cpu_percent,
             "pg_percent": self.pg_percent,
             "hours_left": self.hours_left,
+            "shared_extraction_count": self.shared_extraction_count,
         }
 
 
@@ -488,7 +505,9 @@ def build_plan(
             continue
         recipe = recipes.get(product)
         raw_name = recipe.source if recipe else None
-        templates_needed = int(math.ceil(factory_count / per_miner))
+        templates_needed = int(
+            math.ceil(factory_count / per_miner * max(request.extraction_margin, 1.0))
+        )
         placed = 0
 
         candidates = planets.planets_with_resource(raw_name, request.constellations) if raw_name else None
@@ -599,4 +618,43 @@ def build_plan(
     if pool.free_slots == 0 and pool.total_slots:
         result.warnings.append("Все слоты планет заняты — резерва под расширение нет.")
 
+    if request.extraction_margin > 1.0:
+        result.assumptions.append(
+            f"Число добывающих планет увеличено в {request.extraction_margin:g} раза "
+            f"как запас на истощение месторождений (задано пользователем, не расчёт)"
+        )
+
+    _note_extractor_stacking(result)
     return result
+
+
+def _note_extractor_stacking(result: PlanResult) -> None:
+    """
+    Отметить планеты, где наш план ставит несколько своих экстракторов
+    на одно и то же сырьё.
+
+    Истощение месторождений чужими игроками смоделировать нечем — живых
+    данных нет. Но наложение СВОИХ экстракторов создаёт сам план, и это
+    мы знаем точно. Запрещать не нужно: иначе вернётся нехватка планет,
+    которую как раз и снимает размещение колоний нескольких персонажей.
+    Достаточно показать, чтобы завышенная выработка не выглядела
+    гарантированной.
+    """
+    stacks: dict[tuple[str, str, str | None], list[PlanRow]] = {}
+    for row in result.rows:
+        if "Добыча" not in row.role:
+            continue
+        stacks.setdefault((row.system, row.planet, row.res_in), []).append(row)
+
+    for (system, planet, resource), rows in sorted(stacks.items()):
+        if len(rows) < 2:
+            continue
+        for row in rows:
+            row.shared_extraction_count = len(rows)
+        result.warnings.append(
+            f"{system} {planet}: {len(rows)} наших экстрактора на «{resource}» "
+            f"({', '.join(sorted(r.character for r in rows))}). Месторождение общее, "
+            f"поэтому фактическая выработка каждого будет ниже расчётной. "
+            f"Если это критично — распределите добычу по другим планетам "
+            f"или заложите запас (extraction_margin)."
+        )
