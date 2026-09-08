@@ -39,11 +39,17 @@ def main() -> None:
         print(f"В {TEMPLATES_DIR} нет json-файлов.")
         return
 
+    # miner_p1.json — артефакт прошлой версии проекта (некорректные числа,
+    # не игровой формат). Если он ещё лежит в data/templates/, его надо удалить.
+    legacy = [f for f in files if f.name == "miner_p1.json"]
     skipped_ls = [f for f in files if " - LS - " in f.name]
-    files = [f for f in files if " - LS - " not in f.name]
+    files = [f for f in files if " - LS - " not in f.name and f.name != "miner_p1.json"]
 
     print(f"Файлов всего: {len(files) + len(skipped_ls)}")
     print(f"  из них LS (пропускаем): {len(skipped_ls)}")
+    if legacy:
+        print("  !! найден miner_p1.json из старой версии — его нужно УДАЛИТЬ "
+              "(числа в нём не соответствуют источнику, формат не игровой)")
     print(f"  к разбору: {len(files)}\n")
 
     unknown_ids: dict[int, list[str]] = defaultdict(list)
@@ -93,8 +99,13 @@ def main() -> None:
     if unknown_ids:
         print("!! НЕИЗВЕСТНЫЕ type_id пинов — дополните pin_type_ids в data/pi_reference.json:")
         for type_id, names in sorted(unknown_ids.items()):
-            sample = ", ".join(names[:3]) + (f" (+{len(names) - 3})" if len(names) > 3 else "")
-            print(f"   {type_id}: встречается в {len(names)} файл(ах) — {sample}")
+            uniq = sorted(set(names))
+            sample = ", ".join(uniq[:3]) + (f" (+{len(uniq) - 3})" if len(uniq) > 3 else "")
+            per_file = len(names) / len(uniq) if uniq else 0
+            print(
+                f"   {type_id}: {len(names)} вхождений в {len(uniq)} файл(ах), "
+                f"~{per_file:.0f} пин(ов) на файл — {sample}"
+            )
         print()
     else:
         print("OK: все type_id пинов распознаны.\n")

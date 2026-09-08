@@ -138,3 +138,19 @@ def test_load_percent_is_not_constant():
     b = calculate_colony_load("p4_1factory", 3, 30000, planet_type="Barren")
     assert a.cpu_percent != b.cpu_percent
     assert a.pg_percent != b.pg_percent
+
+
+def test_launchpad_x2_assumption_is_conservative():
+    """
+    Модель считает два причала по полной стоимости (2 x 3600 = 7200 CPU),
+    хотя README в строке 'Starport x2' указывает 5200. Расхождение внутри
+    источника; выбрано консервативное значение, чтобы не планировать
+    заведомо неработающие колонии.
+
+    Тест фиксирует принятое допущение — если его пересмотрят после
+    проверки в игре, тест обязан упасть и заставить обновить документацию.
+    """
+    two = structures_load(load_templates()["p4_2factory"].structures)
+    one = structures_load(load_templates()["p4_1factory"].structures)
+    assert two.cpu == 2 * one.cpu, "ожидается ровно удвоение состава одиночного шаблона"
+    assert two.cpu == 24800

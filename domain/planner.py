@@ -28,6 +28,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from domain.factory_site import SiteSelection
 from domain.planets import PlanetBook
 from domain.recipes import RecipeBook
 
@@ -73,6 +74,10 @@ class PlanRequest:
     target_products: list[str]
     include_direct_p2: bool = False  # Фаза 4: сценарий прямого R0 -> P2
 
+    # Пользователь уже увидел предупреждение о слишком крупных планетах
+    # и согласился ставить по одному шаблону вместо двух.
+    allow_single_template_fallback: bool = False
+
 
 @dataclass
 class PlanAssignment:
@@ -106,6 +111,17 @@ class PlanResult:
     assignments: list[PlanAssignment] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
+    # Результаты подбора площадок под переработку. Держим отдельно от
+    # общего списка warnings, потому что эти предупреждения требуют
+    # РЕШЕНИЯ пользователя (сменить систему или согласиться на один
+    # шаблон), а не просто информируют. Фронтенд должен показывать их
+    # как выбор, а не как строку в логе.
+    site_selections: list[SiteSelection] = field(default_factory=list)
+
+    @property
+    def needs_user_decision(self) -> bool:
+        return any(s.warnings and not s.assignments for s in self.site_selections)
+
 
 def build_plan(
     request: PlanRequest,
@@ -126,9 +142,10 @@ def build_plan(
          CCU V -> доступны варианты на 2 шаблона, CCU < 5 -> только на 1.
          Это прямо влияет на число нужных планет: 2 шаблона на планету
          вдвое сокращают их количество;
-      4. подобрать планеты под каждый шаблон с проверкой через
-         capacity.calculate_colony_load(): тип планеты (P4 только Barren/
-         Temperate) и радиус (линки дорожают, большие планеты не влезают);
+      4. под переработку подобрать планеты через
+         factory_site.select_factory_sites(): только Barren/Temperate,
+         по возрастанию радиуса, с предупреждением вместо тихого отката
+         на одиночный шаблон, если двойной не помещается;
       5. число слотов планет на персонажа = Interplanetary Consolidation + 1;
       6. если request.include_direct_p2 — задействовать planets.best_direct_p2_planet()
          для прямого сценария R0 -> P2 (в v1 не реализовано вообще).
