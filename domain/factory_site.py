@@ -16,6 +16,16 @@
      и даём пользователю выбор: другая домашняя система или один шаблон
      на планету (вдвое больше планет и персонажей).
 
+  4. ОДНА ПЛАНЕТА ВМЕЩАЕТ НЕОГРАНИЧЕННОЕ ЧИСЛО КОЛОНИЙ РАЗНЫХ ПЕРСОНАЖЕЙ,
+     причём и добывающих, и перерабатывающих одновременно. Колония
+     привязана к персонажу, а не к планете, поэтому нехватка планет
+     не является ограничением вовсе: она решается добавлением персонажа
+     из пула. Единственное ограничение — число персонажей и их слотов.
+
+     Источник правила — указание владельца проекта, знающего механику
+     игры; подтвердить внешней ссылкой не удалось (профильная страница
+     форума отдаёт 503).
+
 Пороговые радиусы при CCU V (расчёт domain.capacity):
     p2p3_2factory  — примерно до 12 800 км (ограничивает PG)
     p4_2factory    — примерно до 9 600 км  (ограничивает CPU)
@@ -57,13 +67,18 @@ class PlanetCandidate:
 
 @dataclass(frozen=True)
 class SiteAssignment:
-    """Одна планета с назначенным на неё шаблоном."""
+    """Одна колония: планета плюс поставленный на неё шаблон."""
 
     candidate: PlanetCandidate
     template_key: str
     template_count: int
     cpu_percent: float
     pg_percent: float
+
+    # Какая по счёту колония на этой планете. Планета может нести
+    # колонии нескольких персонажей, поэтому одна и та же планета
+    # встречается в плане несколько раз.
+    colony_index: int = 1
 
 
 @dataclass
@@ -77,6 +92,7 @@ class SiteSelection:
     warnings: list[str] = field(default_factory=list)
     downgraded_to_single: bool = False
     templates_requested: int = 0
+    candidates_available: int = 0
 
     @property
     def templates_placed(self) -> int:
@@ -108,6 +124,35 @@ def _candidates(planets: PlanetBook, system: str) -> list[PlanetCandidate]:
             )
         )
     return result
+
+
+def _cycle(candidates: list[PlanetCandidate], needed: int, start: dict[str, int] | None = None):
+    """
+    Перебирать планеты по кругу, отдавая (планета, номер колонии).
+
+    Планеты идут по возрастанию радиуса, и когда список исчерпан, обход
+    начинается заново со следующим номером колонии: одна планета несёт
+    сколько угодно колоний разных персонажей. Благодаря этому нехватка
+    планет перестаёт быть ограничением — упирается только в число
+    персонажей, что и требуется по правилам проекта.
+    """
+    if not candidates:
+        return
+    offsets = dict(start or {})
+    produced = 0
+    # Числа колоний на планете механика не ограничивает, поэтому кругов
+    # ровно столько, сколько нужно, плюс запас на планеты, куда шаблон
+    # не помещается по CPU/PG и которые будут пропущены.
+    limit = max(needed, 1) * 2 + len(candidates)
+    round_index = 0
+    while produced < limit:
+        for candidate in candidates:
+            colony_index = offsets.get(candidate.planet, 0) + round_index + 1
+            yield candidate, colony_index
+            produced += 1
+            if produced >= limit:
+                return
+        round_index += 1
 
 
 def _fits(template_key: str, ccu_level: int, candidate: PlanetCandidate):
@@ -175,7 +220,8 @@ def select_factory_sites(
 
     # Пытаемся разместить двойные шаблоны на самых мелких планетах.
     remaining = templates_needed
-    used: set[str] = set()
+    selection.candidates_available = len(candidates)
+    used: dict[str, int] = {}
 
     if double_available:
         # Проверяем ПРИГОДНОСТЬ отдельно от количества. Иначе нечётный
@@ -211,7 +257,7 @@ def select_factory_sites(
                 return selection
             selection.downgraded_to_single = True
         else:
-            for candidate in candidates:
+            for candidate, colony_index in _cycle(candidates, remaining // 2):
                 if remaining < 2:
                     break
                 load = _fits(double_key, ccu_level, candidate)
@@ -224,9 +270,10 @@ def select_factory_sites(
                         template_count=2,
                         cpu_percent=load.cpu_percent,
                         pg_percent=load.pg_percent,
+                        colony_index=colony_index,
                     )
                 )
-                used.add(candidate.planet)
+                used[candidate.planet] = colony_index
                 remaining -= 2
 
     # Одиночные шаблоны. Три случая:
@@ -235,11 +282,9 @@ def select_factory_sites(
     #   - остался НЕЧЁТНЫЙ хвост после размещения двойных — это штатная
     #     ситуация, а не откат, и предупреждения не требует.
     if remaining > 0:
-        for candidate in candidates:
+        for candidate, colony_index in _cycle(candidates, remaining, start=used):
             if remaining <= 0:
                 break
-            if candidate.planet in used:
-                continue
             load = _fits(single_key, ccu_level, candidate)
             if load is None:
                 continue
@@ -250,16 +295,18 @@ def select_factory_sites(
                     template_count=1,
                     cpu_percent=load.cpu_percent,
                     pg_percent=load.pg_percent,
+                    colony_index=colony_index,
                 )
             )
-            used.add(candidate.planet)
+            used[candidate.planet] = colony_index
             remaining -= 1
 
     if remaining > 0:
         selection.warnings.append(
-            f"В системе {system} не хватило подходящих планет: размещено "
-            f"{selection.templates_placed} шаблонов из {templates_needed}. "
-            f"Пригодных планет Barren/Temperate — {len(candidates)}."
+            f"В системе {system} не удалось разместить {remaining} шаблонов "
+            f"{tier} из {templates_needed}: на пригодных планетах "
+            f"({selection.candidates_available} шт. Barren/Temperate) шаблон "
+            f"не помещается по CPU/PG. Планеты слишком крупные."
         )
 
     return selection

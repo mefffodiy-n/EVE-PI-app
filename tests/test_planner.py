@@ -138,6 +138,38 @@ class TestAllocation:
         limits = {c.character_id: c.planet_slots for c in characters}
         assert all(count <= limits[char_id] for char_id, count in used.items())
 
+    def test_one_character_never_gets_two_colonies_on_same_planet(self, planets, characters):
+        """
+        Колония привязана к паре «персонаж + планета». Несколько колоний
+        на одной планете возможны, но только от РАЗНЫХ персонажей.
+        """
+        from collections import Counter
+
+        rows = _plan(planets, characters).rows
+        per_planet: dict[tuple[str, str], Counter] = {}
+        for row in rows:
+            key = (row.system, row.planet)
+            per_planet.setdefault(key, Counter())[row.char_id] += 1
+
+        duplicates = [
+            (planet, char_id, count)
+            for planet, counter in per_planet.items()
+            for char_id, count in counter.items()
+            if count > 1
+        ]
+        assert not duplicates, f"персонаж дважды на одной планете: {duplicates}"
+
+    def test_planet_can_host_colonies_of_several_characters(self):
+        """Нехватка планет решается разными персонажами на одной планете."""
+        book = PlanetBook(pd.DataFrame([
+            {"Constellation": "ALPHA", "System": "HOME", "Planet": "4", "Type": "Barren",
+             RADIUS_COLUMN: 5820, "Carbon Compounds": 34, "Noble Metals": 31},
+        ]))
+        crew = [CharacterSlot(i, f"Char {i}", 5, 5) for i in range(1, 7)]
+        rows = _plan(book, crew).rows
+        assert len(rows) > 1, "одна планета должна нести несколько колоний"
+        assert len({r.char_id for r in rows}) == len(rows), "у каждой колонии свой персонаж"
+
     def test_every_row_carries_type_id_for_icons(self, planets, characters):
         """
         Фронтенд строит иконку продукта из p.type_id. Пустое значение даёт
@@ -199,6 +231,50 @@ class TestHonesty:
     def test_shortage_of_characters_is_reported(self, planets):
         result = _plan(planets, [CharacterSlot(90001, "Solo", 5, 0)])  # 1 слот
         assert any("ДЕФИЦИТ" in w for w in result.warnings)
+
+    def test_shortage_is_quantified_as_characters_needed(self, planets):
+        """
+        Дефицит — это не «что-то пошло не так», а задача: сколько ещё
+        персонажей нужно и до какого уровня прокачки.
+        """
+        result = _plan(planets, [CharacterSlot(90001, "Solo", 5, 0)])
+        staffing = result.characters_required()
+        assert staffing, "дефицит должен превращаться в кадровую потребность"
+        mining = staffing.get("Добыча")
+        assert mining and mining["characters_needed"] >= 1
+        assert mining["min_ccu_level"] == 4, "добывающему шаблону хватает CCU IV"
+
+    def test_characters_needed_depends_on_planet_slots(self, planets):
+        result = _plan(planets, [CharacterSlot(90001, "Solo", 5, 0)])
+        few = result.characters_required(planet_slots_per_character=2)
+        many = result.characters_required(planet_slots_per_character=6)
+        if "Добыча" in few and "Добыча" in many:
+            assert few["Добыча"]["characters_needed"] >= many["Добыча"]["characters_needed"]
+
+
+class TestSharedInputs:
+    """
+    Один и тот же компонент входит в несколько рецептов, и потребность
+    в нём должна СУММИРОВАТЬСЯ, а не браться по максимуму.
+    """
+
+    def test_shared_component_demand_accumulates(self, planets, characters):
+        from domain.throughput import expand_demand
+
+        recipes = load_recipes()
+        schematics = dict(SCHEMATICS)
+        one = expand_demand({"Biocells": 60.0}, schematics=schematics, recipes=recipes)
+        two = expand_demand({"Biocells": 120.0}, schematics=schematics, recipes=recipes)
+        assert two.factories["Biofuels"] == pytest.approx(2 * one.factories["Biofuels"])
+
+    def test_raw_material_totals_sum_across_branches(self, planets, characters):
+        from domain.throughput import expand_demand
+
+        recipes = load_recipes()
+        demand = expand_demand({"Biocells": 60.0}, schematics=SCHEMATICS, recipes=recipes)
+        # Оба входа Biocells разворачиваются до своего сырья независимо.
+        assert set(demand.raw_materials) == {"Carbon Compounds", "Noble Metals"}
+        assert all(v > 0 for v in demand.raw_materials.values())
 
 
 class TestFrontendContract:

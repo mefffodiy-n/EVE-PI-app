@@ -174,11 +174,33 @@ class PlanRow:
 
 
 @dataclass
+class StaffingGap:
+    """
+    Сколько персонажей не хватает, чтобы закрыть непрерывное производство.
+
+    Считается отдельно от предупреждений, потому что это не «что-то пошло
+    не так», а конкретная задача: сколько ещё персонажей прокачать и до
+    какого уровня.
+    """
+
+    role: str                  # "Добыча" | "Переработка"
+    planets_needed: int
+    planets_placed: int
+    min_ccu_level: int
+    details: str = ""
+
+    @property
+    def planets_missing(self) -> int:
+        return max(0, self.planets_needed - self.planets_placed)
+
+
+@dataclass
 class PlanResult:
     rows: list[PlanRow] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     assumptions: list[str] = field(default_factory=list)
     demand: Demand | None = None
+    staffing_gaps: list[StaffingGap] = field(default_factory=list)
 
     # Подбор площадок держим отдельно: эти предупреждения требуют
     # РЕШЕНИЯ пользователя (сменить систему или согласиться на один
@@ -189,6 +211,36 @@ class PlanResult:
     def needs_user_decision(self) -> bool:
         return any(s.warnings and not s.assignments for s in self.site_selections)
 
+    def characters_required(self, planet_slots_per_character: int = 6) -> dict:
+        """
+        Сколько ещё персонажей нужно, чтобы закрыть непрерывное производство.
+
+        planet_slots_per_character: сколько планет тянет один персонаж.
+        По умолчанию 6 — это Interplanetary Consolidation V.
+
+        Возвращает сводку по ролям: сколько планет не хватает и сколько
+        персонажей это закрывает при заданном числе слотов.
+        """
+        summary: dict[str, dict] = {}
+        for gap in self.staffing_gaps:
+            if gap.planets_missing <= 0:
+                continue
+            entry = summary.setdefault(
+                gap.role,
+                {"planets_missing": 0, "min_ccu_level": gap.min_ccu_level, "items": []},
+            )
+            entry["planets_missing"] += gap.planets_missing
+            entry["min_ccu_level"] = max(entry["min_ccu_level"], gap.min_ccu_level)
+            if gap.details:
+                entry["items"].append(gap.details)
+
+        for entry in summary.values():
+            entry["characters_needed"] = math.ceil(
+                entry["planets_missing"] / max(planet_slots_per_character, 1)
+            )
+            entry["planet_slots_per_character"] = planet_slots_per_character
+        return summary
+
     def to_dict(self) -> dict:
         return {
             "data": [r.to_dict() for r in self.rows],
@@ -197,11 +249,21 @@ class PlanResult:
             "assumptions": self.assumptions,
             "needs_user_decision": self.needs_user_decision,
             "site_warnings": [w for s in self.site_selections for w in s.warnings],
+            "staffing": self.characters_required(),
         }
 
 
 class _CharacterPool:
-    """Раздаёт слоты планет, соблюдая ограничение по числу планет."""
+    """
+    Раздаёт слоты планет.
+
+    Учитывает два разных ограничения, которые легко перепутать:
+      - у персонажа конечное число слотов планет (Interplanetary
+        Consolidation + 1);
+      - ОДИН персонаж может иметь только ОДНУ колонию на конкретной
+        планете. Несколько колоний на одной планете возможны, но только
+        от РАЗНЫХ персонажей.
+    """
 
     def __init__(self, characters: list[CharacterSlot]):
         # Сначала прокачанные: им доступны двойные шаблоны, и разумно
@@ -211,12 +273,16 @@ class _CharacterPool:
             key=lambda c: (-c.command_center_upgrades_level, -c.interplanetary_consolidation_level),
         )
         self._used: dict[int, int] = {c.character_id: 0 for c in characters}
+        self._planets: dict[int, set[tuple[str, str]]] = {
+            c.character_id: set() for c in characters
+        }
 
     def take(
         self,
         require_ccu5: bool = False,
         min_ccu: int = 0,
         prefer_least_skilled: bool = False,
+        planet: tuple[str, str] | None = None,
     ) -> CharacterSlot | None:
         """
         Выдать слот планеты.
@@ -225,6 +291,10 @@ class _CharacterPool:
         Command Center Upgrades IV, и занимать им персонажа с CCU V
         расточительно — только он может ставить два перерабатывающих
         шаблона на планету, что вдвое сокращает число нужных планет.
+
+        planet=(система, планета): персонаж, уже имеющий колонию на этой
+        планете, пропускается. Вторую колонию на той же планете он
+        поставить не может — для этого нужен другой персонаж.
         """
         order = list(reversed(self._characters)) if prefer_least_skilled else self._characters
         for character in order:
@@ -232,8 +302,12 @@ class _CharacterPool:
                 continue
             if character.command_center_upgrades_level < min_ccu:
                 continue
+            if planet is not None and planet in self._planets[character.character_id]:
+                continue
             if self._used[character.character_id] < character.planet_slots:
                 self._used[character.character_id] += 1
+                if planet is not None:
+                    self._planets[character.character_id].add(planet)
                 return character
         return None
 
@@ -361,10 +435,24 @@ def build_plan(
                 if not queue:
                     break
                 product = queue.pop(0)
-                character = pool.take(require_ccu5=assignment.template_count == 2)
+                character = pool.take(
+                    require_ccu5=assignment.template_count == 2,
+                    planet=(assignment.candidate.system, assignment.candidate.planet),
+                )
                 if character is None:
+                    needed_level = 5 if assignment.template_count == 2 else 0
+                    result.staffing_gaps.append(
+                        StaffingGap(
+                            role="Переработка",
+                            planets_needed=len(selection.assignments),
+                            planets_placed=len([r for r in result.rows if "Добыча" not in r.role]),
+                            min_ccu_level=needed_level,
+                            details=f"{tier_key.replace('_', '/')}: не хватило персонажей",
+                        )
+                    )
                     result.warnings.append(
-                        "Не хватило слотов планет у персонажей для переработки."
+                        f"Переработка {tier_key.replace('_', '/')}: не хватило свободных "
+                        f"персонажей. Планеты под колонии есть — нужны исполнители."
                     )
                     break
                 row_counter += 1
@@ -412,69 +500,100 @@ def build_plan(
             continue
 
         skill_shortfall = False
-        for _, row in candidates.iterrows():
-            if placed >= templates_needed:
+        # Планеты перебираются по кругу: одна планета несёт колонии
+        # нескольких персонажей, поэтому число планет с нужным сырьём
+        # не ограничивает добычу — ограничивают только персонажи.
+        # Порядок сохраняется (по убыванию плотности сырья), так что
+        # повторные колонии тоже садятся на самые богатые планеты.
+        planet_rows = list(candidates.iterrows())
+        colony_round = 0
+        while placed < templates_needed:
+            progressed_this_round = False
+            for _, row in planet_rows:
+                if placed >= templates_needed:
+                    break
+                radius = float(row.get(RADIUS_COLUMN) or 0.0)
+
+                # Сначала выясняем, какая прокачка нужна ИМЕННО НА ЭТОЙ планете:
+                # на крупной шаблон может не влезть при CCU IV и влезть при CCU V.
+                # Определять до выбора персонажа важно ещё и потому, что иначе
+                # неудачная попытка расходовала бы его слот впустую.
+                required_ccu = min_ccu_level_that_fits("miner_00", radius)
+                if required_ccu is None:
+                    if colony_round == 0:
+                        result.warnings.append(
+                            f"{row.get('System')} {row.get('Planet')}: добывающий шаблон "
+                            f"не помещается ни при каком уровне Command Center Upgrades "
+                            f"(радиус {radius:,.0f} км).".replace(",", "\u00a0")
+                        )
+                    continue
+
+                # Берём наименее прокачанного из подходящих: персонажи с CCU V
+                # ценнее на переработке, где только они ставят два шаблона.
+                character = pool.take(
+                    min_ccu=required_ccu,
+                    prefer_least_skilled=True,
+                    planet=(str(row.get("System", "")), str(row.get("Planet", ""))),
+                )
+                if character is None:
+                    skill_shortfall = True
+                    continue
+
+                load = calculate_colony_load(
+                    "miner_00", character.command_center_upgrades_level, radius
+                )
+
+                row_counter += 1
+                placed += 1
+                progressed_this_round = True
+                result.rows.append(
+                    PlanRow(
+                        id=f"row-{row_counter}",
+                        char_id=character.character_id,
+                        character=character.name,
+                        role="Добыча",
+                        planet=str(row.get("Planet", "")),
+                        system=str(row.get("System", "")),
+                        constellation=str(row.get("Constellation", "")),
+                        cc_type=f"1x {row.get('Type')} Command Center",
+                        res_out=product,
+                        res_in=raw_name,
+                        structures=f"{per_miner} фабрик",
+                        type_id=_type_ids().get(product),
+                        template_key="miner_00",
+                        template_count=1,
+                        planet_type=str(row.get("Type", "")),
+                        planet_radius_km=radius,
+                        cpu_percent=load.cpu_percent,
+                        pg_percent=load.pg_percent,
+                    )
+                )
+
+            # Ни одной колонии за полный круг — дальше повторять бессмысленно:
+            # либо кончились персонажи, либо шаблон никуда не помещается.
+            if not progressed_this_round:
                 break
-            radius = float(row.get(RADIUS_COLUMN) or 0.0)
-
-            # Сначала выясняем, какая прокачка нужна ИМЕННО НА ЭТОЙ планете:
-            # на крупной шаблон может не влезть при CCU IV и влезть при CCU V.
-            # Определять до выбора персонажа важно ещё и потому, что иначе
-            # неудачная попытка расходовала бы его слот впустую.
-            required_ccu = min_ccu_level_that_fits("miner_00", radius)
-            if required_ccu is None:
-                result.warnings.append(
-                    f"{row.get('System')} {row.get('Planet')}: добывающий шаблон "
-                    f"не помещается ни при каком уровне Command Center Upgrades "
-                    f"(радиус {radius:,.0f} км).".replace(",", "\u00a0")
-                )
-                continue
-
-            # Берём наименее прокачанного из подходящих: персонажи с CCU V
-            # ценнее на переработке, где только они ставят два шаблона.
-            character = pool.take(min_ccu=required_ccu, prefer_least_skilled=True)
-            if character is None:
-                skill_shortfall = True
-                continue
-
-            load = calculate_colony_load(
-                "miner_00", character.command_center_upgrades_level, radius
-            )
-
-            row_counter += 1
-            placed += 1
-            result.rows.append(
-                PlanRow(
-                    id=f"row-{row_counter}",
-                    char_id=character.character_id,
-                    character=character.name,
-                    role="Добыча",
-                    planet=str(row.get("Planet", "")),
-                    system=str(row.get("System", "")),
-                    constellation=str(row.get("Constellation", "")),
-                    cc_type=f"1x {row.get('Type')} Command Center",
-                    res_out=product,
-                    res_in=raw_name,
-                    structures=f"{per_miner} фабрик",
-                    type_id=_type_ids().get(product),
-                    template_key="miner_00",
-                    template_count=1,
-                    planet_type=str(row.get("Type", "")),
-                    planet_radius_km=radius,
-                    cpu_percent=load.cpu_percent,
-                    pg_percent=load.pg_percent,
-                )
-            )
+            colony_round += 1
 
         if placed < templates_needed:
+            result.staffing_gaps.append(
+                StaffingGap(
+                    role="Добыча",
+                    planets_needed=templates_needed,
+                    planets_placed=placed,
+                    min_ccu_level=MINER_MIN_CCU,
+                    details=f"{product} (сырьё «{raw_name}»)",
+                )
+            )
             reason = (
-                " Не хватило свободных персонажей нужного уровня."
+                "не хватило свободных персонажей — планет достаточно, "
+                "на одной размещаются колонии нескольких"
                 if skill_shortfall
-                else " Не хватило подходящих планет с этим сырьём."
+                else "добывающий шаблон не помещается на найденные планеты"
             )
             result.warnings.append(
-                f"ДЕФИЦИТ ДОБЫЧИ: для {product} нужно {templates_needed} планет, "
-                f"размещено {placed}.{reason}"
+                f"ДЕФИЦИТ ДОБЫЧИ: {product} — нужно {templates_needed} планет, "
+                f"размещено {placed} ({reason})."
             )
 
     if pool.free_slots == 0 and pool.total_slots:
