@@ -39,6 +39,17 @@ IGNORED_CONSTELLATION_VALUES = {"max P2"}
 
 RADIUS_COLUMN = "Radius [km]"
 
+# Одно и то же сырьё называется по-разному в разных источниках.
+# Например, в recipes.json источник для Bacteria записан как
+# "Microorganisms", а в игре, на eve-webtools и в CSV — "Micro-Organisms".
+# Без сопоставления поиск планет с этим сырьём молча ничего не находил бы,
+# и планировщик сообщал бы о несуществующем дефиците.
+RESOURCE_NAME_ALIASES = {
+    "Microorganisms": ["Micro-Organisms", "Micro Organisms"],
+    "Micro-Organisms": ["Microorganisms", "Micro Organisms"],
+    "Non-CS Crystals": ["Noncomplex Crystals", "Non CS Crystals"],
+}
+
 # Типы планет, на которые ставятся перерабатывающие шаблоны (P2-P4).
 #
 # РЕШЕНИЕ ПРОЕКТА, не ограничение источника. Источник разрешает P2/P3 на
@@ -99,6 +110,31 @@ class PlanetBook:
         ]
         return subset.sort_values(RADIUS_COLUMN, na_position="last")
 
+    def resolve_resource_column(self, resource_name: str) -> str | None:
+        """
+        Найти колонку CSV, соответствующую названию сырья.
+
+        Сначала точное совпадение, затем известные варианты написания,
+        затем сравнение без дефисов и регистра. Возвращает None, если
+        колонки нет вовсе — чтобы вызывающий код мог сказать об этом
+        прямо, а не выдать пустой результат как «сырья нет в регионе».
+        """
+        if resource_name in self._df.columns:
+            return resource_name
+
+        for alias in RESOURCE_NAME_ALIASES.get(resource_name, []):
+            if alias in self._df.columns:
+                return alias
+
+        def simplify(text: str) -> str:
+            return text.lower().replace("-", "").replace(" ", "")
+
+        target = simplify(resource_name)
+        for column in self._df.columns:
+            if simplify(str(column)) == target:
+                return str(column)
+        return None
+
     def planets_with_resource(
         self, resource_name: str, constellations: list[str] | None = None
     ) -> pd.DataFrame:
@@ -113,8 +149,10 @@ class PlanetBook:
         Заменяет разрозненные dropna()/sort_values(), разбросанные
         по calculate_plan() в старом main.py.
         """
-        if resource_name not in self._df.columns:
+        column = self.resolve_resource_column(resource_name)
+        if column is None:
             return self._df.iloc[0:0]
+        resource_name = column
 
         subset = self._df
         if constellations:

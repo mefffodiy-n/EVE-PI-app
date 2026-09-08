@@ -51,16 +51,45 @@ def _type_ids() -> dict[str, int]:
 
 @lru_cache(maxsize=1)
 def _initial_payload() -> dict:
-    """Считается один раз на процесс."""
-    recipes = load_recipes()
-    planets = load_planets()
-    products = sorted(r.name for r in recipes if r.tier in PROCESSING_TIERS)
+    """
+    Считается один раз на процесс.
+
+    Отсутствие данных по планетам НЕ роняет ответ: продукты берутся из
+    рецептов и доступны всегда, а список констелляций приходит пустым
+    с внятным пояснением. Иначе интерфейс показывал бы пустые списки
+    без единого намёка на причину — ровно тот симптом, по которому
+    невозможно понять, что не так.
+    """
+    products = sorted(r.name for r in load_recipes() if r.tier in PROCESSING_TIERS)
     ids = _type_ids()
-    return {
-        "bases": planets.constellations(),
+    payload = {
         "products": products,
         "product_ids": {name: ids[name] for name in products if name in ids},
+        "bases": [],
+        "data_problems": [],
     }
+
+    try:
+        payload["bases"] = load_planets().constellations()
+    except FileNotFoundError:
+        payload["data_problems"].append(
+            "Не найден файл data/planet_industry.csv — списки констелляций "
+            "и систем будут пусты. Скопируйте его из корня старого "
+            "репозитория, переименовав без пробела в имени."
+        )
+    except Exception as exc:  # формат файла испорчен
+        payload["data_problems"].append(
+            f"Не удалось разобрать data/planet_industry.csv: "
+            f"{type(exc).__name__}: {exc}"
+        )
+
+    if not payload["product_ids"]:
+        payload["data_problems"].append(
+            "Нет карты type_id — иконки продуктов не отобразятся. "
+            "Создайте её командой: python -m scripts.extract_schematics --write"
+        )
+
+    return payload
 
 
 @bp.get("/initial-data")
@@ -79,7 +108,12 @@ def systems():
     if not constellations:
         return json_error("Список констелляций пуст")
 
-    return json_ok(systems=load_planets().systems_in(constellations))
+    try:
+        return json_ok(systems=load_planets().systems_in(constellations))
+    except FileNotFoundError:
+        return json_error(
+            "Не найден файл data/planet_industry.csv — список систем недоступен.", 503
+        )
 
 
 @bp.get("/thresholds/<int:ccu_level>")

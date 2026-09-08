@@ -1,0 +1,1229 @@
+{
+  "_source": "Извлечено из маршрутов (поле R) шаблонов в data/templates/ скриптом scripts/extract_schematics.py. Количества — проверенные данные из самих шаблонов, не догадки.",
+  "schematics": {
+    "44": {
+      "product": "Enriched Uranium",
+      "facility": "advanced_industry_facility",
+      "inputs": {
+        "2399": 40,
+        "2400": 40
+      },
+      "output_type_id": 44,
+      "output_qty": 5,
+      "sources": [
+        "Factory - Enriched Uranium.json"
+      ],
+      "inputs_by_name": {
+        "Precious Metals": 40,
+        "Toxic Metals": 40
+      }
+    },
+    "2312": {
+      "product": "Supertensile Plastics",
+      "facility": "advanced_industry_facility",
+      "inputs": {
+        "3683": 40,
+        "3779": 40
+      },
+      "output_type_id": 2312,
+      "output_qty": 5,
+      "sources": [
+        "Factory - Supertensile Plastics.json"
+      ],
+      "inputs_by_name": {
+        "Oxygen": 40,
+        "Biomass": 40
+      }
+    },
+    "2317": {
+      "product": "Oxides",
+      "facility": "advanced_industry_facility",
+      "inputs": {
+        "2392": 40,
+        "3683": 40
+      },
+      "output_type_id": 2317,
+      "output_qty": 5,
+      "sources": [
+        "Factory - Oxides.json"
+      ],
+      "inputs_by_name": {
+        "Oxidizing Compound": 40,
+        "Oxygen": 40
+      }
+    },
+    "2319": {
+      "product": "Test Cultures",
+      "facility": "advanced_industry_facility",
+      "inputs": {
+        "2393": 40,
+        "3645": 40
+      },
+      "output_type_id": 2319,
+      "output_qty": 5,
+      "sources": [
+        "Factory - Test Cultures.json"
+      ],
+      "inputs_by_name": {
+        "Bacteria": 40,
+        "Water": 40
+      }
+    },
+    "2321": {
+      "product": "Polyaramids",
+      "facility": "advanced_industry_facility",
+      "inputs": {
+        "2392": 40,
+        "2397": 40
+      },
+      "output_type_id": 2321,
+      "output_qty": 5,
+      "sources": [
+        "Factory - Polyaramids.json"
+      ],
+      "inputs_by_name": {
+        "Oxidizing Compound": 40,
+        "Industrial Fibers": 40
+      }
+    },
+    "2327": {
+      "product": "Microfiber Shielding",
+      "facility": "advanced_industry_facility",
+      "inputs": {
+        "2397": 40,
+        "9828": 40
+      },
+      "output_type_id": 2327,
+      "output_qty": 5,
+      "sources": [
+        "Factory - Microfiber Shielding.json"
+      ],
+      "inputs_by_name": {
+        "Industrial Fibers": 40,
+        "Silicon": 40
+      }
+    },
+    "2328": {
+      "product": "Water-Cooled CPU",
+      "facility": "advanced_industry_facility",
+      "inputs": {
+        "2398": 40,
+        "3645": 40
+      },
+      "output_type_id": 2328,
+      "output_qty": 5,
+      "sources": [
+        "Factory - Water-Cooled CPU.json"
+      ],
+      "inputs_by_name": {
+        "Reactive Metals": 40,
+        "Water": 40
+      }
+    },
+    "2329": {
+      "product": "Biocells",
+      "facility": "advanced_industry_facility",
+      "inputs": {
+        "2396": 40,
+        "2399": 40
+      },
+      "output_type_id": 2329,
+      "output_qty": 5,
+      "sources": [
+        "Factory - Biocells.json"
+      ],
+      "inputs_by_name": {
+        "Biofuels": 40,
+        "Precious Metals": 40
+      }
+    },
+    "2344": {
+      "product": "Condensates",
+      "facility": "advanced_industry_facility",
+      "inputs": {
+        "2317": 10,
+        "9832": 10
+      },
+      "output_type_id": 2344,
+      "output_qty": 3,
+      "sources": [
+        "Factory - Condensates.json"
+      ],
+      "inputs_by_name": {
+        "Oxides": 10,
+        "Coolant": 10
+      }
+    },
+    "2345": {
+      "product": "Camera Drones",
+      "facility": "advanced_industry_facility",
+      "inputs": {
+        "3697": 10,
+        "9830": 10
+      },
+      "output_type_id": 2345,
+      "output_qty": 3,
+      "sources": [
+        "Factory - Camera Drones.json"
+      ],
+      "inputs_by_name": {
+        "Silicate Glass": 10,
+        "Rocket Fuel": 10
+      }
+    },
+    "2346": {
+      "product": "Synthetic Synapses",
+      "facility": "advanced_industry_facility",
+      "inputs": {
+        "2312": 10,
+        "2319": 10
+      },
+      "output_type_id": 2346,
+      "output_qty": 3,
+      "sources": [
+        "Factory - Synthetic Synapses.json"
+      ],
+      "inputs_by_name": {
+        "Supertensile Plastics": 10,
+        "Test Cultures": 10
+      }
+    },
+    "2348": {
+      "product": "Gel-Matrix Biopaste",
+      "facility": "advanced_industry_facility",
+      "inputs": {
+        "2317": 10,
+        "2329": 10,
+        "9838": 10
+      },
+      "output_type_id": 2348,
+      "output_qty": 3,
+      "sources": [
+        "Factory - Gel-Matrix Biopaste.json"
+      ],
+      "inputs_by_name": {
+        "Oxides": 10,
+        "Biocells": 10,
+        "Superconductors": 10
+      }
+    },
+    "2349": {
+      "product": "Supercomputers",
+      "facility": "advanced_industry_facility",
+      "inputs": {
+        "2328": 10,
+        "9832": 10,
+        "9836": 10
+      },
+      "output_type_id": 2349,
+      "output_qty": 3,
+      "sources": [
+        "Factory - Supercomputers.json"
+      ],
+      "inputs_by_name": {
+        "Water-Cooled CPU": 10,
+        "Coolant": 10,
+        "Consumer Electronics": 10
+      }
+    },
+    "2351": {
+      "product": "Smartfab Units",
+      "facility": "advanced_industry_facility",
+      "inputs": {
+        "3828": 10,
+        "9842": 10
+      },
+      "output_type_id": 2351,
+      "output_qty": 3,
+      "sources": [
+        "Factory - Smartfab Units.json"
+      ],
+      "inputs_by_name": {
+        "Construction Blocks": 10,
+        "Miniature Electronics": 10
+      }
+    },
+    "2352": {
+      "product": "Nuclear Reactors",
+      "facility": "advanced_industry_facility",
+      "inputs": {
+        "44": 10,
+        "2327": 10
+      },
+      "output_type_id": 2352,
+      "output_qty": 3,
+      "sources": [
+        "Factory - Nuclear Reactors.json"
+      ],
+      "inputs_by_name": {
+        "Enriched Uranium": 10,
+        "Microfiber Shielding": 10
+      }
+    },
+    "2354": {
+      "product": "Neocoms",
+      "facility": "advanced_industry_facility",
+      "inputs": {
+        "2329": 10,
+        "3697": 10
+      },
+      "output_type_id": 2354,
+      "output_qty": 3,
+      "sources": [
+        "Factory - Neocoms.json"
+      ],
+      "inputs_by_name": {
+        "Biocells": 10,
+        "Silicate Glass": 10
+      }
+    },
+    "2358": {
+      "product": "Biotech Research Reports",
+      "facility": "advanced_industry_facility",
+      "inputs": {
+        "2463": 10,
+        "3725": 10,
+        "3828": 10
+      },
+      "output_type_id": 2358,
+      "output_qty": 3,
+      "sources": [
+        "Factory - Biotech Research Reports.json"
+      ],
+      "inputs_by_name": {
+        "Nanites": 10,
+        "Livestock": 10,
+        "Construction Blocks": 10
+      }
+    },
+    "2360": {
+      "product": "Industrial Explosives",
+      "facility": "advanced_industry_facility",
+      "inputs": {
+        "3693": 10,
+        "3695": 10
+      },
+      "output_type_id": 2360,
+      "output_qty": 3,
+      "sources": [
+        "Factory - Industrial Explosives.json"
+      ],
+      "inputs_by_name": {
+        "Fertilizer": 10,
+        "Polytextiles": 10
+      }
+    },
+    "2361": {
+      "product": "Hermetic Membranes",
+      "facility": "advanced_industry_facility",
+      "inputs": {
+        "2321": 10,
+        "15317": 10
+      },
+      "output_type_id": 2361,
+      "output_qty": 3,
+      "sources": [
+        "Factory - Hermetic Membranes.json"
+      ],
+      "inputs_by_name": {
+        "Polyaramids": 10,
+        "Genetically Enhanced Livestock": 10
+      }
+    },
+    "2366": {
+      "product": "Hazmat Detection Systems",
+      "facility": "advanced_industry_facility",
+      "inputs": {
+        "3695": 10,
+        "3775": 10,
+        "9840": 10
+      },
+      "output_type_id": 2366,
+      "output_qty": 3,
+      "sources": [
+        "Factory - Hazmat Detection Systems.json"
+      ],
+      "inputs_by_name": {
+        "Polytextiles": 10,
+        "Viral Agent": 10,
+        "Transmitter": 10
+      }
+    },
+    "2367": {
+      "product": "Cryoprotectant Solution",
+      "facility": "advanced_industry_facility",
+      "inputs": {
+        "2319": 10,
+        "3691": 10,
+        "3693": 10
+      },
+      "output_type_id": 2367,
+      "output_qty": 3,
+      "sources": [
+        "Factory - Cryoprotectant Solution.json"
+      ],
+      "inputs_by_name": {
+        "Test Cultures": 10,
+        "Synthetic Oil": 10,
+        "Fertilizer": 10
+      }
+    },
+    "2389": {
+      "product": "Plasmoids",
+      "facility": "basic_industry_facility",
+      "inputs": {
+        "2308": 3000
+      },
+      "output_type_id": 2389,
+      "output_qty": 20,
+      "sources": [
+        "Miner - 00 - Plasmoids.json"
+      ],
+      "inputs_by_name": {
+        "type_id:2308": 3000
+      }
+    },
+    "2390": {
+      "product": "Electrolytes",
+      "facility": "basic_industry_facility",
+      "inputs": {
+        "2309": 3000
+      },
+      "output_type_id": 2390,
+      "output_qty": 20,
+      "sources": [
+        "Miner - 00 - Electrolytes.json"
+      ],
+      "inputs_by_name": {
+        "type_id:2309": 3000
+      }
+    },
+    "2392": {
+      "product": "Oxidizing Compound",
+      "facility": "basic_industry_facility",
+      "inputs": {
+        "2311": 3000
+      },
+      "output_type_id": 2392,
+      "output_qty": 20,
+      "sources": [
+        "Miner - 00 - Oxidizing Compound.json"
+      ],
+      "inputs_by_name": {
+        "type_id:2311": 3000
+      }
+    },
+    "2393": {
+      "product": "Bacteria",
+      "facility": "basic_industry_facility",
+      "inputs": {
+        "2073": 3000
+      },
+      "output_type_id": 2393,
+      "output_qty": 20,
+      "sources": [
+        "Miner - 00 - Bacteria.json"
+      ],
+      "inputs_by_name": {
+        "type_id:2073": 3000
+      }
+    },
+    "2395": {
+      "product": "Proteins",
+      "facility": "basic_industry_facility",
+      "inputs": {
+        "2287": 3000
+      },
+      "output_type_id": 2395,
+      "output_qty": 20,
+      "sources": [
+        "Miner - 00 - Proteins.json"
+      ],
+      "inputs_by_name": {
+        "type_id:2287": 3000
+      }
+    },
+    "2396": {
+      "product": "Biofuels",
+      "facility": "basic_industry_facility",
+      "inputs": {
+        "2288": 3000
+      },
+      "output_type_id": 2396,
+      "output_qty": 20,
+      "sources": [
+        "Miner - 00 - Biofuels.json"
+      ],
+      "inputs_by_name": {
+        "type_id:2288": 3000
+      }
+    },
+    "2397": {
+      "product": "Industrial Fibers",
+      "facility": "basic_industry_facility",
+      "inputs": {
+        "2305": 3000
+      },
+      "output_type_id": 2397,
+      "output_qty": 20,
+      "sources": [
+        "Miner - 00 - Industrial Fibers.json"
+      ],
+      "inputs_by_name": {
+        "type_id:2305": 3000
+      }
+    },
+    "2398": {
+      "product": "Reactive Metals",
+      "facility": "basic_industry_facility",
+      "inputs": {
+        "2267": 3000
+      },
+      "output_type_id": 2398,
+      "output_qty": 20,
+      "sources": [
+        "Miner - 00 - Reactive Metals.json"
+      ],
+      "inputs_by_name": {
+        "type_id:2267": 3000
+      }
+    },
+    "2399": {
+      "product": "Precious Metals",
+      "facility": "basic_industry_facility",
+      "inputs": {
+        "2270": 3000
+      },
+      "output_type_id": 2399,
+      "output_qty": 20,
+      "sources": [
+        "Miner - 00 - Precious Metals.json"
+      ],
+      "inputs_by_name": {
+        "type_id:2270": 3000
+      }
+    },
+    "2400": {
+      "product": "Toxic Metals",
+      "facility": "basic_industry_facility",
+      "inputs": {
+        "2272": 3000
+      },
+      "output_type_id": 2400,
+      "output_qty": 20,
+      "sources": [
+        "Miner - 00 - Toxic Metals.json"
+      ],
+      "inputs_by_name": {
+        "type_id:2272": 3000
+      }
+    },
+    "2401": {
+      "product": "Chiral Structures",
+      "facility": "basic_industry_facility",
+      "inputs": {
+        "2306": 3000
+      },
+      "output_type_id": 2401,
+      "output_qty": 20,
+      "sources": [
+        "Miner - 00 - Chiral Stuctures.json"
+      ],
+      "inputs_by_name": {
+        "type_id:2306": 3000
+      }
+    },
+    "2463": {
+      "product": "Nanites",
+      "facility": "advanced_industry_facility",
+      "inputs": {
+        "2393": 40,
+        "2398": 40
+      },
+      "output_type_id": 2463,
+      "output_qty": 5,
+      "sources": [
+        "Factory - Nanites.json"
+      ],
+      "inputs_by_name": {
+        "Bacteria": 40,
+        "Reactive Metals": 40
+      }
+    },
+    "2867": {
+      "product": "Broadcast Node",
+      "facility": "high_tech_industry_facility",
+      "inputs": {
+        "2354": 6,
+        "17392": 6,
+        "17898": 6
+      },
+      "output_type_id": 2867,
+      "output_qty": 1,
+      "sources": [
+        "Factory - Broadcast Node.json"
+      ],
+      "inputs_by_name": {
+        "Neocoms": 6,
+        "Data Chips": 6,
+        "High-Tech Transmitters": 6
+      }
+    },
+    "2868": {
+      "product": "Integrity Response Drones",
+      "facility": "high_tech_industry_facility",
+      "inputs": {
+        "2348": 6,
+        "2366": 6,
+        "9846": 6
+      },
+      "output_type_id": 2868,
+      "output_qty": 1,
+      "sources": [
+        "Factory - Integrity Response Drones.json"
+      ],
+      "inputs_by_name": {
+        "Gel-Matrix Biopaste": 6,
+        "Hazmat Detection Systems": 6,
+        "Planetary Vehicles": 6
+      }
+    },
+    "2869": {
+      "product": "Nano-Factory",
+      "facility": "high_tech_industry_facility",
+      "inputs": {
+        "2360": 6,
+        "2398": 40,
+        "17136": 6
+      },
+      "output_type_id": 2869,
+      "output_qty": 1,
+      "sources": [
+        "Factory - Nano-Factory.json"
+      ],
+      "inputs_by_name": {
+        "Industrial Explosives": 6,
+        "Reactive Metals": 40,
+        "Ukomi Superconductors": 6
+      }
+    },
+    "2870": {
+      "product": "Organic Mortar Applicators",
+      "facility": "high_tech_industry_facility",
+      "inputs": {
+        "2344": 6,
+        "2393": 40,
+        "9848": 6
+      },
+      "output_type_id": 2870,
+      "output_qty": 1,
+      "sources": [
+        "Factory - Organic Mortar Applicators.json"
+      ],
+      "inputs_by_name": {
+        "Condensates": 6,
+        "Bacteria": 40,
+        "Robotics": 6
+      }
+    },
+    "2871": {
+      "product": "Recursive Computing Module",
+      "facility": "high_tech_industry_facility",
+      "inputs": {
+        "2346": 6,
+        "9834": 6,
+        "12836": 6
+      },
+      "output_type_id": 2871,
+      "output_qty": 1,
+      "sources": [
+        "Factory - Recursive Computing Module.json"
+      ],
+      "inputs_by_name": {
+        "Synthetic Synapses": 6,
+        "Guidance Systems": 6,
+        "Transcranial Microcontrollers": 6
+      }
+    },
+    "2872": {
+      "product": "Self-Harmonizing Power Core",
+      "facility": "high_tech_industry_facility",
+      "inputs": {
+        "2345": 6,
+        "2352": 6,
+        "2361": 6
+      },
+      "output_type_id": 2872,
+      "output_qty": 1,
+      "sources": [
+        "Factory - Self-Harmonizing Power Core.json"
+      ],
+      "inputs_by_name": {
+        "Camera Drones": 6,
+        "Nuclear Reactors": 6,
+        "Hermetic Membranes": 6
+      }
+    },
+    "2875": {
+      "product": "Sterile Conduits",
+      "facility": "high_tech_industry_facility",
+      "inputs": {
+        "2351": 6,
+        "3645": 40,
+        "28974": 6
+      },
+      "output_type_id": 2875,
+      "output_qty": 1,
+      "sources": [
+        "Factory - Sterile Conduits.json"
+      ],
+      "inputs_by_name": {
+        "Smartfab Units": 6,
+        "Water": 40,
+        "Vaccines": 6
+      }
+    },
+    "2876": {
+      "product": "Wetware Mainframe",
+      "facility": "high_tech_industry_facility",
+      "inputs": {
+        "2349": 6,
+        "2358": 6,
+        "2367": 6
+      },
+      "output_type_id": 2876,
+      "output_qty": 1,
+      "sources": [
+        "Factory - Wetware Mainframe.json"
+      ],
+      "inputs_by_name": {
+        "Supercomputers": 6,
+        "Biotech Research Reports": 6,
+        "Cryoprotectant Solution": 6
+      }
+    },
+    "3645": {
+      "product": "Water",
+      "facility": "basic_industry_facility",
+      "inputs": {
+        "2268": 3000
+      },
+      "output_type_id": 3645,
+      "output_qty": 20,
+      "sources": [
+        "Miner - 00 - Water.json"
+      ],
+      "inputs_by_name": {
+        "type_id:2268": 3000
+      }
+    },
+    "3683": {
+      "product": "Oxygen",
+      "facility": "basic_industry_facility",
+      "inputs": {
+        "2310": 3000
+      },
+      "output_type_id": 3683,
+      "output_qty": 20,
+      "sources": [
+        "Miner - 00 - Oxygen.json"
+      ],
+      "inputs_by_name": {
+        "type_id:2310": 3000
+      }
+    },
+    "3689": {
+      "product": "Mechanical Parts",
+      "facility": "advanced_industry_facility",
+      "inputs": {
+        "2398": 40,
+        "2399": 40
+      },
+      "output_type_id": 3689,
+      "output_qty": 5,
+      "sources": [
+        "Factory - Mechanical Parts.json"
+      ],
+      "inputs_by_name": {
+        "Reactive Metals": 40,
+        "Precious Metals": 40
+      }
+    },
+    "3691": {
+      "product": "Synthetic Oil",
+      "facility": "advanced_industry_facility",
+      "inputs": {
+        "2390": 40,
+        "3683": 40
+      },
+      "output_type_id": 3691,
+      "output_qty": 5,
+      "sources": [
+        "Factory - Synthetic Oil.json"
+      ],
+      "inputs_by_name": {
+        "Electrolytes": 40,
+        "Oxygen": 40
+      }
+    },
+    "3693": {
+      "product": "Fertilizer",
+      "facility": "advanced_industry_facility",
+      "inputs": {
+        "2393": 40,
+        "2395": 40
+      },
+      "output_type_id": 3693,
+      "output_qty": 5,
+      "sources": [
+        "Factory - Fertilizer.json"
+      ],
+      "inputs_by_name": {
+        "Bacteria": 40,
+        "Proteins": 40
+      }
+    },
+    "3695": {
+      "product": "Polytextiles",
+      "facility": "advanced_industry_facility",
+      "inputs": {
+        "2396": 40,
+        "2397": 40
+      },
+      "output_type_id": 3695,
+      "output_qty": 5,
+      "sources": [
+        "Factory - Polytextiles.json"
+      ],
+      "inputs_by_name": {
+        "Biofuels": 40,
+        "Industrial Fibers": 40
+      }
+    },
+    "3697": {
+      "product": "Silicate Glass",
+      "facility": "advanced_industry_facility",
+      "inputs": {
+        "2392": 40,
+        "9828": 40
+      },
+      "output_type_id": 3697,
+      "output_qty": 5,
+      "sources": [
+        "Factory - Silicate Glass.json"
+      ],
+      "inputs_by_name": {
+        "Oxidizing Compound": 40,
+        "Silicon": 40
+      }
+    },
+    "3725": {
+      "product": "Livestock",
+      "facility": "advanced_industry_facility",
+      "inputs": {
+        "2395": 40,
+        "2396": 40
+      },
+      "output_type_id": 3725,
+      "output_qty": 5,
+      "sources": [
+        "Factory - Livestock.json"
+      ],
+      "inputs_by_name": {
+        "Proteins": 40,
+        "Biofuels": 40
+      }
+    },
+    "3775": {
+      "product": "Viral Agent",
+      "facility": "advanced_industry_facility",
+      "inputs": {
+        "2393": 40,
+        "3779": 40
+      },
+      "output_type_id": 3775,
+      "output_qty": 5,
+      "sources": [
+        "Factory - Viral Agent.json"
+      ],
+      "inputs_by_name": {
+        "Bacteria": 40,
+        "Biomass": 40
+      }
+    },
+    "3779": {
+      "product": "Biomass",
+      "facility": "basic_industry_facility",
+      "inputs": {
+        "2286": 3000
+      },
+      "output_type_id": 3779,
+      "output_qty": 20,
+      "sources": [
+        "Miner - 00 - Biomass.json"
+      ],
+      "inputs_by_name": {
+        "type_id:2286": 3000
+      }
+    },
+    "3828": {
+      "product": "Construction Blocks",
+      "facility": "advanced_industry_facility",
+      "inputs": {
+        "2398": 40,
+        "2400": 40
+      },
+      "output_type_id": 3828,
+      "output_qty": 5,
+      "sources": [
+        "Factory - Construction Blocks.json"
+      ],
+      "inputs_by_name": {
+        "Reactive Metals": 40,
+        "Toxic Metals": 40
+      }
+    },
+    "9828": {
+      "product": "Silicon",
+      "facility": "basic_industry_facility",
+      "inputs": {
+        "2307": 3000
+      },
+      "output_type_id": 9828,
+      "output_qty": 20,
+      "sources": [
+        "Miner - 00 - Silicon.json"
+      ],
+      "inputs_by_name": {
+        "type_id:2307": 3000
+      }
+    },
+    "9830": {
+      "product": "Rocket Fuel",
+      "facility": "advanced_industry_facility",
+      "inputs": {
+        "2389": 40,
+        "2390": 40
+      },
+      "output_type_id": 9830,
+      "output_qty": 5,
+      "sources": [
+        "Factory - Rocket Fuel.json"
+      ],
+      "inputs_by_name": {
+        "Plasmoids": 40,
+        "Electrolytes": 40
+      }
+    },
+    "9832": {
+      "product": "Coolant",
+      "facility": "advanced_industry_facility",
+      "inputs": {
+        "2390": 40,
+        "3645": 40
+      },
+      "output_type_id": 9832,
+      "output_qty": 5,
+      "sources": [
+        "Factory - Coolant.json"
+      ],
+      "inputs_by_name": {
+        "Electrolytes": 40,
+        "Water": 40
+      }
+    },
+    "9834": {
+      "product": "Guidance Systems",
+      "facility": "advanced_industry_facility",
+      "inputs": {
+        "2328": 10,
+        "9840": 10
+      },
+      "output_type_id": 9834,
+      "output_qty": 3,
+      "sources": [
+        "Factory - Guidance Systems.json"
+      ],
+      "inputs_by_name": {
+        "Water-Cooled CPU": 10,
+        "Transmitter": 10
+      }
+    },
+    "9836": {
+      "product": "Consumer Electronics",
+      "facility": "advanced_industry_facility",
+      "inputs": {
+        "2400": 40,
+        "2401": 40
+      },
+      "output_type_id": 9836,
+      "output_qty": 5,
+      "sources": [
+        "Factory - Consumer Electronics.json"
+      ],
+      "inputs_by_name": {
+        "Toxic Metals": 40,
+        "Chiral Structures": 40
+      }
+    },
+    "9838": {
+      "product": "Superconductors",
+      "facility": "advanced_industry_facility",
+      "inputs": {
+        "2389": 40,
+        "3645": 40
+      },
+      "output_type_id": 9838,
+      "output_qty": 5,
+      "sources": [
+        "Factory - Superconductors.json"
+      ],
+      "inputs_by_name": {
+        "Plasmoids": 40,
+        "Water": 40
+      }
+    },
+    "9840": {
+      "product": "Transmitter",
+      "facility": "advanced_industry_facility",
+      "inputs": {
+        "2389": 40,
+        "2401": 40
+      },
+      "output_type_id": 9840,
+      "output_qty": 5,
+      "sources": [
+        "Factory - Transmitter.json"
+      ],
+      "inputs_by_name": {
+        "Plasmoids": 40,
+        "Chiral Structures": 40
+      }
+    },
+    "9842": {
+      "product": "Miniature Electronics",
+      "facility": "advanced_industry_facility",
+      "inputs": {
+        "2401": 40,
+        "9828": 40
+      },
+      "output_type_id": 9842,
+      "output_qty": 5,
+      "sources": [
+        "Factory - Miniature Electronics.json"
+      ],
+      "inputs_by_name": {
+        "Chiral Structures": 40,
+        "Silicon": 40
+      }
+    },
+    "9846": {
+      "product": "Planetary Vehicles",
+      "facility": "advanced_industry_facility",
+      "inputs": {
+        "2312": 10,
+        "3689": 10,
+        "9842": 10
+      },
+      "output_type_id": 9846,
+      "output_qty": 3,
+      "sources": [
+        "Factory - Planetary Vehicles.json"
+      ],
+      "inputs_by_name": {
+        "Supertensile Plastics": 10,
+        "Mechanical Parts": 10,
+        "Miniature Electronics": 10
+      }
+    },
+    "9848": {
+      "product": "Robotics",
+      "facility": "advanced_industry_facility",
+      "inputs": {
+        "3689": 10,
+        "9836": 10
+      },
+      "output_type_id": 9848,
+      "output_qty": 3,
+      "sources": [
+        "Factory - Robotics.json"
+      ],
+      "inputs_by_name": {
+        "Mechanical Parts": 10,
+        "Consumer Electronics": 10
+      }
+    },
+    "12836": {
+      "product": "Transcranial Microcontrollers",
+      "facility": "advanced_industry_facility",
+      "inputs": {
+        "2329": 10,
+        "2463": 10
+      },
+      "output_type_id": 12836,
+      "output_qty": 3,
+      "sources": [
+        "Factory - Transcranial Microcontrollers.json"
+      ],
+      "inputs_by_name": {
+        "Biocells": 10,
+        "Nanites": 10
+      }
+    },
+    "15317": {
+      "product": "Genetically Enhanced Livestock",
+      "facility": "advanced_industry_facility",
+      "inputs": {
+        "2395": 40,
+        "3779": 40
+      },
+      "output_type_id": 15317,
+      "output_qty": 5,
+      "sources": [
+        "Factory - Genetically Enhanced Livestock.json"
+      ],
+      "inputs_by_name": {
+        "Proteins": 40,
+        "Biomass": 40
+      }
+    },
+    "17136": {
+      "product": "Ukomi Superconductors",
+      "facility": "advanced_industry_facility",
+      "inputs": {
+        "3691": 10,
+        "9838": 10
+      },
+      "output_type_id": 17136,
+      "output_qty": 3,
+      "sources": [
+        "Factory - Ukomi Superconductors.json"
+      ],
+      "inputs_by_name": {
+        "Synthetic Oil": 10,
+        "Superconductors": 10
+      }
+    },
+    "17392": {
+      "product": "Data Chips",
+      "facility": "advanced_industry_facility",
+      "inputs": {
+        "2312": 10,
+        "2327": 10
+      },
+      "output_type_id": 17392,
+      "output_qty": 3,
+      "sources": [
+        "Factory - Data Chips.json"
+      ],
+      "inputs_by_name": {
+        "Supertensile Plastics": 10,
+        "Microfiber Shielding": 10
+      }
+    },
+    "17898": {
+      "product": "High-Tech Transmitters",
+      "facility": "advanced_industry_facility",
+      "inputs": {
+        "2321": 10,
+        "9840": 10
+      },
+      "output_type_id": 17898,
+      "output_qty": 3,
+      "sources": [
+        "Factory - High-Tech Transmitters.json"
+      ],
+      "inputs_by_name": {
+        "Polyaramids": 10,
+        "Transmitter": 10
+      }
+    },
+    "28974": {
+      "product": "Vaccines",
+      "facility": "advanced_industry_facility",
+      "inputs": {
+        "3725": 10,
+        "3775": 10
+      },
+      "output_type_id": 28974,
+      "output_qty": 3,
+      "sources": [
+        "Factory - Vaccines.json"
+      ],
+      "inputs_by_name": {
+        "Livestock": 10,
+        "Viral Agent": 10
+      }
+    }
+  },
+  "type_ids": {
+    "Bacteria": 2393,
+    "Biocells": 2329,
+    "Biofuels": 2396,
+    "Biomass": 3779,
+    "Biotech Research Reports": 2358,
+    "Broadcast Node": 2867,
+    "Camera Drones": 2345,
+    "Chiral Structures": 2401,
+    "Condensates": 2344,
+    "Construction Blocks": 3828,
+    "Consumer Electronics": 9836,
+    "Coolant": 9832,
+    "Cryoprotectant Solution": 2367,
+    "Data Chips": 17392,
+    "Electrolytes": 2390,
+    "Enriched Uranium": 44,
+    "Fertilizer": 3693,
+    "Gel-Matrix Biopaste": 2348,
+    "Genetically Enhanced Livestock": 15317,
+    "Guidance Systems": 9834,
+    "Hazmat Detection Systems": 2366,
+    "Hermetic Membranes": 2361,
+    "High-Tech Transmitters": 17898,
+    "Industrial Explosives": 2360,
+    "Industrial Fibers": 2397,
+    "Integrity Response Drones": 2868,
+    "Livestock": 3725,
+    "Mechanical Parts": 3689,
+    "Microfiber Shielding": 2327,
+    "Miniature Electronics": 9842,
+    "Nanites": 2463,
+    "Nano-Factory": 2869,
+    "Neocoms": 2354,
+    "Nuclear Reactors": 2352,
+    "Organic Mortar Applicators": 2870,
+    "Oxides": 2317,
+    "Oxidizing Compound": 2392,
+    "Oxygen": 3683,
+    "Planetary Vehicles": 9846,
+    "Plasmoids": 2389,
+    "Polyaramids": 2321,
+    "Polytextiles": 3695,
+    "Precious Metals": 2399,
+    "Proteins": 2395,
+    "Reactive Metals": 2398,
+    "Recursive Computing Module": 2871,
+    "Robotics": 9848,
+    "Rocket Fuel": 9830,
+    "Self-Harmonizing Power Core": 2872,
+    "Silicate Glass": 3697,
+    "Silicon": 9828,
+    "Smartfab Units": 2351,
+    "Sterile Conduits": 2875,
+    "Supercomputers": 2349,
+    "Superconductors": 9838,
+    "Supertensile Plastics": 2312,
+    "Synthetic Oil": 3691,
+    "Synthetic Synapses": 2346,
+    "Test Cultures": 2319,
+    "Toxic Metals": 2400,
+    "Transcranial Microcontrollers": 12836,
+    "Transmitter": 9840,
+    "Ukomi Superconductors": 17136,
+    "Vaccines": 28974,
+    "Viral Agent": 3775,
+    "Water": 3645,
+    "Water-Cooled CPU": 2328,
+    "Wetware Mainframe": 2876
+  }
+}

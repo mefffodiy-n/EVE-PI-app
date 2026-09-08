@@ -124,6 +124,15 @@ class TestPlans:
         assert "Слишком много" in response.get_json()["message"]
 
 
+SAMPLE_PLAN_ROW = {
+    "character": "Chief 1", "role": "Переработка P2/P3", "constellation": "ALPHA",
+    "system": "HOME", "planet": "4", "planet_type": "Barren", "planet_radius_km": 5820.0,
+    "cc_type": "1x Barren Command Center", "res_in": "Biofuels", "res_out": "Biocells",
+    "structures": "12 фабрик", "template_key": "p2p3_1factory",
+    "cpu_percent": 39.2, "pg_percent": 95.1,
+}
+
+
 class TestExport:
     def test_export_rejects_empty_plan(self, client):
         assert client.post("/api/export", json={"plan_data": []}).status_code == 400
@@ -131,6 +140,53 @@ class TestExport:
     def test_export_limits_plan_size(self, client):
         response = client.post("/api/export", json={"plan_data": [{}] * 501})
         assert response.status_code == 400
+
+    def test_export_rejects_non_object_rows(self, client):
+        response = client.post("/api/export", json={"plan_data": ["строка"]})
+        assert response.status_code == 400
+
+    def test_export_returns_xlsx_attachment(self, client):
+        response = client.post("/api/export", json={"plan_data": [SAMPLE_PLAN_ROW]})
+        assert response.status_code == 200
+        assert "spreadsheetml" in response.headers["Content-Type"]
+        assert "attachment" in response.headers["Content-Disposition"]
+        assert response.data[:2] == b"PK", "xlsx — это zip-архив"
+
+    def test_export_workbook_structure(self, client):
+        from io import BytesIO
+
+        from openpyxl import load_workbook
+
+        response = client.post("/api/export", json={"plan_data": [SAMPLE_PLAN_ROW]})
+        workbook = load_workbook(BytesIO(response.data))
+        assert workbook.sheetnames == ["План", "Сводка", "Проверка"]
+        assert workbook["План"].max_row == 2
+        assert workbook["План"].freeze_panes == "A2"
+
+    def test_summary_uses_formulas_not_precomputed_values(self, client):
+        """
+        Сводка должна пересчитываться, если пользователь правит лист
+        «План» вручную, поэтому там формулы, а не числа из Python.
+        """
+        from io import BytesIO
+
+        from openpyxl import load_workbook
+
+        response = client.post("/api/export", json={"plan_data": [SAMPLE_PLAN_ROW]})
+        workbook = load_workbook(BytesIO(response.data))
+        assert str(workbook["Сводка"]["B2"].value).startswith("=COUNTIF")
+        assert str(workbook["Проверка"]["F2"].value).startswith("=100-")
+
+    def test_overloaded_planets_are_highlighted(self, client):
+        """Планеты с загрузкой от 90% подсвечиваются — они сломаются первыми."""
+        from io import BytesIO
+
+        from openpyxl import load_workbook
+
+        response = client.post("/api/export", json={"plan_data": [SAMPLE_PLAN_ROW]})
+        workbook = load_workbook(BytesIO(response.data))
+        pg_cell = workbook["План"]["N2"]  # pg_percent = 95.1
+        assert pg_cell.fill.start_color.rgb == "00FFF2CC"
 
 
 class TestMarket:

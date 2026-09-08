@@ -154,9 +154,16 @@ class TestHonesty:
         assert all(r.hours_left is None for r in _plan(planets, characters).rows)
 
     def test_unverified_assumptions_are_reported(self, planets, characters):
+        """
+        В расчёте должны перечисляться только ДЕЙСТВИТЕЛЬНО непроверенные
+        значения. Длительности циклов подтверждены вики EVE University и
+        из списка убраны; осталось одно — формула числа планет.
+        """
         assumptions = _plan(planets, characters).assumptions
-        assert any("цикла advanced" in a for a in assumptions)
         assert any("Interplanetary Consolidation" in a for a in assumptions)
+        assert not any("цикла" in a for a in assumptions), (
+            "циклы подтверждены источником и не должны значиться допущениями"
+        )
 
     def test_missing_schematics_stop_the_chain_loudly(self, planets, characters):
         request = PlanRequest(
