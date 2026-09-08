@@ -35,12 +35,42 @@ DEV_CHARACTERS = [
     (90002, "Dev Factory Chief 2", 5, 5, "может ставить 2 шаблона на планету"),
     (90003, "Dev Miner Full",      5, 4, "рекомендованная прокачка майнера"),
     (90004, "Dev Miner Partial",   4, 4, "CCU IV — только одиночные шаблоны"),
-    (90005, "Dev Miner Rookie",    3, 2, "низкая прокачка, мало слотов планет"),
+    (90005, "Dev Miner Rookie",    3, 2, "низкая прокачка: добывающий шаблон не влезет"),
     *[
         (90010 + i, f"Dev Miner {i + 1}", 5, 4, "рекомендованная прокачка майнера")
         for i in range(8)
     ],
 ]
+
+
+def load_characters() -> list:
+    """
+    Вернуть персонажей для планировщика.
+
+    Фаза 1: читает dev-заглушки, если разрешено окружением.
+    Фаза 3: то же место будет читать реальных персонажей из БД,
+    заполненных sync_character_skills. Планировщик разницы не заметит —
+    поля те же.
+
+    Возвращает пустой список вне dev-окружения: молча подставлять
+    тестовых персонажей в проде нельзя.
+    """
+    import os
+
+    from domain.planner import CharacterSlot
+
+    if os.environ.get("PI_ENV", "dev").lower() != "dev":
+        return []
+
+    return [
+        CharacterSlot(
+            character_id=char_id,
+            name=name,
+            command_center_upgrades_level=ccu,
+            interplanetary_consolidation_level=ic,
+        )
+        for char_id, name, ccu, ic, _ in DEV_CHARACTERS
+    ]
 
 
 def seed() -> None:

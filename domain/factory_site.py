@@ -178,25 +178,15 @@ def select_factory_sites(
     used: set[str] = set()
 
     if double_available:
-        for candidate in candidates:
-            if remaining < 2:
-                break
-            load = _fits(double_key, ccu_level, candidate)
-            if load is None:
-                continue
-            selection.assignments.append(
-                SiteAssignment(
-                    candidate=candidate,
-                    template_key=double_key,
-                    template_count=2,
-                    cpu_percent=load.cpu_percent,
-                    pg_percent=load.pg_percent,
-                )
-            )
-            used.add(candidate.planet)
-            remaining -= 2
+        # Проверяем ПРИГОДНОСТЬ отдельно от количества. Иначе нечётный
+        # остаток (или потребность в одном шаблоне) выглядел бы как
+        # «двойной не помещается», и пользователь получал бы ложное
+        # предупреждение о слишком крупных планетах.
+        double_fits_somewhere = any(
+            _fits(double_key, ccu_level, candidate) is not None for candidate in candidates
+        )
 
-        if not selection.assignments:
+        if not double_fits_somewhere:
             threshold = max_planet_radius_that_fits(double_key, ccu_level)
             smallest_km = _km(smallest.radius_km)
             threshold_km = _km(threshold) if threshold is not None else "неизвестен"
@@ -220,9 +210,31 @@ def select_factory_sites(
             if not allow_single_fallback:
                 return selection
             selection.downgraded_to_single = True
+        else:
+            for candidate in candidates:
+                if remaining < 2:
+                    break
+                load = _fits(double_key, ccu_level, candidate)
+                if load is None:
+                    continue
+                selection.assignments.append(
+                    SiteAssignment(
+                        candidate=candidate,
+                        template_key=double_key,
+                        template_count=2,
+                        cpu_percent=load.cpu_percent,
+                        pg_percent=load.pg_percent,
+                    )
+                )
+                used.add(candidate.planet)
+                remaining -= 2
 
-    # Одиночные шаблоны: либо CCU < 5, либо явно разрешён откат.
-    if remaining > 0 and (not double_available or selection.downgraded_to_single):
+    # Одиночные шаблоны. Три случая:
+    #   - CCU < 5: двойной недоступен в принципе;
+    #   - пользователь согласился на откат после предупреждения;
+    #   - остался НЕЧЁТНЫЙ хвост после размещения двойных — это штатная
+    #     ситуация, а не откат, и предупреждения не требует.
+    if remaining > 0:
         for candidate in candidates:
             if remaining <= 0:
                 break

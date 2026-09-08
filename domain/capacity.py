@@ -238,6 +238,36 @@ def max_planet_radius_that_fits(
     return last_ok
 
 
+def min_ccu_level_that_fits(
+    template_key: str,
+    planet_radius_km: float,
+    planet_type: str | None = None,
+    extractor_head_count: int | None = None,
+) -> int | None:
+    """
+    Наименьший уровень Command Center Upgrades, при котором шаблон
+    помещается на планету заданного радиуса. None — не помещается ни при каком.
+
+    Нужно планировщику, чтобы не отбрасывать планету, на которую просто
+    не хватило прокачки взятого персонажа: на крупной планете шаблон
+    может не влезть при CCU IV и влезть при CCU V.
+    """
+    for level in range(0, 6):
+        try:
+            load = calculate_colony_load(
+                template_key,
+                level,
+                planet_radius_km,
+                planet_type=planet_type,
+                extractor_head_count=extractor_head_count,
+            )
+        except UnsupportedSetup:
+            continue
+        if load.fits:
+            return level
+    return None
+
+
 def available_templates_for(ccu_level: int, planet_type: str | None = None) -> list[Template]:
     """
     Какие шаблоны доступны персонажу с данной прокачкой на данной планете.

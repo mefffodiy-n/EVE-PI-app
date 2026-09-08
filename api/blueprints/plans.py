@@ -22,6 +22,10 @@ from __future__ import annotations
 from flask import Blueprint
 
 from api.cache import cache_key, json_error, json_ok, parse_json_body, plan_cache
+from domain.planets import load_planets
+from domain.planner import PlanRequest, build_plan
+from domain.recipes import load_recipes
+from scripts.seed_dev_characters import load_characters
 
 bp = Blueprint("plans", __name__)
 
@@ -57,21 +61,33 @@ def calculate():
     key = cache_key(sorted(constellations), factory_sys, sorted(targets), allow_single)
 
     def compute():
-        raise NotImplementedError(
-            "TODO(Фаза 1): собрать PlanRequest, загрузить персонажей "
-            "(на Фазе 1 — из scripts/seed_dev_characters.py), вызвать "
-            "domain.planner.build_plan и привести результат к формату, "
-            "который ожидает renderDashboard() во фронтенде.\n\n"
-            "ВАЖНО: каждый элемент data[] должен нести РЕАЛЬНОЕ время до "
-            "истечения цикла экстрактора либо не нести его вовсе. Сейчас "
-            "index.html:475 дорисовывает hours_left через Math.random() и "
-            "показывает это как настоящий таймер — убрать одновременно с "
-            "тем, как бэкенд начнёт отдавать значение (Фаза 3).\n\n"
-            "Если подбор площадок вернул предупреждения без назначений "
-            "(PlanResult.needs_user_decision), ответ должен содержать их "
-            "как ВЫБОР для пользователя (сменить домашнюю систему или "
-            "ставить по одному шаблону), а не как строку в логе."
+        # Персонажи: на Фазе 1 — dev-заглушки, в Фазе 3 те же поля придут
+        # из sync_character_skills. Планировщик об источнике не знает.
+        characters = load_characters()
+        if not characters:
+            return {
+                "data": [],
+                "warning": "Нет персонажей. Заполните их командой "
+                           "`python -m scripts.seed_dev_characters` (только dev-окружение).",
+                "warnings": [],
+                "assumptions": [],
+                "needs_user_decision": False,
+                "site_warnings": [],
+            }
+
+        request_obj = PlanRequest(
+            constellations=constellations,
+            factory_system=factory_sys,
+            target_products=targets,
+            allow_single_template_fallback=allow_single,
         )
+        result = build_plan(
+            request_obj,
+            characters,
+            recipes=load_recipes(),
+            planets=load_planets(),
+        )
+        return result.to_dict()
 
     return json_ok(**plan_cache.get_or_compute(key, compute))
 
