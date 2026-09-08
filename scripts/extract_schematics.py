@@ -54,6 +54,15 @@ def _categories() -> dict[int, str]:
     return mapping
 
 
+# Опечатки в именах файлов шаблонов автора. Исправляются здесь, а не
+# в recipes.json: расхождение только в написании, составы совпадают.
+# Без этой правки одна опечатка порождает четыре мнимых расхождения —
+# само неузнанное имя плюс три продукта, куда оно входит.
+PRODUCT_NAME_FIXES = {
+    "Chiral Stuctures": "Chiral Structures",
+}
+
+
 def product_name_from_filename(name: str) -> str:
     """
     Имя продукта из имени файла шаблона.
@@ -66,7 +75,8 @@ def product_name_from_filename(name: str) -> str:
     планеты или зона безопасности, а не продукт.
     """
     stem = name[:-5] if name.lower().endswith(".json") else name
-    return stem.split(" - ")[-1].strip()
+    product = stem.split(" - ")[-1].strip()
+    return PRODUCT_NAME_FIXES.get(product, product)
 
 
 def extract(templates_dir: Path = TEMPLATES_DIR) -> dict:
@@ -257,13 +267,30 @@ def main() -> None:
             print("   ", line)
 
     problems = cross_check_with_recipes(data)
-    if problems:
-        print(f"\n!! Расхождения со recipes.json ({len(problems)}):")
-        for line in problems[:20]:
+    conflicts = [p for p in problems if "даёт" in p]
+    missing_template = [p for p in problems if "нет шаблона" in p]
+    missing_recipe = [p for p in problems if "нет рецепта" in p]
+
+    if conflicts:
+        print(f"\n!! ПРОТИВОРЕЧИЯ В СОСТАВЕ ({len(conflicts)}) — требуют решения.")
+        print("   Шаблон ссылается на type_id из самой игры, а не на имя, поэтому")
+        print("   при расхождении он обычно надёжнее, чем recipes.json.")
+        for line in conflicts:
             print("   ", line)
-        if len(problems) > 20:
-            print(f"    ... ещё {len(problems) - 20}")
-    else:
+
+    if missing_recipe:
+        print(f"\n~  Есть шаблон, но нет рецепта ({len(missing_recipe)}):")
+        for line in missing_recipe:
+            print("   ", line)
+        print("   Обычно это опечатка в имени файла — добавьте её в PRODUCT_NAME_FIXES.")
+
+    if missing_template:
+        print(f"\n~  Есть рецепт, но нет шаблона ({len(missing_template)}):")
+        for line in missing_template:
+            print("   ", line)
+        print("   Либо шаблон не скачан, либо такого продукта в игре нет.")
+
+    if not problems:
         print("\nOK: составы и количества входов совпали с recipes.json")
 
     if args.write:

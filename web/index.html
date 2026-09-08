@@ -244,7 +244,12 @@
     </div>
 
     <script>
-        const API_BASE = 'http://localhost:8000/api';
+        // Относительный путь: фронтенд отдаётся тем же Flask-приложением,
+        // поэтому запросы идут на тот же origin и CORS не нужен вовсе.
+        // Раньше здесь был абсолютный 'http://localhost:8000/api' — при
+        // открытии по 127.0.0.1 это уже другой origin, запросы падали,
+        // а catch ниже глушил ошибку, из-за чего списки молча пустели.
+        const API_BASE = '/api';
         let currentPlan = null;
         let globalProductIds = {};
         let selectedProducts = [];
@@ -276,6 +281,14 @@
                 let response = await fetch(`${API_BASE}/initial-data`);
                 let res = await response.json();
                 
+                if (res.data_problems && res.data_problems.length) {
+                    console.warn('Проблемы с данными:', res.data_problems);
+                    let box = document.getElementById('customProdOptions');
+                    if (box) box.insertAdjacentHTML('afterbegin',
+                        `<div class="p-2 text-[11px] text-amber-400 font-mono-eve border-b border-dynamic">`
+                        + res.data_problems.join('<br>') + `</div>`);
+                }
+
                 globalProductIds = res.product_ids || {};
                 allProductsList = res.products || [];
                 allConstellationsList = res.bases || [];
@@ -285,7 +298,14 @@
                 renderDropdownList();
                 await onConstellationChange(); 
                 updateTooltips();
-            } catch (error) { console.error('Init error:', error); }
+            } catch (error) {
+                console.error('Init error:', error);
+                let box = document.getElementById('customProdOptions');
+                if (box) box.innerHTML = `<div class="p-3 text-[12px] text-red-400 font-mono-eve">
+                    Не удалось загрузить справочники: ${error}<br>
+                    Проверьте, что сервер запущен и открыт тот же адрес, что в строке браузера.
+                </div>`;
+            }
         }
 
         async function onConstellationChange() {

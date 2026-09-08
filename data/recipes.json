@@ -141,7 +141,7 @@
     "type": "P3",
     "inputs": {
       "Fertilizer": 10,
-      "Polyaramids": 10
+      "Polytextiles": 10
     }
   },
   "Neocoms": {
@@ -164,13 +164,6 @@
       "Mechanical Parts": 10,
       "Miniature Electronics": 10,
       "Supertensile Plastics": 10
-    }
-  },
-  "Positron Cord": {
-    "type": "P3",
-    "inputs": {
-      "Superconductors": 10,
-      "Synthetic Oil": 10
     }
   },
   "Robotics": {
@@ -223,43 +216,232 @@
       "Viral Agent": 10
     }
   },
-  "Biocells": { "type": "P2", "inputs": { "Biofuels": 40, "Precious Metals": 40 } },
-  "Construction Blocks": { "type": "P2", "inputs": { "Reactive Metals": 40, "Toxic Metals": 40 } },
-  "Consumer Electronics": { "type": "P2", "inputs": { "Chiral Structures": 40, "Toxic Metals": 40 } },
-  "Coolant": { "type": "P2", "inputs": { "Electrolytes": 40, "Water": 40 } },
-  "Enriched Uranium": { "type": "P2", "inputs": { "Precious Metals": 40, "Toxic Metals": 40 } },
-  "Fertilizer": { "type": "P2", "inputs": { "Bacteria": 40, "Proteins": 40 } },
-  "Genetically Enhanced Livestock": { "type": "P2", "inputs": { "Biomass": 40, "Proteins": 40 } },
-  "Livestock": { "type": "P2", "inputs": { "Biofuels": 40, "Proteins": 40 } },
-  "Mechanical Parts": { "type": "P2", "inputs": { "Precious Metals": 40, "Reactive Metals": 40 } },
-  "Microfiber Shielding": { "type": "P2", "inputs": { "Industrial Fibers": 40, "Silicon": 40 } },
-  "Miniature Electronics": { "type": "P2", "inputs": { "Chiral Structures": 40, "Silicon": 40 } },
-  "Nanites": { "type": "P2", "inputs": { "Bacteria": 40, "Reactive Metals": 40 } },
-  "Oxides": { "type": "P2", "inputs": { "Oxidizing Compound": 40, "Oxygen": 40 } },
-  "Polyaramids": { "type": "P2", "inputs": { "Industrial Fibers": 40, "Oxidizing Compound": 40 } },
-  "Polytextiles": { "type": "P2", "inputs": { "Biofuels": 40, "Industrial Fibers": 40 } },
-  "Rocket Fuel": { "type": "P2", "inputs": { "Electrolytes": 40, "Plasmoids": 40 } },
-  "Silicate Glass": { "type": "P2", "inputs": { "Oxidizing Compound": 40, "Silicon": 40 } },
-  "Superconductors": { "type": "P2", "inputs": { "Plasmoids": 40, "Water": 40 } },
-  "Supertensile Plastics": { "type": "P2", "inputs": { "Biomass": 40, "Oxygen": 40 } },
-  "Synthetic Oil": { "type": "P2", "inputs": { "Electrolytes": 40, "Oxygen": 40 } },
-  "Test Cultures": { "type": "P2", "inputs": { "Bacteria": 40, "Water": 40 } },
-  "Transmitter": { "type": "P2", "inputs": { "Chiral Structures": 40, "Plasmoids": 40 } },
-  "Viral Agent": { "type": "P2", "inputs": { "Bacteria": 40, "Biomass": 40 } },
-  "Water-Cooled CPU": { "type": "P2", "inputs": { "Reactive Metals": 40, "Water": 40 } },
-  "Bacteria": { "type": "P1", "source": "Microorganisms" },
-  "Biofuels": { "type": "P1", "source": "Carbon Compounds" },
-  "Biomass": { "type": "P1", "source": "Planktic Colonies" },
-  "Chiral Structures": { "type": "P1", "source": "Non-CS Crystals" },
-  "Electrolytes": { "type": "P1", "source": "Ionic Solutions" },
-  "Industrial Fibers": { "type": "P1", "source": "Autotrophs" },
-  "Oxidizing Compound": { "type": "P1", "source": "Reactive Gas" },
-  "Oxygen": { "type": "P1", "source": "Noble Gas" },
-  "Plasmoids": { "type": "P1", "source": "Suspended Plasma" },
-  "Precious Metals": { "type": "P1", "source": "Noble Metals" },
-  "Proteins": { "type": "P1", "source": "Complex Organisms" },
-  "Reactive Metals": { "type": "P1", "source": "Base Metals" },
-  "Silicon": { "type": "P1", "source": "Felsic Magma" },
-  "Toxic Metals": { "type": "P1", "source": "Heavy Metals" },
-  "Water": { "type": "P1", "source": "Aqueous Liquids" }
+  "Biocells": {
+    "type": "P2",
+    "inputs": {
+      "Biofuels": 40,
+      "Precious Metals": 40
+    }
+  },
+  "Construction Blocks": {
+    "type": "P2",
+    "inputs": {
+      "Reactive Metals": 40,
+      "Toxic Metals": 40
+    }
+  },
+  "Consumer Electronics": {
+    "type": "P2",
+    "inputs": {
+      "Chiral Structures": 40,
+      "Toxic Metals": 40
+    }
+  },
+  "Coolant": {
+    "type": "P2",
+    "inputs": {
+      "Electrolytes": 40,
+      "Water": 40
+    }
+  },
+  "Enriched Uranium": {
+    "type": "P2",
+    "inputs": {
+      "Precious Metals": 40,
+      "Toxic Metals": 40
+    }
+  },
+  "Fertilizer": {
+    "type": "P2",
+    "inputs": {
+      "Bacteria": 40,
+      "Proteins": 40
+    }
+  },
+  "Genetically Enhanced Livestock": {
+    "type": "P2",
+    "inputs": {
+      "Biomass": 40,
+      "Proteins": 40
+    }
+  },
+  "Livestock": {
+    "type": "P2",
+    "inputs": {
+      "Biofuels": 40,
+      "Proteins": 40
+    }
+  },
+  "Mechanical Parts": {
+    "type": "P2",
+    "inputs": {
+      "Precious Metals": 40,
+      "Reactive Metals": 40
+    }
+  },
+  "Microfiber Shielding": {
+    "type": "P2",
+    "inputs": {
+      "Industrial Fibers": 40,
+      "Silicon": 40
+    }
+  },
+  "Miniature Electronics": {
+    "type": "P2",
+    "inputs": {
+      "Chiral Structures": 40,
+      "Silicon": 40
+    }
+  },
+  "Nanites": {
+    "type": "P2",
+    "inputs": {
+      "Bacteria": 40,
+      "Reactive Metals": 40
+    }
+  },
+  "Oxides": {
+    "type": "P2",
+    "inputs": {
+      "Oxidizing Compound": 40,
+      "Oxygen": 40
+    }
+  },
+  "Polyaramids": {
+    "type": "P2",
+    "inputs": {
+      "Industrial Fibers": 40,
+      "Oxidizing Compound": 40
+    }
+  },
+  "Polytextiles": {
+    "type": "P2",
+    "inputs": {
+      "Biofuels": 40,
+      "Industrial Fibers": 40
+    }
+  },
+  "Rocket Fuel": {
+    "type": "P2",
+    "inputs": {
+      "Electrolytes": 40,
+      "Plasmoids": 40
+    }
+  },
+  "Silicate Glass": {
+    "type": "P2",
+    "inputs": {
+      "Oxidizing Compound": 40,
+      "Silicon": 40
+    }
+  },
+  "Superconductors": {
+    "type": "P2",
+    "inputs": {
+      "Plasmoids": 40,
+      "Water": 40
+    }
+  },
+  "Supertensile Plastics": {
+    "type": "P2",
+    "inputs": {
+      "Biomass": 40,
+      "Oxygen": 40
+    }
+  },
+  "Synthetic Oil": {
+    "type": "P2",
+    "inputs": {
+      "Electrolytes": 40,
+      "Oxygen": 40
+    }
+  },
+  "Test Cultures": {
+    "type": "P2",
+    "inputs": {
+      "Bacteria": 40,
+      "Water": 40
+    }
+  },
+  "Transmitter": {
+    "type": "P2",
+    "inputs": {
+      "Chiral Structures": 40,
+      "Plasmoids": 40
+    }
+  },
+  "Viral Agent": {
+    "type": "P2",
+    "inputs": {
+      "Bacteria": 40,
+      "Biomass": 40
+    }
+  },
+  "Water-Cooled CPU": {
+    "type": "P2",
+    "inputs": {
+      "Reactive Metals": 40,
+      "Water": 40
+    }
+  },
+  "Bacteria": {
+    "type": "P1",
+    "source": "Microorganisms"
+  },
+  "Biofuels": {
+    "type": "P1",
+    "source": "Carbon Compounds"
+  },
+  "Biomass": {
+    "type": "P1",
+    "source": "Planktic Colonies"
+  },
+  "Chiral Structures": {
+    "type": "P1",
+    "source": "Non-CS Crystals"
+  },
+  "Electrolytes": {
+    "type": "P1",
+    "source": "Ionic Solutions"
+  },
+  "Industrial Fibers": {
+    "type": "P1",
+    "source": "Autotrophs"
+  },
+  "Oxidizing Compound": {
+    "type": "P1",
+    "source": "Reactive Gas"
+  },
+  "Oxygen": {
+    "type": "P1",
+    "source": "Noble Gas"
+  },
+  "Plasmoids": {
+    "type": "P1",
+    "source": "Suspended Plasma"
+  },
+  "Precious Metals": {
+    "type": "P1",
+    "source": "Noble Metals"
+  },
+  "Proteins": {
+    "type": "P1",
+    "source": "Complex Organisms"
+  },
+  "Reactive Metals": {
+    "type": "P1",
+    "source": "Base Metals"
+  },
+  "Silicon": {
+    "type": "P1",
+    "source": "Felsic Magma"
+  },
+  "Toxic Metals": {
+    "type": "P1",
+    "source": "Heavy Metals"
+  },
+  "Water": {
+    "type": "P1",
+    "source": "Aqueous Liquids"
+  }
 }
