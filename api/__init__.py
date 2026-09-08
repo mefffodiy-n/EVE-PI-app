@@ -29,6 +29,7 @@ Flask-приложение — только HTTP-слой.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from flask import Flask, jsonify, send_from_directory
@@ -60,8 +61,44 @@ def create_app(config: dict | None = None) -> Flask:
     app.register_blueprint(export_bp, url_prefix="/api")
 
     _register_error_handlers(app)
+    _register_dev_cors(app)
     _register_web(app)
     return app
+
+
+def _register_dev_cors(app: Flask) -> None:
+    """
+    Разрешить кросс-доменные запросы — ТОЛЬКО для разработки вёрстки.
+
+    Штатно фронтенд отдаётся этим же приложением, поэтому CORS не нужен:
+    origin один и тот же. Но при правке вёрстки удобен Live Server с
+    автоперезагрузкой, а он поднимается на другом порту, и без CORS
+    браузер запросы заблокирует.
+
+    Включается явно переменной окружения, не по умолчанию:
+        PI_DEV_CORS=1 python run.py        (Windows: set PI_DEV_CORS=1)
+
+    В production переменную не выставлять: разрешение принимать запросы
+    с любого origin в бою — дыра, а не удобство.
+    """
+    if os.environ.get("PI_DEV_CORS", "").strip() not in ("1", "true", "yes"):
+        return
+
+    app.logger.warning(
+        "PI_DEV_CORS включён: запросы разрешены с любого origin. "
+        "Только для разработки, в production выключите."
+    )
+
+    @app.after_request
+    def add_cors_headers(response):
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        return response
+
+    @app.route("/api/<path:_ignored>", methods=["OPTIONS"])
+    def cors_preflight(_ignored):
+        return "", 204
 
 
 def _register_error_handlers(app: Flask) -> None:

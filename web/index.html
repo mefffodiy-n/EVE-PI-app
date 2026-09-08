@@ -244,12 +244,21 @@
     </div>
 
     <script>
-        // Относительный путь: фронтенд отдаётся тем же Flask-приложением,
-        // поэтому запросы идут на тот же origin и CORS не нужен вовсе.
-        // Раньше здесь был абсолютный 'http://localhost:8000/api' — при
-        // открытии по 127.0.0.1 это уже другой origin, запросы падали,
-        // а catch ниже глушил ошибку, из-за чего списки молча пустели.
-        const API_BASE = '/api';
+        // Куда слать запросы к API.
+        //
+        // Обычный случай: страницу отдаёт сам Flask, тогда origin один и тот же,
+        // достаточно относительного пути, и CORS не нужен вовсе.
+        //
+        // Случай разработки вёрстки: страница открыта через Live Server (порт 5500)
+        // или как файл. Такой сервер про /api ничего не знает и вернул бы HTML-страницу
+        // 404, на которой разбор JSON падает с "Unexpected token '<'". Поэтому
+        // определяем это и обращаемся к Flask напрямую. Чтобы такой режим работал,
+        // сервер надо запустить с разрешённым CORS:
+        //     PI_DEV_CORS=1 python run.py     (Windows: set PI_DEV_CORS=1)
+        const FLASK_ORIGIN = 'http://127.0.0.1:8000';
+        const SERVED_BY_FLASK = location.origin === FLASK_ORIGIN
+            || location.origin === 'http://localhost:8000';
+        const API_BASE = SERVED_BY_FLASK ? '/api' : `${FLASK_ORIGIN}/api`;
         let currentPlan = null;
         let globalProductIds = {};
         let selectedProducts = [];
@@ -279,6 +288,24 @@
 
             try {
                 let response = await fetch(`${API_BASE}/initial-data`);
+
+                // Если ответ не JSON — почти наверняка страницу отдал не Flask,
+                // а обычный статический сервер (Live Server, python -m http.server
+                // и т.п.). Такой сервер про /api ничего не знает и возвращает
+                // HTML-страницу 404, на которой JSON.parse падает с
+                // "Unexpected token '<'". Ловим это здесь и говорим прямо,
+                // вместо того чтобы показывать невнятную ошибку разбора.
+                let contentType = response.headers.get('content-type') || '';
+                if (!contentType.includes('application/json')) {
+                    throw new Error(
+                        `Ответ от ${API_BASE}/initial-data пришёл не в формате JSON. `
+                        + (SERVED_BY_FLASK
+                            ? `Проверьте, что сервер запущен: python run.py`
+                            : `Страница открыта через ${location.origin}, а API ожидается на `
+                              + `${FLASK_ORIGIN}. Запустите сервер с разрешённым CORS `
+                              + `(PI_DEV_CORS=1 python run.py) либо откройте ${FLASK_ORIGIN}/ напрямую.`)
+                    );
+                }
                 let res = await response.json();
                 
                 if (res.data_problems && res.data_problems.length) {
@@ -302,8 +329,11 @@
                 console.error('Init error:', error);
                 let box = document.getElementById('customProdOptions');
                 if (box) box.innerHTML = `<div class="p-3 text-[12px] text-red-400 font-mono-eve">
-                    Не удалось загрузить справочники: ${error}<br>
-                    Проверьте, что сервер запущен и открыт тот же адрес, что в строке браузера.
+                    Не удалось загрузить справочники.<br><br>
+                    ${error.message || error}<br><br>
+                    Приложение должно открываться через Flask:<br>
+                    1) в корне проекта выполните <b>python run.py</b><br>
+                    2) откройте <b>http://127.0.0.1:8000/</b> (не /web/index.html)
                 </div>`;
             }
         }

@@ -62,9 +62,16 @@ def _initial_payload() -> dict:
     """
     products = sorted(r.name for r in load_recipes() if r.tier in PROCESSING_TIERS)
     ids = _type_ids()
+
+    # Отдаём карту id целиком, а не только по целевым продуктам.
+    # Фронтенду она нужна шире: помимо выпадающего списка, из неё берутся
+    # иконки промежуточных продуктов в дашборде (включая P1) и иконки
+    # командных центров в списке закупки, где ключ выглядит как
+    # "Barren Command Center". Раньше отдавались только P2-P4, поэтому
+    # обе эти группы иконок оставались пустыми.
     payload = {
         "products": products,
-        "product_ids": {name: ids[name] for name in products if name in ids},
+        "product_ids": ids,
         "bases": [],
         "data_problems": [],
     }
