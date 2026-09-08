@@ -92,10 +92,25 @@ def test_ccu4_falls_back_to_single_with_warning():
     assert "нужен уровень 5" in " ".join(result.warnings)
 
 
-def test_warns_when_not_enough_planets():
+def test_planet_shortage_is_solved_by_extra_colonies():
+    """
+    Планет под переработку не может «не хватить»: колония привязана
+    к персонажу, поэтому на одной планете размещаются колонии разных
+    персонажей. Ограничением остаётся число персонажей, а не планет —
+    это правило проекта.
+    """
     result = select_factory_sites(_book(SMALL_SYSTEM), "HOME", "P2_P3", 5, 10)
-    assert not result.satisfied
-    assert "не хватило подходящих планет" in " ".join(result.warnings)
+    assert result.satisfied, "нехватка планет не должна блокировать переработку"
+    assert not result.warnings
+    # Планет всего две пригодные, значит какая-то использована повторно.
+    assert max(a.colony_index for a in result.assignments) > 1
+
+
+def test_reused_planets_keep_smallest_radius_first():
+    """Повторный обход идёт в том же порядке — сначала самые мелкие планеты."""
+    result = select_factory_sites(_book(SMALL_SYSTEM), "HOME", "P2_P3", 5, 8)
+    first_round = [a.candidate.radius_km for a in result.assignments if a.colony_index == 1]
+    assert first_round == sorted(first_round)
 
 
 def test_p4_warning_mentions_unresolved_launchpad_assumption():
