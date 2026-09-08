@@ -30,9 +30,9 @@
         .eve-panel { background-color: var(--bg-panel); border: 1px solid var(--border-color); transition: background-color 0.3s, border-color 0.3s; }
         .panel-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding: 8px 12px; transition: border-color 0.3s; }
         .panel-header h2 { color: var(--text-heading); font-size: 13px; font-weight: 600; }
-        .eve-input { background-color: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-white); font-family: 'Share Tech Mono', monospace; font-size: 13px; width: 100%; padding: 8px 12px; outline: none; transition: all 0.2s; }
+        .eve-input { background-color: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-white); font-family: 'Share Tech Mono', monospace; font-size: 13px; width: 100%; padding: 8px 12px; outline: none; transition: border-color 0.2s, background-color 0.2s; }
         .eve-input:focus { border-color: var(--accent); }
-        .eve-btn { background: transparent; border: 1px solid var(--border-color); color: var(--text-main); width: 100%; padding: 8px 12px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: all 0.2s; }
+        .eve-btn { background: transparent; border: 1px solid var(--border-color); color: var(--text-main); width: 100%; padding: 8px 12px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: border-color 0.2s, color 0.2s, background-color 0.2s; }
         .eve-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-hover); }
 
         .custom-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -43,6 +43,33 @@
         body:not(.lang-en) .en-text { display: none !important; }
         body.lang-en .ru-text { display: none !important; }
         
+        /* Смена темы меняет CSS-переменные на body. Браузер обязан
+           пересчитать стиль ВСЕГО поддерева, а каждый элемент с transition
+           на цвете запускает свою анимацию на 300 мс. В детальном виде это
+           сотни одновременных анимаций — отсюда «перетекание» темы от
+           элемента к элементу. На время переключения переходы глушатся,
+           и смена темы становится одной перерисовкой. */
+        .theme-switching *,
+        .theme-switching *::before,
+        .theme-switching *::after {
+            transition: none !important;
+        }
+
+        /* Строки плана вне экрана не рендерятся вовсе. Это снимает
+           основную часть работы при пересчёте стилей: браузер занимается
+           только видимыми строками. contain-intrinsic-size задаёт
+           предполагаемую высоту, чтобы полоса прокрутки не прыгала. */
+        .plan-row {
+            content-visibility: auto;
+            contain-intrinsic-size: auto 68px;
+        }
+
+        /* Уважаем системную настройку «уменьшить движение»: бесконечное
+           вращение колец — украшение, а не функциональность. */
+        @media (prefers-reduced-motion: reduce) {
+            .spin-slow, .spin-slow-reverse { animation: none; }
+        }
+
         .spin-slow { animation: spin 12s linear infinite; }
         .spin-slow-reverse { animation: spin 15s linear infinite reverse; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
@@ -636,7 +663,7 @@
                 }
 
                 html += `
-                <div class="flex items-center gap-3 p-2 bg-[var(--bg-input)] border border-dynamic hover:border-[var(--accent)] rounded transition">
+                <div class="plan-row flex items-center gap-3 p-2 bg-[var(--bg-input)] border border-dynamic hover:border-[var(--accent)] rounded transition-colors">
                     <div class="relative w-11 h-11 shrink-0">
                         <img src="${texture}" class="w-full h-full rounded-full opacity-80 border border-dynamic">
                         <img src="${charAvatar}" class="absolute -top-1 -left-1 w-5 h-5 rounded-full border border-black shadow">
@@ -780,7 +807,22 @@
             document.getElementById('sortDropdown')?.classList.add('hidden');
         });
 
-        function toggleTheme() { document.body.classList.toggle('light-theme'); }
+        function toggleTheme() {
+            let root = document.documentElement;
+            root.classList.add('theme-switching');
+            document.body.classList.toggle('light-theme');
+
+            // Чтение offsetWidth форсирует немедленный пересчёт стилей,
+            // пока переходы ещё отключены. Иначе браузер объединит
+            // добавление и снятие класса в один кадр, и глушение не сработает.
+            void document.body.offsetWidth;
+
+            // Два кадра: в первом применяются новые цвета, во втором
+            // возвращаются переходы для обычных наведений мышью.
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => root.classList.remove('theme-switching'));
+            });
+        }
         function toggleLang() {
             document.body.classList.toggle('lang-en'); isEnglish = document.body.classList.contains('lang-en'); localStorage.setItem('appLang', isEnglish ? 'en' : 'ru');
             renderDropdownList(); renderConstDropdown(); onConstellationChange(); updateTooltips(); renderDashboard();
