@@ -37,6 +37,17 @@ COLUMN_NAME_FIXES = {
 # встречались в исходном файле и должны отбрасываться при импорте.
 IGNORED_CONSTELLATION_VALUES = {"max P2"}
 
+RADIUS_COLUMN = "Radius [km]"
+
+# Типы планет, на которые ставятся перерабатывающие шаблоны (P2-P4).
+#
+# РЕШЕНИЕ ПРОЕКТА, не ограничение источника. Источник разрешает P2/P3 на
+# планете любого типа (не рекомендуя только Gas из-за размера) и требует
+# Barren/Temperate лишь для P4. Мы сужаем правило до Barren/Temperate для
+# ВСЕЙ переработки: это единообразно, снимает вопрос выбора типа планеты
+# и даёт запас по CPU/PG, поскольку эти типы в среднем мельче.
+FACTORY_PLANET_TYPES = ("Barren", "Temperate")
+
 
 @dataclass(frozen=True)
 class Planet:
@@ -63,10 +74,30 @@ class PlanetBook:
         return self._df
 
     def constellations(self) -> list[str]:
-        raise NotImplementedError("TODO(Фаза 1): sorted(df['Constellation'].unique())")
+        return sorted(self._df["Constellation"].dropna().unique())
 
     def systems_in(self, constellations: list[str]) -> list[str]:
-        raise NotImplementedError("TODO(Фаза 1): перенести логику из /api/systems main.py v1")
+        subset = self._df[self._df["Constellation"].isin(constellations)]
+        return sorted(subset["System"].dropna().unique())
+
+    def planets_in_system(self, system: str) -> pd.DataFrame:
+        """Все планеты системы."""
+        return self._df[self._df["System"] == system]
+
+    def factory_candidates(self, system: str) -> pd.DataFrame:
+        """
+        Планеты системы, пригодные под перерабатывающие шаблоны,
+        отсортированные ПО ВОЗРАСТАНИЮ РАДИУСА.
+
+        Порядок важен: стоимость линков растёт с радиусом, поэтому
+        меньшая планета всегда предпочтительнее при прочих равных —
+        именно на ней с большей вероятностью поместятся два шаблона.
+        """
+        subset = self._df[
+            (self._df["System"] == system)
+            & (self._df["Type"].isin(FACTORY_PLANET_TYPES))
+        ]
+        return subset.sort_values(RADIUS_COLUMN, na_position="last")
 
     def planets_with_resource(self, resource_name: str, constellations: list[str] | None = None) -> pd.DataFrame:
         """
@@ -93,6 +124,29 @@ def _normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df.rename(columns=COLUMN_NAME_FIXES)
 
 
+def _normalize_radius(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Привести колонку радиуса к числу.
+
+    В исходном CSV радиус записан с пробелом-разделителем разрядов
+    ("11 860"), в том числе с неразрывными и узкими неразрывными
+    пробелами из Excel. Без очистки pandas читает колонку как строку,
+    и любое сравнение радиуса молча даёт неверный результат.
+    """
+    if RADIUS_COLUMN not in df.columns:
+        return df
+    cleaned = (
+        df[RADIUS_COLUMN]
+        .astype(str)
+        .str.replace("\u00a0", "", regex=False)   # неразрывный пробел
+        .str.replace("\u202f", "", regex=False)   # узкий неразрывный пробел
+        .str.replace(" ", "", regex=False)
+        .str.replace(",", ".", regex=False)
+    )
+    df[RADIUS_COLUMN] = pd.to_numeric(cleaned, errors="coerce")
+    return df
+
+
 def _clean_rows(df: pd.DataFrame) -> pd.DataFrame:
     """
     Отфильтровать служебные/битые строки:
@@ -113,10 +167,11 @@ def load_planets(path: Path = DEFAULT_PLANETS_PATH) -> PlanetBook:
     Загрузить и нормализовать data/planet_industry.csv.
 
     В отличие от v1 (df читался прямо в глобальный STATIC_DATA dict в main.py
-    при старте FastAPI-приложения), здесь загрузка изолирована от веб-слоя —
+    при старте веб-приложения), здесь загрузка изолирована от веб-слоя —
     её можно вызывать и из тестов, и из воркеров синхронизации, и из API.
     """
     df = pd.read_csv(path, sep=";", skiprows=1, encoding="utf-8")
     df = _normalize_columns(df)
     df = _clean_rows(df)
+    df = _normalize_radius(df)
     return PlanetBook(df)
