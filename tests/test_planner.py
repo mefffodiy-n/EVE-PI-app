@@ -138,6 +138,18 @@ class TestAllocation:
         limits = {c.character_id: c.planet_slots for c in characters}
         assert all(count <= limits[char_id] for char_id, count in used.items())
 
+    def test_every_row_carries_type_id_for_icons(self, planets, characters):
+        """
+        Фронтенд строит иконку продукта из p.type_id. Пустое значение даёт
+        сломанную картинку в дашборде — так и было, пока планировщик
+        проставлял здесь None.
+        """
+        rows = _plan(planets, characters).rows
+        assert rows
+        assert all(r.type_id for r in rows), (
+            f"строки без type_id: {[r.res_out for r in rows if not r.type_id]}"
+        )
+
     def test_every_row_has_fitting_load(self, planets, characters):
         for row in _plan(planets, characters).rows:
             assert row.cpu_percent <= 100.0

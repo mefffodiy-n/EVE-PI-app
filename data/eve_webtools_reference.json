@@ -12,10 +12,8 @@
     "discrepancy_found": "P3: на сайте 21 продукт, в recipes.json 22. Лишний — Positron Cord. Это ЧЕТВЁРТОЕ независимое подтверждение, что запись ошибочна (ранее: дубль входов с Ukomi Superconductors, отсутствие в PI_TYPE_NAMES v1, 45 шаблонов P2/P3 при 46 продуктах). Итог: 68 продуктов на сайте = 68 шаблонов у автора.",
     "site_spelling_note": "На сайте есть опечатки в названиях: Pasmoids, Plyaramids, Rocket Fuels, Supertensil Plastics, Ukomi Super-Conductors. Ниже приведены исправленные написания, совпадающие с recipes.json. Источник надёжен по составу и type_id, но не по орфографии."
   },
-
   "type_ids": {
     "_comment": "type_id продуктов PI. Нужны фронтенду для иконок images.evetech.net. Получены без обращения к ESI.",
-
     "Aqueous Liquids": 2268,
     "Autotrophs": 2305,
     "Base Metals": 2267,
@@ -31,7 +29,6 @@
     "Planktic Colonies": 2286,
     "Reactive Gas": 2311,
     "Suspended Plasma": 2308,
-
     "Water": 3645,
     "Industrial Fibers": 2397,
     "Reactive Metals": 2398,
@@ -47,7 +44,6 @@
     "Biomass": 3779,
     "Oxidizing Compound": 2392,
     "Plasmoids": 2389,
-
     "Biocells": 2329,
     "Construction Blocks": 3828,
     "Consumer Electronics": 9836,
@@ -72,7 +68,6 @@
     "Transmitter": 9840,
     "Viral Agent": 3775,
     "Water-Cooled CPU": 2328,
-
     "Biotech Research Reports": 2358,
     "Camera Drones": 2345,
     "Condensates": 2344,
@@ -94,7 +89,6 @@
     "Transcranial Microcontrollers": 12836,
     "Ukomi Superconductors": 17136,
     "Vaccines": 28974,
-
     "Broadcast Node": 2867,
     "Integrity Response Drones": 2868,
     "Nano-Factory": 2869,
@@ -104,7 +98,6 @@
     "Sterile Conduits": 2875,
     "Wetware Mainframe": 2876
   },
-
   "planet_type_ids": {
     "_comment": "type_id типов планет. Соответствует полю Pln в JSON-шаблонах застройки.",
     "Barren": 2016,
@@ -116,19 +109,65 @@
     "Storm": 2017,
     "Temperate": 11
   },
-
   "planet_resources": {
     "_comment": "Какое сырьё P0 встречается на каком типе планет. Пригодно для проверки planet_industry.csv: если в CSV у планеты указана плотность сырья, которого на этом типе не бывает, значит в данных ошибка.",
-    "Barren": ["Aqueous Liquids", "Base Metals", "Carbon Compounds", "Micro-Organisms", "Noble Metals"],
-    "Gas": ["Aqueous Liquids", "Base Metals", "Ionic Solutions", "Noble Gas", "Reactive Gas"],
-    "Ice": ["Aqueous Liquids", "Heavy Metals", "Micro-Organisms", "Noble Gas", "Planktic Colonies"],
-    "Lava": ["Base Metals", "Felsic Magma", "Heavy Metals", "Non-CS Crystals", "Suspended Plasma"],
-    "Oceanic": ["Aqueous Liquids", "Carbon Compounds", "Complex Organisms", "Micro-Organisms", "Planktic Colonies"],
-    "Plasma": ["Base Metals", "Heavy Metals", "Noble Metals", "Non-CS Crystals", "Suspended Plasma"],
-    "Storm": ["Aqueous Liquids", "Base Metals", "Ionic Solutions", "Noble Gas", "Suspended Plasma"],
-    "Temperate": ["Aqueous Liquids", "Autotrophs", "Carbon Compounds", "Complex Organisms", "Micro-Organisms"]
+    "Barren": [
+      "Aqueous Liquids",
+      "Base Metals",
+      "Carbon Compounds",
+      "Micro-Organisms",
+      "Noble Metals"
+    ],
+    "Gas": [
+      "Aqueous Liquids",
+      "Base Metals",
+      "Ionic Solutions",
+      "Noble Gas",
+      "Reactive Gas"
+    ],
+    "Ice": [
+      "Aqueous Liquids",
+      "Heavy Metals",
+      "Micro-Organisms",
+      "Noble Gas",
+      "Planktic Colonies"
+    ],
+    "Lava": [
+      "Base Metals",
+      "Felsic Magma",
+      "Heavy Metals",
+      "Non-CS Crystals",
+      "Suspended Plasma"
+    ],
+    "Oceanic": [
+      "Aqueous Liquids",
+      "Carbon Compounds",
+      "Complex Organisms",
+      "Micro-Organisms",
+      "Planktic Colonies"
+    ],
+    "Plasma": [
+      "Base Metals",
+      "Heavy Metals",
+      "Noble Metals",
+      "Non-CS Crystals",
+      "Suspended Plasma"
+    ],
+    "Storm": [
+      "Aqueous Liquids",
+      "Base Metals",
+      "Ionic Solutions",
+      "Noble Gas",
+      "Suspended Plasma"
+    ],
+    "Temperate": [
+      "Aqueous Liquids",
+      "Autotrophs",
+      "Carbon Compounds",
+      "Complex Organisms",
+      "Micro-Organisms"
+    ]
   },
-
   "name_normalization": {
     "_comment": "Приведение написаний из разных источников к именам из recipes.json. В recipes.json сырьё для Bacteria названо 'Microorganisms', тогда как на сайте и в игре — 'Micro-Organisms'; это надо учитывать при сопоставлении с колонками planet_industry.csv.",
     "Pasmoids": "Plasmoids",
@@ -139,11 +178,21 @@
     "Chiral Stuctures": "Chiral Structures",
     "Microorganisms": "Micro-Organisms"
   },
-
   "colony_builder_parameters": {
     "_comment": "Параметры из конструктора колоний на сайте — независимая сверка с data/pi_reference.json.",
     "command_center_cpu_at_level_0": 1675,
     "command_center_pg_at_level_0": 6000,
     "extractor_heads_max": 10
+  },
+  "command_center_type_ids": {
+    "Barren Command Center": 2524,
+    "Gas Command Center": 2534,
+    "Ice Command Center": 2533,
+    "Lava Command Center": 2549,
+    "Oceanic Command Center": 2525,
+    "Plasma Command Center": 2551,
+    "Storm Command Center": 2550,
+    "Temperate Command Center": 2254,
+    "_comment": "type_id командных центров. Нужны фронтенду для иконок в списке закупки. В шаблонах застройки их нет: командный центр не является пином. Источник: eveinfo.com/itemsdb/t/1322/command-centers. Barren (2524) сверен независимо с Adam4EVE и EVE Ref; последний заодно подтверждает CPU Output 1675 tf и Powergrid Output 6000 MW — третье подтверждение нашей таблицы ёмкости."
   }
 }

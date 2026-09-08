@@ -291,17 +291,22 @@ def check_frontend() -> bool:
         return False
     text = index.read_text(encoding="utf-8")
 
-    if "const API_BASE = '/api'" in text:
+    if "SERVED_BY_FLASK" in text:
+        _line(OK, "API_BASE определяется автоматически")
+    elif "const API_BASE = '/api'" in text:
         _line(OK, "API_BASE относительный")
     else:
         _line(
             BAD,
-            "API_BASE НЕ относительный. Абсолютный адрес ломает запросы, если "
-            "открыть приложение по другому имени хоста (127.0.0.1 против "
-            "localhost) — это разные origin, а CORS отключён. "
-            "Замените на: const API_BASE = '/api';",
+            "API_BASE задан абсолютным адресом. Это ломает запросы при открытии "
+            "по другому имени хоста (127.0.0.1 против localhost) — разные origin, "
+            "а CORS отключён. Возьмите web/index.html из поставки.",
         )
         return False
+
+    _line(WARN, "Открывайте приложение по адресу http://127.0.0.1:8000/ (корень), "
+                "а не через Live Server и не как файл: иначе /api отдаст HTML "
+                "вместо JSON и списки останутся пустыми")
 
     if "Math.random() * 22" in text or "Math.random()*22" in text:
         _line(WARN, "во фронтенде остался Math.random() для таймеров экстракторов — "

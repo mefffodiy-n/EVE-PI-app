@@ -84,6 +84,24 @@ class TestReference:
         assert response.status_code == 400
         assert response.get_json()["status"] == "error"
 
+    def test_product_ids_include_command_centers(self, client):
+        """
+        Список закупки ищет иконки по ключу вида «Barren Command Center».
+        Пока отдавались id только целевых продуктов, эти иконки не грузились.
+        """
+        ids = client.get("/api/initial-data").get_json()["product_ids"]
+        if not ids:
+            pytest.skip("data/type_ids.json отсутствует")
+        assert ids.get("Barren Command Center") == 2524
+        assert ids.get("Temperate Command Center") == 2254
+
+    def test_product_ids_include_intermediate_tiers(self, client):
+        """В дашборде показываются и P1 — их id тоже должны приходить."""
+        ids = client.get("/api/initial-data").get_json()["product_ids"]
+        if not ids:
+            pytest.skip("data/type_ids.json отсутствует")
+        assert "Biofuels" in ids
+
     def test_thresholds_exposed_for_ui(self, client):
         body = client.get("/api/thresholds/5").get_json()
         assert body["thresholds"]["p2p3_2factory"] is not None

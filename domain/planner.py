@@ -29,8 +29,11 @@ Math.random() и выводит как настоящий таймер — уб�
 
 from __future__ import annotations
 
+import json
 import math
 from dataclasses import dataclass, field
+from functools import lru_cache
+from pathlib import Path
 
 from domain.capacity import (
     UnsupportedSetup,
@@ -42,6 +45,25 @@ from domain.factory_site import TEMPLATE_BY_TIER, SiteSelection, select_factory_
 from domain.planets import RADIUS_COLUMN, PlanetBook
 from domain.recipes import RecipeBook, load_recipes
 from domain.throughput import Demand, Schematic, expand_demand, load_schematics
+
+ROOT = Path(__file__).resolve().parent.parent
+TYPE_IDS_PATH = ROOT / "data" / "type_ids.json"
+
+
+@lru_cache(maxsize=1)
+def _type_ids() -> dict[str, int]:
+    """
+    Карта «имя продукта -> type_id» для иконок во фронтенде.
+
+    Файла может не быть — тогда строки плана придут с type_id = None,
+    и интерфейс просто не покажет картинку. Это лучше, чем сходить
+    за идентификаторами в ESI: правило проекта запрещает обращения
+    наружу из пользовательского запроса.
+    """
+    if not TYPE_IDS_PATH.is_file():
+        return {}
+    raw = json.loads(TYPE_IDS_PATH.read_text(encoding="utf-8"))
+    return {k: int(v) for k, v in raw.items() if not k.startswith("_")}
 
 # Сколько фабрик содержит один шаблон каждого вида.
 # Расчётный минимум для добывающего шаблона: при CCU III он перегружает
@@ -361,7 +383,7 @@ def build_plan(
                         if product in schematics
                         else None,
                         structures=f"{FACTORIES_PER_TEMPLATE[assignment.template_key]} фабрик",
-                        type_id=None,
+                        type_id=_type_ids().get(product),
                         template_key=assignment.template_key,
                         template_count=assignment.template_count,
                         planet_type=assignment.candidate.planet_type,
@@ -434,7 +456,7 @@ def build_plan(
                     res_out=product,
                     res_in=raw_name,
                     structures=f"{per_miner} фабрик",
-                    type_id=None,
+                    type_id=_type_ids().get(product),
                     template_key="miner_00",
                     template_count=1,
                     planet_type=str(row.get("Type", "")),
