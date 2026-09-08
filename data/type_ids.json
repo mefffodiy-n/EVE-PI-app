@@ -89,5 +89,19 @@
   "Viral Agent": 3775,
   "Water": 3645,
   "Water-Cooled CPU": 2328,
-  "Wetware Mainframe": 2876
+  "Wetware Mainframe": 2876,
+  "planet:Barren": 2016,
+  "planet:Gas": 13,
+  "planet:Ice": 12,
+  "planet:Lava": 2015,
+  "planet:Oceanic": 2014,
+  "planet:Plasma": 2063,
+  "planet:Storm": 2017,
+  "planet:Temperate": 11,
+  "structure:advanced_industry_facility": 2474,
+  "structure:basic_industry_facility": 2481,
+  "structure:extractor_control_unit": 3068,
+  "structure:high_tech_industry_facility": 2475,
+  "structure:launchpad": 2256,
+  "structure:storage_facility": 2562
 }

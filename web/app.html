@@ -1,0 +1,730 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PI Director</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ═══ Общие токены ═══════════════════════════════════════════════════
+   Две вкладки говорят на разных визуальных языках намеренно:
+   дашборд повторяет игровое окно Planetary Industry, чтобы взгляд
+   переносился между игрой и планировщиком без переучивания;
+   настройки — плотная таблица решений, где важны числа, а не иконки. */
+:root {
+  --void:#080b11; --hull:#0f141c; --seam:#1b2331;
+  --dim:#6d7d92; --read:#ccd6e0; --bright:#f2f6fa;
+  --amber:#d4a04a; --flux:#4f9cd6; --forge:#c8823c; --alarm:#cf6058; --calm:#4a9d7f;
+  /* Цвета колец повторяют игровые: синий — инфраструктура,
+     бирюзовый — экстрактор, оранжевый — производство. */
+  --ring-infra:#3a9fd8; --ring-extract:#2fb89a; --ring-basic:#c8763a; --ring-adv:#d8a63c;
+}
+* { box-sizing:border-box; }
+body { margin:0; background:var(--void); color:var(--read);
+       font-family:'IBM Plex Sans',system-ui,sans-serif; font-size:13px; line-height:1.45; }
+.num { font-family:'IBM Plex Mono',monospace; font-variant-numeric:tabular-nums; }
+button { font-family:inherit; }
+
+/* ═══ Шапка приложения ═══════════════════════════════════════════ */
+.topbar { display:flex; align-items:center; gap:4px; padding:0 14px;
+          border-bottom:1px solid var(--seam); background:var(--hull); height:44px; }
+.brand { font-weight:600; color:var(--bright); margin-right:18px; letter-spacing:.02em; }
+.brand small { color:var(--dim); font-weight:400; margin-left:7px; }
+.tab { background:none; border:none; border-bottom:2px solid transparent; color:var(--dim);
+       padding:12px 14px; cursor:pointer; font-size:13px; }
+.tab:hover { color:var(--read); }
+.tab.on { color:var(--bright); border-bottom-color:var(--flux); }
+.topbar .right { margin-left:auto; color:var(--dim); font-size:12px; display:flex; gap:16px; align-items:center; }
+.topbar .right b { color:var(--read); font-weight:500; }
+
+.page { display:none; }
+.page.on { display:block; }
+
+/* ═══ Панель инструментов дашборда ═══════════════════════════════ */
+.tools { display:flex; align-items:center; gap:2px; padding:8px 14px;
+         border-bottom:1px solid var(--seam); }
+.tool { width:30px; height:26px; display:grid; place-items:center; cursor:pointer;
+        background:none; border:1px solid transparent; color:var(--dim); border-radius:3px; }
+.tool:hover { color:var(--read); background:#141b26; }
+.tool.on { color:var(--bright); border-color:var(--seam); background:#141b26; }
+.tool svg { width:15px; height:15px; }
+.counts { margin-left:auto; color:var(--dim); font-size:12px; }
+.counts b { color:var(--read); font-weight:500; }
+.counts .idle { color:var(--amber); }
+
+.menu { position:relative; }
+.menu-pop { position:absolute; top:30px; left:0; z-index:20; min-width:230px;
+            background:#0d121a; border:1px solid var(--seam); padding:4px 0; display:none; }
+.menu.open .menu-pop { display:block; }
+.menu-pop button { display:flex; gap:8px; width:100%; text-align:left; background:none;
+                   border:none; color:var(--read); padding:6px 12px; cursor:pointer; font-size:13px; }
+.menu-pop button:hover { background:#161e2a; }
+.menu-pop button .mark { width:12px; color:var(--flux); }
+
+/* ═══ Круг колонии: планета, кольцо, время, портрет ══════════════ */
+.orb { position:relative; width:var(--orb,58px); height:var(--orb,58px); flex:0 0 auto; cursor:pointer; }
+.orb .disc { position:absolute; inset:5px; border-radius:50%; overflow:hidden;
+             background:#101720; display:grid; place-items:center; }
+.orb .disc img { width:100%; height:100%; object-fit:cover; }
+.orb .cargo { position:absolute; inset:0; margin:auto; width:52%; height:52%;
+              filter:drop-shadow(0 1px 2px rgba(0,0,0,.8)); }
+.orb svg.ring { position:absolute; inset:0; transform:rotate(-90deg); }
+.orb .ring circle { fill:none; stroke-width:2.5; }
+.orb .ring .track { stroke:#1c2532; }
+/* Стрелки направлений медленно проступают поверх планеты — так в игре
+   обозначается, что по колонии можно кликнуть. Чисто декоративный
+   элемент, никаких данных не несёт. */
+.orb .arrows { position:absolute; inset:12%; opacity:0; pointer-events:none;
+               animation:breathe 5s ease-in-out infinite; }
+.orb .arrows svg { width:100%; height:100%; fill:none; stroke:#c8d4e2; stroke-width:1.4; }
+@keyframes breathe { 0%,100%{opacity:0} 45%,55%{opacity:.55} }
+.orb:hover .arrows { opacity:.75; animation:none; }
+
+/* Внутреннее кольцо — ход производственного цикла. */
+.orb .ring .cycle { stroke:#e8eef5; stroke-width:2; }
+.orb .ring .cycle.none { stroke:#2a3644; stroke-dasharray:2 4; }
+.orb.busy .outer { filter:drop-shadow(0 0 3px currentColor); }
+
+.orb .badge { position:absolute; top:-3px; left:-2px; z-index:3;
+              background:#12181f; border:1px solid #253040; border-radius:3px;
+              padding:0 4px; font-size:10px; line-height:14px;
+              font-family:'IBM Plex Mono',monospace; color:var(--amber); }
+.orb .badge.hot { color:var(--alarm); border-color:#4a2a2a; }
+/* Портрет персонажа придёт из игры в Фазе 3. Пока — инициалы:
+   пустой серый круг выглядит как незагрузившаяся картинка. */
+.orb .pilot { position:absolute; right:-2px; bottom:-2px; width:40%; height:40%;
+              border-radius:50%; border:1px solid #0a0f16; background:#232d3d;
+              display:grid; place-items:center; font-size:9px; font-weight:600;
+              color:#8fa3bd; letter-spacing:-.02em; }
+.orb .pilot img { width:100%; height:100%; object-fit:cover; }
+
+/* ═══ Вид «Детали»: строка на колонию ═══════════════════════════ */
+.colony { border-bottom:1px solid #121824; padding:12px 14px;
+          content-visibility:auto; contain-intrinsic-size:auto 132px; }
+.colony:hover { background:#0c1119; }
+.colony-head { display:flex; align-items:center; gap:10px; }
+.pilot-lg { width:30px; height:30px; border-radius:50%; background:#232d3d; flex:0 0 auto;
+            display:grid; place-items:center; font-size:11px; font-weight:600; color:#8fa3bd; }
+.pilot-lg img { width:100%; height:100%; object-fit:cover; }
+.pilot-name { color:var(--bright); font-weight:500; }
+.sub { color:var(--dim); font-size:12px; display:flex; gap:8px; align-items:center; margin-top:1px; }
+.sysbadge { background:#1a2332; border-radius:3px; padding:1px 6px;
+            font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--read); }
+.sec { font-family:'IBM Plex Mono',monospace; font-size:11px; padding:1px 5px; border-radius:3px; }
+.colony-head .tail { margin-left:auto; text-align:right; }
+.tail .lbl { color:var(--dim); font-size:11px; }
+.tail .val { font-family:'IBM Plex Mono',monospace; color:var(--read); }
+.tail .val.hot { color:var(--alarm); }
+.details-btn { margin-left:12px; background:none; border:1px solid #2b3a4d; color:var(--flux);
+               padding:5px 12px; cursor:pointer; font-size:12px; border-radius:2px; }
+.details-btn:hover { background:rgba(79,156,214,.1); }
+.strip { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; padding-left:2px; }
+
+/* ═══ Вид «Список»: строка на персонажа ═════════════════════════ */
+.pilot-row { display:flex; align-items:center; gap:12px; padding:10px 14px;
+             border-bottom:1px solid #121824; content-visibility:auto; contain-intrinsic-size:auto 78px; }
+.pilot-row .who { width:150px; flex:0 0 auto; }
+.pilot-row .orbs { display:flex; gap:10px; flex-wrap:wrap; }
+
+/* ═══ Вид «Сетка» ═══════════════════════════════════════════════ */
+.grid { display:flex; flex-wrap:wrap; gap:12px; padding:14px; }
+
+/* ═══ Панель колонии ════════════════════════════════════════════ */
+/* Детали колонии — не боковая панель, а замена содержимого страницы,
+   как в игре. Кнопка «Назад» возвращает к списку. */
+.colony-page { display:none; }
+.colony-page.on { display:block; }
+.cp-head { display:flex; align-items:center; gap:12px; padding:14px 16px; }
+.cp-head .back { margin-left:auto; background:none; border:1px solid #2b3a4d;
+                 color:var(--flux); padding:6px 16px; cursor:pointer; font-size:13px; }
+.cp-head .back:hover { background:rgba(79,156,214,.1); }
+
+/* Круг структуры стоит СЛЕВА, вне панели строки — как в игре. */
+.unit { display:flex; gap:14px; align-items:flex-start; padding:0 16px 8px; }
+.unit .panel { flex:1; min-width:0; background:#0d121a; border:1px solid #141c27;
+               padding:8px 12px; }
+.unit .title { color:var(--read); display:flex; align-items:center; gap:7px; }
+.unit .title .code { color:var(--dim); }
+.unit .cols2 { display:grid; grid-template-columns:1fr 1fr; gap:4px 24px; margin-top:6px; max-width:640px; }
+.unit .lbl { color:var(--dim); font-size:11px; }
+.unit .meta { color:var(--dim); font-size:12px; }
+.unit .val { font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--read); }
+.state-ok { color:var(--calm); } .state-wait { color:var(--dim); }
+.inputs { display:flex; gap:4px; margin-top:3px; }
+.inputs span { width:26px; height:26px; background:#101823; border:1px solid #1c2734;
+               display:grid; place-items:center; }
+.inputs span.have { background:#12314a; border-color:#2d5f86; }
+.inputs img { width:20px; height:20px; object-fit:contain; }
+.meter { height:4px; background:#151c27; margin:5px 0 3px; max-width:280px; }
+.meter i { display:block; height:100%; }
+.meter i.cpu { background:var(--ring-extract); }
+.meter i.pg { background:var(--alarm); }
+.meter i.pg.ok { background:var(--ring-infra); }
+
+/* ═══ Настройки (плотная панель решений) ════════════════════════ */
+.answers { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+           border-bottom:1px solid var(--seam); background:var(--hull); }
+.answer { padding:11px 14px; border-right:1px solid var(--seam); }
+.answer:last-child { border-right:none; }
+.answer .label { color:var(--dim); font-size:11px; letter-spacing:.08em; text-transform:uppercase; }
+.answer .value { font-family:'IBM Plex Mono',monospace; font-variant-numeric:tabular-nums;
+                 font-size:25px; color:var(--bright); line-height:1.15; margin-top:2px; }
+.answer .value.warn { color:var(--amber); }
+.answer .unit-s { font-size:13px; color:var(--dim); margin-left:5px; font-family:'IBM Plex Sans',sans-serif; }
+.answer .note { color:var(--dim); font-size:12px; }
+.split { display:grid; grid-template-columns:270px 1fr; min-height:calc(100vh - 150px); }
+.rail { border-right:1px solid var(--seam); padding:14px; background:var(--hull); }
+.rail h2 { font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--dim);
+           font-weight:500; margin:0 0 10px; }
+.rail h2:not(:first-child) { margin-top:20px; padding-top:16px; border-top:1px solid var(--seam); }
+.field { margin-bottom:11px; }
+.field label { display:block; font-size:12px; color:var(--dim); margin-bottom:3px; }
+.field select, .field input { width:100%; background:var(--void); border:1px solid var(--seam);
+    color:var(--read); padding:6px 8px; font-family:'IBM Plex Mono',monospace; font-size:12px; }
+.field select:focus, .field input:focus { outline:none; border-color:var(--flux); }
+.run { width:100%; margin-top:6px; padding:8px; cursor:pointer; background:transparent;
+       border:1px solid var(--flux); color:var(--flux); font-size:13px; font-weight:500; }
+.run:hover { background:rgba(79,156,214,.1); }
+.crew { max-height:210px; overflow-y:auto; }
+.crew div { display:flex; gap:8px; align-items:center; padding:4px 0; font-size:12px; }
+.crew .lv { margin-left:auto; color:var(--dim); font-family:'IBM Plex Mono',monospace; font-size:11px; }
+
+table { width:100%; border-collapse:collapse; }
+thead .group th { text-align:left; padding:8px 10px 2px; font-size:11px; font-weight:600;
+    letter-spacing:.08em; text-transform:uppercase; color:var(--dim);
+    border-bottom:1px solid var(--seam); border-left:1px solid var(--seam); }
+thead .group th small { display:block; font-weight:400; letter-spacing:0; text-transform:none;
+    color:#48566a; font-size:11px; }
+thead .cols th { text-align:left; padding:5px 10px; font-size:11px; font-weight:500;
+    letter-spacing:.05em; text-transform:uppercase; color:#55637a;
+    border-bottom:1px solid var(--seam); }
+thead .cols th.r { text-align:right; }
+tbody tr { border-bottom:1px solid #131a24; content-visibility:auto; contain-intrinsic-size:auto 38px; }
+tbody tr:hover { background:#0d121a; }
+td { padding:6px 10px; }
+td.r { text-align:right; }
+.idx { color:#465366; width:28px; text-align:right; }
+.stack { display:flex; height:5px; background:#151c27; width:140px; position:relative; }
+.stack::after { content:''; position:absolute; left:90%; top:-2px; bottom:-2px; width:1px; background:#3a4557; }
+.stack i { display:block; height:100%; }
+.s-str { background:#3d6f9e; } .s-hed { background:#7c6bb0; } .s-lnk { background:var(--amber); }
+.parts { font-size:11px; color:var(--dim); margin-top:3px; font-family:'IBM Plex Mono',monospace; }
+.pct { font-family:'IBM Plex Mono',monospace; font-variant-numeric:tabular-nums; }
+.pct.hot { color:var(--alarm); } .pct.warm { color:var(--amber); }
+
+.msg { padding:5px 10px; margin-bottom:3px; font-size:12px; border-left:2px solid var(--amber);
+       background:rgba(212,160,74,.06); }
+.msg.bad { border-left-color:var(--alarm); background:rgba(207,96,88,.06); }
+details.msgs > summary { cursor:pointer; font-size:12px; color:var(--dim); padding:4px 0; list-style:none; }
+details.msgs > summary::before { content:'▸ '; color:var(--amber); }
+details.msgs[open] > summary::before { content:'▾ '; }
+.empty { padding:56px 14px; color:var(--dim); text-align:center; }
+
+@media (prefers-reduced-motion:reduce) { * { transition:none !important; animation:none !important; } }
+@media (max-width:900px) { .split { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">PI Director<small>планировщик колоний</small></div>
+  <button class="tab on" data-page="dash">Дашборд</button>
+  <button class="tab" data-page="setup">Настройки</button>
+  <div class="right">
+    <span>данные <b id="dataStatus">—</b></span>
+  </div>
+</div>
+
+<!-- ═══ ДАШБОРД ═══════════════════════════════════════════════════ -->
+<div class="page on" id="page-dash">
+  <div class="tools">
+    <button class="tool on" data-view="details" title="Детали">
+      <svg viewBox="0 0 16 16" fill="currentColor"><rect y="2" width="16" height="2"/><rect y="7" width="16" height="2"/><rect y="12" width="16" height="2"/></svg>
+    </button>
+    <button class="tool" data-view="list" title="Список по персонажам">
+      <svg viewBox="0 0 16 16" fill="currentColor"><rect y="2" width="3" height="2"/><rect x="5" y="2" width="11" height="2"/><rect y="7" width="3" height="2"/><rect x="5" y="7" width="11" height="2"/><rect y="12" width="3" height="2"/><rect x="5" y="12" width="11" height="2"/></svg>
+    </button>
+    <button class="tool" data-view="grid" title="Сетка">
+      <svg viewBox="0 0 16 16" fill="currentColor"><rect width="6" height="6"/><rect x="10" width="6" height="6"/><rect y="10" width="6" height="6"/><rect x="10" y="10" width="6" height="6"/></svg>
+    </button>
+    <div class="menu" id="sortMenu" style="margin-left:8px">
+      <button class="tool" onclick="document.getElementById('sortMenu').classList.toggle('open')" title="Сортировка">
+        <svg viewBox="0 0 16 16" fill="currentColor"><rect y="2" width="14" height="2"/><rect y="7" width="10" height="2"/><rect y="12" width="6" height="2"/></svg>
+      </button>
+      <div class="menu-pop" id="sortPop"></div>
+    </div>
+    <div class="counts" id="counts">план не построен</div>
+  </div>
+  <div id="dashBody"><div class="empty">План не построен. Откройте вкладку «Настройки», выберите продукты и постройте план.</div></div>
+  <div class="colony-page" id="colonyPage"></div>
+</div>
+
+<!-- ═══ НАСТРОЙКИ ═════════════════════════════════════════════════ -->
+<div class="page" id="page-setup">
+  <div class="answers" id="answers"></div>
+  <div class="split">
+    <aside class="rail">
+      <h2>Что производим</h2>
+      <div class="field">
+        <label for="products">Целевые продукты</label>
+        <select id="products" multiple size="7"></select>
+      </div>
+
+      <h2>Где добываем</h2>
+      <div class="field">
+        <label for="constellations">Созвездия</label>
+        <select id="constellations" multiple size="5"></select>
+      </div>
+      <div class="field">
+        <label for="margin">Запас на истощение месторождений</label>
+        <input id="margin" type="number" value="1.0" step="0.1" min="1" max="3">
+      </div>
+
+      <h2>Где перерабатываем</h2>
+      <div class="field">
+        <label for="factorySys">Домашняя система</label>
+        <select id="factorySys"></select>
+      </div>
+      <div class="field" id="thresholdNote" style="font-size:11px;color:var(--dim)"></div>
+
+      <h2>Персонажи</h2>
+      <div class="crew" id="crew"><div style="color:var(--dim);font-size:12px">
+        Появятся после расчёта: планировщик сам распределяет персонажей
+        по планетам с учётом их прокачки.</div></div>
+
+      <button class="run" onclick="calculate()">Построить план</button>
+    </aside>
+
+    <main>
+      <div id="messages" style="padding:12px 14px 0"></div>
+      <div id="tableWrap"><div class="empty">План не построен.</div></div>
+    </main>
+  </div>
+</div>
+
+
+
+<script>
+const FLASK='http://127.0.0.1:8000';
+const SAME=location.origin===FLASK||location.origin==='http://localhost:8000';
+const API=SAME?'/api':`${FLASK}/api`;
+const ICON=id=>`https://images.evetech.net/types/${id}/icon?size=64`;
+
+let ids={}, plan=[], staffing={}, view='details', sortBy='load';
+
+const STRUCT_RU={command_center:'Командный центр',launchpad:'Причал',storage_facility:'Склад',
+  extractor_control_unit:'Экстрактор',basic_industry_facility:'Базовая фабрика',
+  advanced_industry_facility:'Продвинутая фабрика',high_tech_industry_facility:'Высокотехнологичная фабрика'};
+const RING={command_center:'--ring-infra',launchpad:'--ring-infra',storage_facility:'--ring-infra',
+  extractor_control_unit:'--ring-extract',basic_industry_facility:'--ring-basic',
+  advanced_industry_facility:'--ring-adv',high_tech_industry_facility:'--ring-adv'};
+
+const SORTS=[
+  {key:'load',   name:'По загрузке'},
+  {key:'reserve',name:'По остатку запаса'},
+  {key:'pilot',  name:'По имени персонажа'},
+  {key:'system', name:'По системе'}
+];
+
+function initials(name){
+  return String(name||'').split(/\s+/).filter(Boolean).slice(0,2)
+    .map(w=>w[0].toUpperCase()).join('');
+}
+
+function plural(n,one,few,many){const a=Math.abs(n)%100,b=a%10;
+  if(a>10&&a<20)return `${n} ${many}`; if(b>1&&b<5)return `${n} ${few}`;
+  if(b===1)return `${n} ${one}`; return `${n} ${many}`;}
+
+/* ── Круг колонии ───────────────────────────────────────────────
+   Кольцо показывает загрузку по узкому ресурсу, а не таймер цикла:
+   таймеров у нас пока нет, и рисовать вымышленное время нельзя. */
+function orb(row,size){
+  const peak=Math.max(row.cpu_percent,row.pg_percent);
+  const r=(size/2)-2, c=2*Math.PI*r;
+  const color=peak>=95?'var(--alarm)':peak>=90?'var(--amber)':
+              (row.role.includes('Добыча')?'var(--ring-extract)':'var(--ring-adv)');
+  const planetId=ids['planet:'+row.planet_type], cargoId=row.type_id;
+  return `<div class="orb" style="--orb:${size}px" onclick="openColony('${row.id}')"
+            title="${row.character} · ${row.system} ${row.planet} · ${row.res_out}">
+    <div class="disc">${planetId?`<img src="${ICON(planetId)}" alt="">`:''}</div>
+    ${cargoId?`<img class="cargo" src="${ICON(cargoId)}" alt="">`:''}
+    <div class="arrows"><svg viewBox="0 0 40 40">
+      <path d="M20 4 v9 M16 8 l4-4 4 4"/><path d="M20 36 v-9 M16 32 l4 4 4-4"/>
+      <path d="M4 20 h9 M8 16 l-4 4 4 4"/><path d="M36 20 h-9 M32 16 l4 4-4 4"/>
+    </svg></div>
+    <svg class="ring" viewBox="0 0 ${size} ${size}">
+      <circle class="track" cx="${size/2}" cy="${size/2}" r="${r}"/>
+      <circle cx="${size/2}" cy="${size/2}" r="${r}" stroke="${color}"
+        stroke-dasharray="${c*Math.min(peak,100)/100} ${c}" stroke-linecap="round"/>
+    </svg>
+    <div class="badge${peak>=95?' hot':''}">${peak.toFixed(0)}%</div>
+    <div class="pilot" title="${row.character}">${initials(row.character)}</div>
+  </div>`;
+}
+
+/* Маленький круг структуры внутри колонии. */
+function structOrb(kind,count,planetType,opts){
+  opts=opts||{};
+  const id = kind==='command_center' ? ids[`${planetType} Command Center`] : ids['structure:'+kind];
+  const size=opts.size||46, R=(size/2)-2, r2=R-5;
+  const cOut=2*Math.PI*R, cIn=2*Math.PI*r2;
+
+  // Командный центр показывает две нагрузки сразу: CPU бирюзовым слева,
+  // Power красным справа — как в игре. Штриховка делает их различимыми
+  // даже когда обе почти полные.
+  let outer;
+  if(kind==='command_center' && opts.cpu!=null){
+    const half=cOut/2;
+    outer=`<circle cx="${size/2}" cy="${size/2}" r="${R}" stroke="var(--ring-extract)"
+             stroke-dasharray="${half*opts.cpu/100} ${cOut}" stroke-width="2.5"/>
+           <circle cx="${size/2}" cy="${size/2}" r="${R}" stroke="var(--alarm)"
+             stroke-dasharray="0 ${half} ${half*opts.pg/100} ${cOut}" stroke-width="2.5"/>`;
+  } else {
+    outer=`<circle class="outer" cx="${size/2}" cy="${size/2}" r="${R}"
+             stroke="var(${RING[kind]})" stroke-dasharray="${cOut} ${cOut}" stroke-width="2.5"/>`;
+  }
+
+  // Внутреннее кольцо — ход производственного цикла. Данных о нём у нас
+  // пока нет, поэтому по умолчанию оно пунктирное: «неизвестно».
+  // Когда sync_colony_status начнёт отдавать таймеры, сюда придёт число,
+  // и то же кольцо станет показывать реальный прогресс.
+  const cyc = opts.cycle;
+  const inner = cyc==null
+    ? `<circle class="cycle none" cx="${size/2}" cy="${size/2}" r="${r2}" stroke-dasharray="2 4"/>`
+    : `<circle class="cycle" cx="${size/2}" cy="${size/2}" r="${r2}"
+         stroke-dasharray="${cIn*cyc/100} ${cIn}" stroke-linecap="round"/>`;
+
+  return `<div class="orb${cyc!=null?' busy':''}" style="--orb:${size}px;cursor:default"
+       title="${STRUCT_RU[kind]}${count>1?' ×'+count:''}${kind==='command_center'?' ('+planetType+')':''}">
+    <div class="disc" style="background:#0d131b">${id?`<img src="${ICON(id)}" style="width:58%;height:58%;object-fit:contain">`:''}</div>
+    <svg class="ring" viewBox="0 0 ${size} ${size}">
+      <circle class="track" cx="${size/2}" cy="${size/2}" r="${R}"/>
+      ${outer}${inner}
+    </svg>
+    ${count>1?`<div class="badge">×${count}</div>`:''}</div>`;
+}
+
+function secColor(t){ // цвет статуса безопасности как в игре
+  return t==='Barren'||t==='Temperate' ? '#5b8a5b' : '#8a5b5b';
+}
+
+function sorted(){
+  const c=[...plan];
+  if(sortBy==='load')    c.sort((a,b)=>Math.max(b.cpu_percent,b.pg_percent)-Math.max(a.cpu_percent,a.pg_percent));
+  if(sortBy==='reserve') c.sort((a,b)=>Math.max(a.cpu_percent,a.pg_percent)-Math.max(b.cpu_percent,b.pg_percent));
+  if(sortBy==='pilot')   c.sort((a,b)=>a.character.localeCompare(b.character)||a.system.localeCompare(b.system));
+  if(sortBy==='system')  c.sort((a,b)=>a.system.localeCompare(b.system)||(+a.planet)-(+b.planet));
+  return c;
+}
+
+function renderDash(){
+  const box=document.getElementById('dashBody');
+  if(!plan.length){ box.innerHTML='<div class="empty">План не построен. Откройте вкладку «Настройки».</div>'; return; }
+  const rows=sorted();
+
+  if(view==='details'){
+    box.innerHTML=rows.map(p=>{
+      const peak=Math.max(p.cpu_percent,p.pg_percent);
+      return `<div class="colony">
+        <div class="colony-head">
+          ${orb(p,54)}
+          <div class="pilot-lg" title="${p.character}">${initials(p.character)}</div>
+          <div>
+            <div class="pilot-name">${p.character}</div>
+            <div class="sub">
+              <span>${p.role}</span>
+              <span class="sysbadge">${p.system} ${p.planet}</span>
+              <span class="sec" style="color:${secColor(p.planet_type)}">${p.planet_type}</span>
+              <span class="num">${Math.round(p.planet_radius_km).toLocaleString('ru')} км</span>
+            </div>
+          </div>
+          <div class="tail">
+            <div class="lbl">Загрузка</div>
+            <div class="val${peak>=90?' hot':''}">CPU ${p.cpu_percent.toFixed(1)}% · PG ${p.pg_percent.toFixed(1)}%</div>
+          </div>
+          <button class="details-btn" onclick="openColony('${p.id}')">Детали</button>
+        </div>
+        <div class="strip">${(p.structures_detail||[]).map(s=>structOrb(s.kind,s.count,p.planet_type,
+              s.kind==="command_center"?{cpu:p.cpu_percent,pg:p.pg_percent}:{})).join('')}</div>
+      </div>`;
+    }).join('');
+  }
+
+  if(view==='list'){
+    const byPilot={};
+    rows.forEach(p=>(byPilot[p.character]=byPilot[p.character]||[]).push(p));
+    box.innerHTML=Object.entries(byPilot).map(([name,items])=>`
+      <div class="pilot-row">
+        <div class="who">
+          <div class="pilot-lg" style="margin-bottom:4px">${initials(name)}</div>
+          <div class="pilot-name" style="font-size:12px">${name}</div>
+          <div class="sub" style="font-size:11px">${plural(items.length,'колония','колонии','колоний')}</div>
+        </div>
+        <div class="orbs">${items.map(p=>orb(p,52)).join('')}</div>
+      </div>`).join('');
+  }
+
+  if(view==='grid'){
+    box.innerHTML=`<div class="grid">${rows.map(p=>orb(p,58)).join('')}</div>`;
+  }
+
+  const strained=plan.filter(p=>Math.max(p.cpu_percent,p.pg_percent)>=90).length;
+  document.getElementById('counts').innerHTML=
+    `<b>${plural(plan.length,'колония','колонии','колоний')}</b>`
+    + (strained?` · <span class="idle">${strained} без запаса</span>`:' · запас везде есть');
+}
+
+/* ── Панель колонии: разбор по структурам, как в игре ─────────── */
+function openColony(id){
+  const p=plan.find(x=>x.id===id); if(!p)return;
+  const pgb=p.pg_breakdown||{};
+  const planetId=ids['planet:'+p.planet_type];
+
+  // Разворачиваем состав в отдельные строки: в игре каждая структура —
+  // своя строка со своими показателями, а не одна плашка с числом.
+  const units=[];
+  (p.structures_detail||[]).forEach(sd=>{
+    for(let i=0;i<sd.count;i++) units.push(sd.kind);
+  });
+
+  const body=units.map((kind,i)=>{
+    const isFactory=kind.includes('industry_facility');
+    const isCC=kind==='command_center';
+    const isECU=kind==='extractor_control_unit';
+    const isStore=kind==='launchpad'||kind==='storage_facility';
+    const code=`${String.fromCharCode(65+(i%26))}${i}-${p.planet}`;
+
+    let fields='';
+    if(isCC){
+      fields=`<div class="cols2">
+        <div><div class="lbl">CPU: ${p.cpu_percent.toFixed(1)}%</div>
+          <div class="meter"><i class="cpu" style="width:${Math.min(p.cpu_percent,100)}%"></i></div></div>
+        <div><div class="lbl">Power: ${p.pg_percent.toFixed(1)}%</div>
+          <div class="meter"><i class="pg${p.pg_percent<90?' ok':''}" style="width:${Math.min(p.pg_percent,100)}%"></i></div></div>
+      </div>
+      <div class="meta" style="margin-top:6px">
+        Из чего сложилось (Power): структуры ${pgb.structures||0}% · головы ${pgb.heads||0}% · линки ${pgb.links||0}%</div>`;
+    } else if(isStore){
+      fields=`<div class="cols2">
+        <div><div class="lbl">Вместимость</div>
+          <div class="meter"><i class="ok" style="width:0%;background:var(--ring-infra)"></i></div>
+          <div class="val">0 / ${kind==='launchpad'?'10 000':'12 000'} m³</div></div>
+        <div><div class="lbl">Содержимое</div><div class="meta">нет данных</div></div>
+      </div>`;
+    } else if(isECU){
+      fields=`<div class="cols2">
+        <div><div class="lbl">Текущий цикл</div>
+          <div class="meter"><i style="width:0%;background:var(--ring-extract)"></i></div>
+          <div class="meta">данных о цикле нет</div></div>
+        <div><div class="lbl">Добывает</div>
+          <div class="val">${p.res_in||'—'}</div>
+          <div class="meta">10 голов</div></div>
+      </div>`;
+    } else if(isFactory){
+      const inputs=(p.res_in||'').split(',').map(x=>x.trim()).filter(Boolean);
+      fields=`<div class="cols2">
+        <div><div class="state-wait">Состояние цикла неизвестно</div>
+          <div class="meter"><i style="width:0%"></i></div>
+          <div class="meta">появится после подключения к игре</div></div>
+        <div><div class="lbl">Производит</div>
+          <div class="val">${p.res_out}</div>
+          <div class="lbl" style="margin-top:5px">Вход</div>
+          <div class="inputs">${inputs.map(n=>ids[n]
+            ?`<span class="have" title="${n}"><img src="${ICON(ids[n])}" alt=""></span>`
+            :`<span title="${n}">·</span>`).join('')}</div></div>
+      </div>`;
+    }
+
+    return `<div class="unit">
+      ${structOrb(kind,1,p.planet_type,isCC?{cpu:p.cpu_percent,pg:p.pg_percent,size:52}:{size:52})}
+      <div class="panel">
+        <div class="title">${STRUCT_RU[kind]} <span class="code">${code}</span></div>
+        ${fields}
+      </div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('colonyPage').innerHTML=`
+    <div class="cp-head">
+      ${orb(p,58)}
+      <div>
+        <div class="pilot-name">${p.character}</div>
+        <div class="sub">
+          <span class="sysbadge">${p.system} ${p.planet}</span>
+          <span class="sec" style="color:${secColor(p.planet_type)}">${p.planet_type}</span>
+          <span class="num">${Math.round(p.planet_radius_km).toLocaleString('ru')} км</span>
+          <span>${p.role}</span>
+        </div>
+      </div>
+      <button class="back" onclick="closeColony()">Назад</button>
+    </div>
+    ${(p.shared_extraction_count||1)>1?`<div class="msg" style="margin:0 16px 8px">
+      На этой планете ${p.shared_extraction_count} наших экстрактора на одном сырье —
+      выработка каждого будет ниже расчётной.</div>`:''}
+    ${body}`;
+
+  document.getElementById('dashBody').style.display='none';
+  document.querySelector('#page-dash .tools').style.display='none';
+  document.getElementById('colonyPage').classList.add('on');
+}
+
+function closeColony(){
+  document.getElementById('colonyPage').classList.remove('on');
+  document.getElementById('dashBody').style.display='';
+  document.querySelector('#page-dash .tools').style.display='';
+}
+document.addEventListener('keydown',e=>{ if(e.key==='Escape')closeColony(); });
+
+/* ── Настройки ──────────────────────────────────────────────── */
+async function boot(){
+  try{
+    const res=await fetch(`${API}/initial-data`);
+    if(!(res.headers.get('content-type')||'').includes('application/json'))
+      throw new Error(`${API} вернул не JSON. Запустите «python run.py» и откройте ${FLASK}/`);
+    const d=await res.json();
+    ids=d.product_ids||{};
+    fill('constellations',d.bases||[]);
+    fill('products',d.products||[]);
+    document.getElementById('dataStatus').textContent=
+      `${plural((d.bases||[]).length,'созвездие','созвездия','созвездий')} · `
+      +`${plural((d.products||[]).length,'продукт','продукта','продуктов')}`;
+    (d.data_problems||[]).forEach(t=>msg(t,true));
+    document.getElementById('constellations').addEventListener('change',loadSystems);
+  }catch(e){ msg(e.message,true); document.getElementById('dataStatus').textContent='не загружены'; }
+
+  document.getElementById('sortPop').innerHTML=SORTS.map(s=>
+    `<button onclick="setSort('${s.key}')"><span class="mark">${s.key===sortBy?'✓':''}</span>${s.name}</button>`).join('');
+}
+function setSort(k){ sortBy=k; document.getElementById('sortMenu').classList.remove('open');
+  document.getElementById('sortPop').innerHTML=SORTS.map(s=>
+    `<button onclick="setSort('${s.key}')"><span class="mark">${s.key===sortBy?'✓':''}</span>${s.name}</button>`).join('');
+  renderDash(); }
+
+function fill(id,items){ document.getElementById(id).innerHTML=items.map(v=>`<option value="${v}">${v}</option>`).join(''); }
+function picked(id){ return [...document.getElementById(id).selectedOptions].map(o=>o.value); }
+function msg(t,bad){ document.getElementById('messages').insertAdjacentHTML('beforeend',
+  `<div class="msg${bad?' bad':''}">${t}</div>`); }
+
+async function loadSystems(){
+  const c=picked('constellations'); if(!c.length)return;
+  const r=await fetch(`${API}/systems`,{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({constellations:c})});
+  fill('factorySys',(await r.json()).systems||[]);
+}
+
+async function calculate(){
+  const body={constellations:picked('constellations'),
+    factory_sys:document.getElementById('factorySys').value,
+    target_products:picked('products'),
+    extraction_margin:parseFloat(document.getElementById('margin').value)||1.0};
+  document.getElementById('messages').innerHTML='';
+  const r=await fetch(`${API}/calculate`,{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(body)});
+  const d=await r.json();
+  if(d.status!=='success'){ msg(d.message,true); return; }
+
+  plan=d.data||[]; staffing=d.staffing||{};
+  renderMessages(d.warnings||[],d.assumptions||[]);
+  renderAnswers(); renderTable(); renderDash(); renderCrew();
+  show('dash');
+}
+
+function renderMessages(warnings,assumptions){
+  const box=document.getElementById('messages');
+  const crit=warnings.filter(w=>w.includes('ДЕФИЦИТ'));
+  const rest=warnings.filter(w=>!w.includes('ДЕФИЦИТ')).concat(assumptions);
+  box.innerHTML=crit.map(w=>`<div class="msg bad">${w}</div>`).join('');
+  if(rest.length) box.insertAdjacentHTML('beforeend',
+    `<details class="msgs"><summary>${plural(rest.length,'замечание','замечания','замечаний')} к плану</summary>
+     ${rest.map(w=>`<div class="msg">${w}</div>`).join('')}</details>`);
+}
+
+// Кто чем занят: показывает, не перегружен ли один персонаж и остались
+// ли у кого-то свободные слоты планет.
+function renderCrew(){
+  const by={};
+  plan.forEach(r=>{
+    const c=by[r.character]=by[r.character]||{mining:0,proc:0};
+    r.role.includes('Добыча')?c.mining++:c.proc++;
+  });
+  const box=document.getElementById('crew');
+  const rows=Object.entries(by).sort((a,b)=>
+    (b[1].mining+b[1].proc)-(a[1].mining+a[1].proc));
+  box.innerHTML=rows.map(([name,c])=>`
+    <div><div class="pilot-lg" style="width:22px;height:22px;font-size:9px">${initials(name)}</div>
+      <span>${name}</span>
+      <span class="lv">${c.proc?c.proc+'п':''}${c.proc&&c.mining?' ':''}${c.mining?c.mining+'д':''}</span>
+    </div>`).join('')
+    + `<div style="color:var(--dim);font-size:11px;margin-top:6px">п — переработка, д — добыча</div>`;
+}
+
+function renderAnswers(){
+  const mining=plan.filter(r=>r.role.includes('Добыча'));
+  const worst=plan.reduce((w,r)=>Math.max(r.cpu_percent,r.pg_percent)>Math.max(w.cpu_percent||0,w.pg_percent||0)?r:w,{});
+  const short=Object.values(staffing).reduce((n,s)=>n+(s.characters_needed||0),0);
+  const cards=[
+    {label:'Колоний в плане',value:plan.length,note:`${mining.length} добыча · ${plan.length-mining.length} переработка`},
+    {label:'Персонажей занято',value:new Set(plan.map(r=>r.char_id)).size,
+     note:`на ${plural(new Set(plan.map(r=>r.system+r.planet)).size,'планете','планетах','планетах')}`},
+    {label:'Самая нагруженная',value:worst.pg_percent?Math.max(worst.cpu_percent,worst.pg_percent).toFixed(0):'—',
+     unit:'%',warn:Math.max(worst.cpu_percent||0,worst.pg_percent||0)>=90,
+     note:worst.system?`${worst.system} ${worst.planet}`:'нет данных'},
+    {label:'Не хватает персонажей',value:short||'0',warn:short>0,
+     note:short?Object.entries(staffing).map(([r,s])=>`${r}: CCU ${s.min_ccu_level}+`).join(' · '):'план закрыт'}
+  ];
+  document.getElementById('answers').innerHTML=cards.map(c=>`
+    <div class="answer"><div class="label">${c.label}</div>
+      <div class="value${c.warn?' warn':''}">${c.value}${c.unit?`<span class="unit-s">${c.unit}</span>`:''}</div>
+      <div class="note">${c.note}</div></div>`).join('');
+}
+
+function renderTable(){
+  if(!plan.length){ document.getElementById('tableWrap').innerHTML='<div class="empty">План пуст.</div>'; return; }
+  const rows=[...plan].sort((a,b)=>Math.max(b.cpu_percent,b.pg_percent)-Math.max(a.cpu_percent,a.pg_percent));
+  const body=rows.map((r,i)=>{
+    const peak=Math.max(r.cpu_percent,r.pg_percent), reserve=100-peak, pgb=r.pg_breakdown||{};
+    return `<tr>
+      <td class="idx num">${i+1}</td>
+      <td><div style="color:var(--bright)">${r.character}</div>
+          <div class="parts" style="margin:0">${r.role}</div></td>
+      <td><div class="num">${r.system} ${r.planet}</div>
+          <div class="parts" style="margin:0">${r.planet_type} · ${Math.round(r.planet_radius_km).toLocaleString('ru')} км</div></td>
+      <td>${r.res_out}<div class="parts" style="margin:0">${r.structures}${r.res_in?' ← '+r.res_in:''}</div></td>
+      <td><div class="stack"><i class="s-str" style="width:${pgb.structures||0}%"></i>
+          <i class="s-hed" style="width:${pgb.heads||0}%"></i>
+          <i class="s-lnk" style="width:${pgb.links||0}%"></i></div>
+          <div class="parts">структуры ${pgb.structures||0} · головы ${pgb.heads||0} · линки ${pgb.links||0}</div></td>
+      <td class="r"><span class="pct ${r.cpu_percent>=90?'hot':r.cpu_percent>=75?'warm':''}">${r.cpu_percent.toFixed(1)}</span></td>
+      <td class="r"><span class="pct ${r.pg_percent>=90?'hot':r.pg_percent>=75?'warm':''}">${r.pg_percent.toFixed(1)}</span></td>
+      <td class="r"><span class="pct" style="color:${reserve<5?'var(--alarm)':reserve<15?'var(--amber)':'var(--calm)'}">${reserve.toFixed(1)}</span></td>
+    </tr>`;}).join('');
+  document.getElementById('tableWrap').innerHTML=`<table>
+    <thead>
+      <tr class="group"><th colspan="3">Колония<small>кто и где</small></th>
+        <th>Производство<small>что делает и из чего</small></th>
+        <th colspan="4">Нагрузка<small>из чего сложилась и сколько осталось</small></th></tr>
+      <tr class="cols"><th>#</th><th>Персонаж</th><th>Планета</th><th>Продукт</th>
+        <th>Из чего сложилось (PG)</th><th class="r">CPU %</th><th class="r">PG %</th><th class="r">Запас</th></tr>
+    </thead><tbody>${body}</tbody></table>`;
+}
+
+/* ── Вкладки и вид ──────────────────────────────────────────── */
+function show(p){
+  document.querySelectorAll('.page').forEach(x=>x.classList.toggle('on',x.id==='page-'+p));
+  document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x.dataset.page===p));
+}
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>show(t.dataset.page));
+document.querySelectorAll('.tool[data-view]').forEach(t=>t.onclick=()=>{
+  view=t.dataset.view;
+  document.querySelectorAll('.tool[data-view]').forEach(x=>x.classList.toggle('on',x===t));
+  renderDash();
+});
+document.addEventListener('click',e=>{ if(!e.target.closest('#sortMenu'))
+  document.getElementById('sortMenu').classList.remove('open'); });
+
+boot();
+</script>
+</body>
+</html>

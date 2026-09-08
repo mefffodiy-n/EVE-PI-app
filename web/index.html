@@ -70,6 +70,23 @@
             .spin-slow, .spin-slow-reverse { animation: none; }
         }
 
+        /* Чип состояния данных в шапке. Пользователь должен видеть,
+           на какой момент построен расчёт: иначе устаревшие данные
+           выглядят так же, как свежие. */
+        .status-chip {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-family: 'Share Tech Mono', monospace; font-size: 10px;
+            padding: 3px 9px; border-radius: 999px;
+            border: 1px solid var(--border-color); color: var(--text-main);
+            text-transform: none; letter-spacing: 0.02em; white-space: nowrap;
+        }
+        .status-chip .dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 auto; }
+        .status-chip.ok .dot    { background: #4ade80; }
+        .status-chip.warn .dot  { background: #fbbf24; }
+        .status-chip.error .dot { background: #f87171; }
+        .status-chip.warn  { border-color: #fbbf24; color: #fbbf24; }
+        .status-chip.error { border-color: #f87171; color: #f87171; }
+
         .spin-slow { animation: spin 12s linear infinite; }
         .spin-slow-reverse { animation: spin 15s linear infinite reverse; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
@@ -135,6 +152,7 @@
                 </div>
             </div>
 
+            <span id="statusChip" class="status-chip" title="Состояние данных"></span>
             <button onclick="toggleLang()" class="hover:text-[var(--accent)] transition-colors">
                 <span class="ru-text">[ 🌐 RU ]</span><span class="en-text">[ 🌐 EN ]</span>
             </button>
@@ -313,6 +331,8 @@
             let token = localStorage.getItem('eve_token');
             if (token) renderAuthUser();
 
+            loadStatus();
+
             try {
                 let response = await fetch(`${API_BASE}/initial-data`);
 
@@ -362,6 +382,47 @@
                     1) в корне проекта выполните <b>python run.py</b><br>
                     2) откройте <b>http://127.0.0.1:8000/</b> (не /web/index.html)
                 </div>`;
+            }
+        }
+
+        async function loadStatus() {
+            let chip = document.getElementById('statusChip');
+            if (!chip) return;
+            try {
+                let res = await (await fetch(`${API_BASE}/status`)).json();
+                let parts = [];
+
+                if (res.missing && res.missing.length) {
+                    parts.push('нет данных: ' + res.missing.join(', '));
+                } else {
+                    parts.push(res.products + ' продуктов');
+                    if (res.templates && res.templates.count) {
+                        parts.push(res.templates.count + ' шаблонов');
+                    }
+                }
+
+                // Возраст рыночного снимка. Если сборщика ещё нет,
+                // говорим об этом прямо, а не показываем пустую строку.
+                if (res.market) {
+                    if (!res.market.present) parts.push('цен нет');
+                    else if (res.market.stale) parts.push('цены устарели (' + res.market.age_hours + ' ч)');
+                    else parts.push('цены ' + res.market.age_hours + ' ч назад');
+                }
+                parts.push('v' + res.version);
+
+                let level = 'ok';
+                if (res.missing && res.missing.length) level = 'error';
+                else if (!res.market.present || res.market.stale) level = 'warn';
+
+                chip.className = 'status-chip ' + level;
+                chip.innerHTML = '<span class="dot"></span>' + parts.join(' · ');
+                chip.title = res.ready
+                    ? 'Данные загружены. Расчёт строится по ним, обращений к ESI по вашему действию нет.'
+                    : 'Не хватает файлов данных: ' + (res.missing || []).join(', ');
+            } catch (e) {
+                chip.className = 'status-chip error';
+                chip.innerHTML = '<span class="dot"></span>сервер недоступен';
+                chip.title = String(e);
             }
         }
 

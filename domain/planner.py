@@ -158,6 +158,23 @@ class PlanRow:
     planet_radius_km: float
     cpu_percent: float
     pg_percent: float
+
+    # Поимённый состав застройки: командный центр, причал, склад,
+    # экстрактор, фабрики. Нужен дашборду, чтобы рисовать полосу
+    # структур как в игровом окне Planetary Industry, а не одно число.
+    structures_detail: list = field(default_factory=list)
+
+    # Разбивка нагрузки: из чего сложились проценты выше.
+    # Расчёт уже знает эти три слагаемых, но раньше отдавал только сумму,
+    # и по плану нельзя было понять, что именно съедает ресурс —
+    # структуры шаблона, головы экстрактора или линки (то есть радиус).
+    cpu_structures: float = 0.0
+    cpu_heads: float = 0.0
+    cpu_links: float = 0.0
+    pg_structures: float = 0.0
+    pg_heads: float = 0.0
+    pg_links: float = 0.0
+
     hours_left: float | None = None  # None = неизвестно; НЕ подставлять случайное
 
     # Сколько НАШИХ экстракторов тянут это же сырьё с этой же планеты.
@@ -178,6 +195,7 @@ class PlanRow:
             "res_out": self.res_out,
             "res_in": self.res_in,
             "structures": self.structures,
+            "structures_detail": self.structures_detail,
             "type_id": self.type_id,
             "template_key": self.template_key,
             "template_count": self.template_count,
@@ -185,6 +203,16 @@ class PlanRow:
             "planet_radius_km": self.planet_radius_km,
             "cpu_percent": self.cpu_percent,
             "pg_percent": self.pg_percent,
+            "cpu_breakdown": {
+                "structures": self.cpu_structures,
+                "heads": self.cpu_heads,
+                "links": self.cpu_links,
+            },
+            "pg_breakdown": {
+                "structures": self.pg_structures,
+                "heads": self.pg_heads,
+                "links": self.pg_links,
+            },
             "hours_left": self.hours_left,
             "shared_extraction_count": self.shared_extraction_count,
         }
@@ -335,6 +363,49 @@ class _CharacterPool:
     @property
     def total_slots(self) -> int:
         return sum(c.planet_slots for c in self._characters)
+
+
+# Порядок как в игровом окне: сначала командный центр, потом склады
+# и причалы, затем экстрактор, затем производственные модули.
+STRUCTURE_ORDER = [
+    "command_center",
+    "launchpad",
+    "storage_facility",
+    "extractor_control_unit",
+    "basic_industry_facility",
+    "advanced_industry_facility",
+    "high_tech_industry_facility",
+]
+
+
+def _structures_detail(template_key: str, planet_type: str) -> list[dict]:
+    """
+    Поимённый состав колонии для полосы иконок на дашборде.
+
+    Командный центр добавляется отдельно: в шаблоне застройки его нет
+    (он не является пином), но в игровом окне это первая структура.
+    """
+    template = load_templates()[template_key]
+    counts = {"command_center": 1, **template.structures}
+    return [
+        {"kind": kind, "count": counts[kind]}
+        for kind in STRUCTURE_ORDER
+        if counts.get(kind)
+    ]
+
+
+def _breakdown(load) -> dict[str, float]:
+    """Доли слагаемых нагрузки в процентах от ёмкости командного центра."""
+    cpu_total = load.capacity.cpu or 1.0
+    pg_total = load.capacity.pg or 1.0
+    return {
+        "cpu_structures": round(100 * load.structures.cpu / cpu_total, 1),
+        "cpu_heads": round(100 * load.extractor_heads.cpu / cpu_total, 1),
+        "cpu_links": round(100 * load.links.cpu / cpu_total, 1),
+        "pg_structures": round(100 * load.structures.pg / pg_total, 1),
+        "pg_heads": round(100 * load.extractor_heads.pg / pg_total, 1),
+        "pg_links": round(100 * load.links.pg / pg_total, 1),
+    }
 
 
 def _tier_of(product: str, recipes: RecipeBook) -> str | None:
@@ -488,6 +559,9 @@ def build_plan(
                         if product in schematics
                         else None,
                         structures=f"{FACTORIES_PER_TEMPLATE[assignment.template_key]} фабрик",
+                        structures_detail=_structures_detail(
+                            assignment.template_key, assignment.candidate.planet_type
+                        ),
                         type_id=_type_ids().get(product),
                         template_key=assignment.template_key,
                         template_count=assignment.template_count,
@@ -495,6 +569,14 @@ def build_plan(
                         planet_radius_km=assignment.candidate.radius_km,
                         cpu_percent=assignment.cpu_percent,
                         pg_percent=assignment.pg_percent,
+                        **_breakdown(
+                            calculate_colony_load(
+                                assignment.template_key,
+                                character.command_center_upgrades_level,
+                                assignment.candidate.radius_km,
+                                planet_type=assignment.candidate.planet_type,
+                            )
+                        ),
                     )
                 )
 
@@ -578,6 +660,9 @@ def build_plan(
                         res_out=product,
                         res_in=raw_name,
                         structures=f"{per_miner} фабрик",
+                        structures_detail=_structures_detail(
+                            "miner_00", str(row.get("Type", ""))
+                        ),
                         type_id=_type_ids().get(product),
                         template_key="miner_00",
                         template_count=1,
@@ -585,6 +670,7 @@ def build_plan(
                         planet_radius_km=radius,
                         cpu_percent=load.cpu_percent,
                         pg_percent=load.pg_percent,
+                        **_breakdown(load),
                     )
                 )
 
