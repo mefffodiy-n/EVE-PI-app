@@ -34,12 +34,46 @@ BIG_SYSTEM = [
 ]
 
 
-def test_only_barren_and_temperate_are_used():
-    """Gas и Lava не должны попадать под переработку, даже если Lava мельче всех."""
+def test_preferred_types_win_even_over_smaller_planets():
+    """
+    Barren и Temperate идут первыми, даже если планета другого типа
+    мельче. Радиус решает только внутри группы.
+    """
     result = select_factory_sites(_book(SMALL_SYSTEM), "HOME", "P2_P3", 5, 4)
     types = {a.candidate.planet_type for a in result.assignments}
     assert types <= {"Barren", "Temperate"}
-    assert "Lava" not in types, "Lava радиусом 4000 не должна выбираться, несмотря на малый радиус"
+    assert not result.used_fallback_types
+
+
+def test_p2p3_falls_back_to_other_types_with_warning():
+    """
+    Barren и Temperate — предпочтение, а не запрет: источник разрешает
+    P2/P3 на любом типе. При их отсутствии переработка размещается
+    на других типах, но пользователь об этом узнаёт.
+    """
+    book = _book([
+        {"System": "HOME", "Planet": "1", "Type": "Lava", RADIUS_COLUMN: 5000},
+        {"System": "HOME", "Planet": "2", "Type": "Plasma", RADIUS_COLUMN: 7000},
+    ])
+    result = select_factory_sites(book, "HOME", "P2_P3", 5, 2)
+    assert result.templates_placed == 2
+    assert result.used_fallback_types == ["Lava"]
+    assert "нет планет Barren или Temperate" in " ".join(result.warnings)
+
+
+def test_p4_never_falls_back_because_game_forbids_it():
+    """
+    Для P4 Barren и Temperate — правило игры, а не наше предпочтение.
+    Подменять тип нельзя ни при каких условиях.
+    """
+    book = _book([
+        {"System": "HOME", "Planet": "1", "Type": "Lava", RADIUS_COLUMN: 5000},
+    ])
+    result = select_factory_sites(book, "HOME", "P4", 5, 2)
+    assert result.assignments == []
+    text = " ".join(result.warnings)
+    assert "ограничение игры" in text
+    assert "другую домашнюю систему" in text
 
 
 def test_planets_are_taken_smallest_radius_first():
@@ -78,11 +112,22 @@ def test_single_fallback_only_on_explicit_consent():
     assert all(a.template_count == 1 for a in result.assignments)
 
 
-def test_warns_when_no_suitable_planet_types_at_all():
-    book = _book([{"System": "GASONLY", "Planet": "1", "Type": "Gas", RADIUS_COLUMN: 60000}])
-    result = select_factory_sites(book, "GASONLY", "P2_P3", 5, 2)
+def test_warns_when_system_has_no_planets_at_all():
+    book = _book([{"System": "OTHER", "Planet": "1", "Type": "Gas", RADIUS_COLUMN: 60000}])
+    result = select_factory_sites(book, "EMPTY", "P2_P3", 5, 2)
     assert result.assignments == []
-    assert "нет планет типов Barren или Temperate" in " ".join(result.warnings)
+    assert "вообще нет планет" in " ".join(result.warnings)
+
+
+def test_huge_fallback_planet_is_reported_as_not_fitting():
+    """
+    Газовый гигант формально допустим для P2/P3, но двойной шаблон
+    на нём не помещается — об этом должно быть сказано, а не тихо
+    размещено что попало.
+    """
+    book = _book([{"System": "HOME", "Planet": "1", "Type": "Gas", RADIUS_COLUMN: 60000}])
+    result = select_factory_sites(book, "HOME", "P2_P3", 5, 2)
+    assert " ".join(result.warnings)
 
 
 def test_ccu4_falls_back_to_single_with_warning():
@@ -106,11 +151,21 @@ def test_planet_shortage_is_solved_by_extra_colonies():
     assert max(a.colony_index for a in result.assignments) > 1
 
 
-def test_reused_planets_keep_smallest_radius_first():
-    """Повторный обход идёт в том же порядке — сначала самые мелкие планеты."""
+def test_order_is_preferred_type_then_radius():
+    """
+    Порядок двухуровневый: сначала предпочтительные типы, внутри них —
+    по возрастанию радиуса. Проверять просто «по радиусу» больше нельзя:
+    мелкая Lava идёт после крупной Barren, и это правильно.
+    """
     result = select_factory_sites(_book(SMALL_SYSTEM), "HOME", "P2_P3", 5, 8)
-    first_round = [a.candidate.radius_km for a in result.assignments if a.colony_index == 1]
-    assert first_round == sorted(first_round)
+    first_round = [a.candidate for a in result.assignments if a.colony_index == 1]
+
+    preferred = [c.radius_km for c in first_round if c.preferred]
+    assert preferred == sorted(preferred), "внутри предпочтительных — по радиусу"
+
+    # Ни одна непредпочтительная планета не должна опередить предпочтительную.
+    flags = [c.preferred for c in first_round]
+    assert flags == sorted(flags, reverse=True)
 
 
 def test_p4_warning_mentions_unresolved_launchpad_assumption():

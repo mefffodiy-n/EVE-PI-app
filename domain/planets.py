@@ -50,14 +50,21 @@ RESOURCE_NAME_ALIASES = {
     "Non-CS Crystals": ["Noncomplex Crystals", "Non CS Crystals"],
 }
 
-# Типы планет, на которые ставятся перерабатывающие шаблоны (P2-P4).
+# ПРЕДПОЧТИТЕЛЬНЫЕ типы планет под переработку.
 #
-# РЕШЕНИЕ ПРОЕКТА, не ограничение источника. Источник разрешает P2/P3 на
-# планете любого типа (не рекомендуя только Gas из-за размера) и требует
-# Barren/Temperate лишь для P4. Мы сужаем правило до Barren/Temperate для
-# ВСЕЙ переработки: это единообразно, снимает вопрос выбора типа планеты
-# и даёт запас по CPU/PG, поскольку эти типы в среднем мельче.
-FACTORY_PLANET_TYPES = ("Barren", "Temperate")
+# Это предпочтение, а не запрет. Различие принципиальное:
+#   - для P4 Barren и Temperate — ПРАВИЛО ИГРЫ (allowed_planet_types
+#     в data/pi_reference.json), обойти его нельзя;
+#   - для P2/P3 источник разрешает любой тип, и Barren с Temperate
+#     выбраны нами лишь потому, что в среднем они мельче, а значит
+#     дешевле по линкам.
+#
+# Поэтому при нехватке таких планет P2/P3 ставятся на другие типы
+# с предупреждением, а P4 — не ставятся вовсе.
+PREFERRED_FACTORY_PLANET_TYPES = ("Barren", "Temperate")
+
+# Прежнее имя оставлено: на него могли ссылаться внешние скрипты.
+FACTORY_PLANET_TYPES = PREFERRED_FACTORY_PLANET_TYPES
 
 
 @dataclass(frozen=True)
@@ -120,19 +127,23 @@ class PlanetBook:
         """Все планеты системы."""
         return self._df[self._df["System"] == system]
 
-    def factory_candidates(self, system: str) -> pd.DataFrame:
+    def factory_candidates(self, system: str, preferred_only: bool = False) -> pd.DataFrame:
         """
-        Планеты системы, пригодные под перерабатывающие шаблоны,
-        отсортированные ПО ВОЗРАСТАНИЮ РАДИУСА.
+        Планеты системы под перерабатывающие шаблоны, отсортированные
+        ПО ВОЗРАСТАНИЮ РАДИУСА.
 
         Порядок важен: стоимость линков растёт с радиусом, поэтому
-        меньшая планета всегда предпочтительнее при прочих равных —
-        именно на ней с большей вероятностью поместятся два шаблона.
+        меньшая планета всегда лучше при прочих равных — именно на ней
+        с большей вероятностью поместятся два шаблона.
+
+        preferred_only=True вернёт только Barren и Temperate. По умолчанию
+        возвращаются все планеты системы: пригодность по типу решает
+        вызывающий код, потому что для P4 это правило игры, а для P2/P3 —
+        лишь предпочтение.
         """
-        subset = self._df[
-            (self._df["System"] == system)
-            & (self._df["Type"].isin(FACTORY_PLANET_TYPES))
-        ]
+        subset = self._df[self._df["System"] == system]
+        if preferred_only:
+            subset = subset[subset["Type"].isin(PREFERRED_FACTORY_PLANET_TYPES)]
         return subset.sort_values(RADIUS_COLUMN, na_position="last")
 
     def resolve_resource_column(self, resource_name: str) -> str | None:

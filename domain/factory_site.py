@@ -3,9 +3,14 @@
 
 ПРАВИЛА (решение проекта):
 
-  1. Под переработку берутся только планеты типов Barren и Temperate.
-     Источник разрешает P2/P3 на любом типе и требует Barren/Temperate
-     только для P4 — мы сужаем правило до единого для всей переработки.
+  1. Barren и Temperate — ПРЕДПОЧТЕНИЕ, а не запрет, и различие тут
+     принципиальное:
+       - для P4 это правило игры: шаблон физически не ставится на другие
+         типы, и если таких планет в системе нет, переработка P4
+         невозможна — об этом надо сказать прямо;
+       - для P2/P3 ограничения нет. Barren и Temperate предпочтительны
+         лишь потому, что в среднем мельче, а значит дешевле по линкам.
+         При их нехватке берутся другие типы с предупреждением.
 
   2. Планеты выбираются ПО ВОЗРАСТАНИЮ РАДИУСА. Стоимость линков растёт
      линейно с радиусом, поэтому меньшая планета всегда даёт больше
@@ -48,7 +53,7 @@ from domain.capacity import (
     load_templates,
     max_planet_radius_that_fits,
 )
-from domain.planets import RADIUS_COLUMN, PlanetBook
+from domain.planets import PREFERRED_FACTORY_PLANET_TYPES, RADIUS_COLUMN, PlanetBook
 
 # Какой шаблон отвечает какому тиру переработки.
 TEMPLATE_BY_TIER = {
@@ -63,6 +68,10 @@ class PlanetCandidate:
     planet: str
     planet_type: str
     radius_km: float
+
+    @property
+    def preferred(self) -> bool:
+        return self.planet_type in PREFERRED_FACTORY_PLANET_TYPES
 
 
 @dataclass(frozen=True)
@@ -94,6 +103,9 @@ class SiteSelection:
     templates_requested: int = 0
     candidates_available: int = 0
 
+    # Пришлось ли ставить переработку на непредпочтительные типы планет.
+    used_fallback_types: list[str] = field(default_factory=list)
+
     @property
     def templates_placed(self) -> int:
         return sum(a.template_count for a in self.assignments)
@@ -109,6 +121,13 @@ def _km(value: float) -> str:
 
 
 def _candidates(planets: PlanetBook, system: str) -> list[PlanetCandidate]:
+    """
+    Кандидаты по возрастанию радиуса, предпочтительные типы впереди.
+
+    Внутри каждой группы порядок по радиусу сохраняется, поэтому
+    самая мелкая Barren идёт раньше самой мелкой Lava, но обе — раньше
+    крупных планет своего типа.
+    """
     df = planets.factory_candidates(system)
     result: list[PlanetCandidate] = []
     for _, row in df.iterrows():
@@ -123,6 +142,8 @@ def _candidates(planets: PlanetBook, system: str) -> list[PlanetCandidate]:
                 radius_km=float(radius),
             )
         )
+    # Предпочтительные типы впереди, внутри групп — по радиусу.
+    result.sort(key=lambda c: (not c.preferred, c.radius_km))
     return result
 
 
@@ -200,10 +221,30 @@ def select_factory_sites(
     candidates = _candidates(planets, system)
     if not candidates:
         selection.warnings.append(
-            f"В системе {system} нет планет типов Barren или Temperate — "
-            f"перерабатывающие шаблоны ставить некуда. Выберите другую домашнюю систему."
+            f"В системе {system} вообще нет планет — переработку ставить некуда. "
+            f"Выберите другую домашнюю систему."
         )
         return selection
+
+    preferred = [c for c in candidates if c.preferred]
+    if not preferred:
+        types = ", ".join(sorted({c.planet_type for c in candidates}))
+        if tier == "P4":
+            # Для P4 это не предпочтение, а правило игры: шаблон
+            # не ставится на другие типы вовсе.
+            selection.warnings.append(
+                f"В системе {system} нет планет Barren или Temperate. "
+                f"Переработка P4 на них и только на них — это ограничение игры, "
+                f"обойти его нельзя. Доступны только: {types}. "
+                f"Выберите другую домашнюю систему."
+            )
+            return selection
+        selection.warnings.append(
+            f"В системе {system} нет планет Barren или Temperate. Переработка "
+            f"{tier} будет размещена на других типах ({types}) — это допустимо, "
+            f"но такие планеты в среднем крупнее, и линки обойдутся дороже. "
+            f"Если запас по CPU/PG окажется мал, выберите другую домашнюю систему."
+        )
 
     double_key = TEMPLATE_BY_TIER[tier][2]
     single_key = TEMPLATE_BY_TIER[tier][1]
@@ -300,6 +341,11 @@ def select_factory_sites(
             )
             used[candidate.planet] = colony_index
             remaining -= 1
+
+    used_types = {a.candidate.planet_type for a in selection.assignments}
+    selection.used_fallback_types = sorted(
+        t for t in used_types if t not in PREFERRED_FACTORY_PLANET_TYPES
+    )
 
     if remaining > 0:
         selection.warnings.append(
