@@ -92,6 +92,87 @@ def calculate():
     return json_ok(**plan_cache.get_or_compute(key, compute))
 
 
+# ── Сохранённые планы ────────────────────────────────────────────
+# Хранятся на сервере, а не в браузере: план должен переживать
+# перезагрузку, смену устройства и быть показываемым напарнику.
+
+@bp.get("/plans")
+def list_saved():
+    from domain.plan_storage import list_plans
+
+    return json_ok(plans=[p.summary() for p in list_plans()])
+
+
+@bp.post("/plans")
+def save_plan():
+    from domain.plan_storage import PlanStorageError, save
+
+    payload, error = parse_json_body({"rows": list})
+    if error:
+        return json_error(error)
+
+    try:
+        plan = save(
+            name=str(payload.get("name", "")),
+            request=payload.get("request") or {},
+            rows=payload["rows"],
+            warnings=payload.get("warnings") or [],
+            assumptions=payload.get("assumptions") or [],
+        )
+    except PlanStorageError as exc:
+        return json_error(str(exc))
+
+    return json_ok(plan=plan.summary())
+
+
+@bp.get("/plans/<plan_id>")
+def get_plan(plan_id: str):
+    from domain.plan_storage import PlanStorageError, load
+
+    try:
+        plan = load(plan_id)
+    except PlanStorageError as exc:
+        return json_error(str(exc), 404)
+    return json_ok(plan=plan.to_dict())
+
+
+@bp.delete("/plans/<plan_id>")
+def remove_plan(plan_id: str):
+    from domain.plan_storage import PlanStorageError, delete
+
+    try:
+        removed = delete(plan_id)
+    except PlanStorageError as exc:
+        return json_error(str(exc))
+    if not removed:
+        return json_error("План не найден", 404)
+    return json_ok(deleted=plan_id)
+
+
+@bp.get("/plans/compare")
+def compare_plans():
+    """
+    Сравнить два плана: /api/plans/compare?left=<id>&right=<id>
+
+    Отдаёт не только разницу в числах, но и перечень колоний, которые
+    появились или исчезли: «на три планеты меньше» не отвечает на
+    вопрос, каких именно.
+    """
+    from flask import request as flask_request
+
+    from domain.plan_storage import PlanStorageError, compare
+
+    left = flask_request.args.get("left")
+    right = flask_request.args.get("right")
+    if not left or not right:
+        return json_error("Нужны оба идентификатора: left и right")
+
+    try:
+        return json_ok(**compare(left, right))
+    except PlanStorageError as exc:
+        return json_error(str(exc), 404)
+
+
 @bp.get("/cache-stats")
 def cache_stats():
     """Диагностика эффективности кэша планов."""

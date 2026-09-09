@@ -24,3 +24,9 @@ data/cache/*.json
 # Генерируется локально из data/templates/ скриптом extract_schematics.
 # В репозитории не нужен: собирается одной командой из шаблонов.
 data/schematics.json
+
+# Сохранённые планы — данные пользователя, не часть кода.
+data/plans/
+
+# Кэш ETag для запросов к ESI — служебный файл, не часть кода.
+data/cache/etags.json

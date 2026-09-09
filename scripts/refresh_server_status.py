@@ -14,9 +14,14 @@
     Linux, cron:      */10 * * * * cd /path/to/app && python -m scripts.refresh_server_status
     Windows, планировщик заданий: то же самое действие раз в 10 минут.
 
-Эндпоинт ESI: GET https://esi.evetech.net/latest/status/
-Он публичный, авторизации не требует, и это единственный вызов, который
-делает скрипт.
+Эндпоинт ESI: GET /status/ — публичный, авторизации не требует.
+
+Обращение идёт через scripts/esi_client.py, который соблюдает правила
+CCP: представляется в User-Agent, передаёт X-Compatibility-Date, следит
+за лимитом ошибок и уважает Retry-After. Раньше здесь был прямой вызов
+на /latest/status/ — путь со старым способом версионирования, без
+заголовка совместимости. Такой запрос обслуживается по самой старой
+доступной версии поведения, а её порог CCP периодически поднимает.
 """
 
 from __future__ import annotations
@@ -32,22 +37,24 @@ ROOT = Path(__file__).resolve().parent.parent
 CACHE_DIR = ROOT / "data" / "cache"
 SNAPSHOT = CACHE_DIR / "server_status.json"
 
-ESI_STATUS_URL = "https://esi.evetech.net/latest/status/"
-USER_AGENT = "PI-Director/0.4.0 (planetary industry planner; contact via repository)"
-TIMEOUT_SECONDS = 10
+ESI_STATUS_PATH = "/status/"
 
 
-def fetch() -> dict:
+def fetch() -> dict | None:
     """
     Забрать статус сервера.
 
-    ESI просит представляться в User-Agent — без этого запросы могут
-    ограничивать жёстче. Ошибку не проглатываем: пусть расписание
-    покажет её в логе, а приложение продолжит отдавать прошлый снапшот.
+    Возвращает None, если ESI ответил 304: тело не изменилось с прошлого
+    раза, и перезаписывать снимок нечем. Это не ошибка, а экономия —
+    трафик не тратится, а лимит не расходуется.
+
+    Ошибку не проглатываем: пусть расписание покажет её в логе,
+    а приложение продолжит отдавать прошлый снимок.
     """
-    request = urllib.request.Request(ESI_STATUS_URL, headers={"User-Agent": USER_AGENT})
-    with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
-        return json.loads(response.read().decode("utf-8"))
+    from scripts.esi_client import EsiClient
+
+    response = EsiClient().get(ESI_STATUS_PATH)
+    return None if response.from_cache else response.data
 
 
 def save(payload: dict, error: str | None = None) -> None:
@@ -64,22 +71,52 @@ def save(payload: dict, error: str | None = None) -> None:
 
 
 def main() -> int:
+    from scripts.esi_client import EsiError, EsiRateLimited
+
     try:
         data = fetch()
-    except urllib.error.HTTPError as exc:
+    except EsiRateLimited as exc:
+        # Не ошибка данных, а просьба подождать. Прошлый снимок не трогаем:
+        # он устареет, и приложение честно покажет его возраст.
+        print(f"ESI просит подождать: {exc}")
+        return 1
+    except EsiError as exc:
+        message = str(exc)
         # 503 у ESI означает, что игровой сервер выключен — это не сбой
         # сборщика, а нормальное состояние во время ежедневного рестарта.
-        message = "сервер офлайн" if exc.code == 503 else f"HTTP {exc.code}"
+        if "503" in message:
+            save({}, error="сервер офлайн")
+            print("Статус недоступен: сервер офлайн")
+            return 0
         save({}, error=message)
-        print(f"Статус недоступен: {message}")
-        return 0 if exc.code == 503 else 1
+        print(f"Не удалось получить статус: {message}")
+        return 1
     except Exception as exc:
         save({}, error=f"{type(exc).__name__}: {exc}")
         print(f"Не удалось получить статус: {exc}")
         return 1
 
+    if data is None:
+        # 304: тело не менялось, перезаписывать снимок нечем.
+        # Обновляем только метку времени, чтобы возраст был честным.
+        print("Статус не изменился с прошлого раза (304) — снимок актуален")
+        return _touch()
+
     save(data)
     print(f"Онлайн: {data.get('players')} · версия сервера {data.get('server_version')}")
+    return 0
+
+
+def _touch() -> int:
+    """Обновить время сбора у существующего снимка после ответа 304."""
+    if not SNAPSHOT.is_file():
+        return 0
+    try:
+        snapshot = json.loads(SNAPSHOT.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return 1
+    snapshot["collected_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    SNAPSHOT.write_text(json.dumps(snapshot, ensure_ascii=False, indent=1), encoding="utf-8")
     return 0
 
 
