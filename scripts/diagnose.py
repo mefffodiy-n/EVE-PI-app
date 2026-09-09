@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -58,7 +59,23 @@ def check_data_files() -> bool:
         _line(BAD, "data/templates/ — пусто, положите туда набор 00-шаблонов")
         ok = False
     if any(t.name == "miner_p1.json" for t in templates):
-        _line(WARN, "data/templates/miner_p1.json — удалите, числа в нём неверны")
+        _line(WARN, "data/templates/miner_p1.json — удалите, числа в нём неверны "
+                    "(12400/16800 — склейка двух посторонних значений)")
+
+    # Загрузчик пропускает файлы, не являющиеся шаблонами колоний.
+    # Молчать об этом нельзя: пропущенным может оказаться и нужный файл
+    # с испорченной структурой.
+    try:
+        from domain.templates import load_all_templates, skipped_files
+
+        parsed = load_all_templates()
+        skipped = skipped_files()
+        _line(OK, f"разобрано шаблонов: {len(parsed)}")
+        if skipped:
+            _line(WARN, f"пропущено как не-шаблоны: {', '.join(skipped)}")
+    except Exception as exc:
+        _line(BAD, f"разбор шаблонов упал: {type(exc).__name__}: {exc}")
+        ok = False
 
     return ok
 
@@ -291,22 +308,34 @@ def check_frontend() -> bool:
         return False
     text = index.read_text(encoding="utf-8")
 
-    if "SERVED_BY_FLASK" in text:
-        _line(OK, "API_BASE определяется автоматически")
-    elif "const API_BASE = '/api'" in text:
-        _line(OK, "API_BASE относительный")
+    # Проверяем СВОЙСТВО, а не имя переменной: адрес API должен зависеть
+    # от того, откуда открыта страница. Прежняя версия искала конкретное
+    # имя SERVED_BY_FLASK и ругалась на исправный файл, где переменная
+    # называлась иначе.
+    api_lines = [
+        line.strip() for line in text.splitlines()
+        if re.search(r"\b(const|let|var)\s+API(_BASE)?\s*=", line)
+    ]
+    if not api_lines:
+        _line(BAD, "не найдено определение адреса API во фронтенде")
+        return False
+
+    adaptive = any(
+        "location.origin" in line or "location.host" in line or re.search(r"=\s*['\"]/api", line)
+        for line in api_lines + [
+            l for l in text.splitlines() if "location.origin" in l and "FLASK" in l
+        ]
+    )
+    if adaptive:
+        _line(OK, "адрес API подстраивается под адрес страницы")
     else:
         _line(
             BAD,
-            "API_BASE задан абсолютным адресом. Это ломает запросы при открытии "
-            "по другому имени хоста (127.0.0.1 против localhost) — разные origin, "
-            "а CORS отключён. Возьмите web/index.html из поставки.",
+            "адрес API задан жёстко: " + api_lines[0] + ". Это ломает запросы при "
+            "открытии по другому имени хоста (127.0.0.1 против localhost) — "
+            "разные origin, а CORS отключён. Возьмите web/index.html из поставки.",
         )
         return False
-
-    _line(WARN, "Открывайте приложение по адресу http://127.0.0.1:8000/ (корень), "
-                "а не через Live Server и не как файл: иначе /api отдаст HTML "
-                "вместо JSON и списки останутся пустыми")
 
     if "Math.random() * 22" in text or "Math.random()*22" in text:
         _line(WARN, "во фронтенде остался Math.random() для таймеров экстракторов — "
