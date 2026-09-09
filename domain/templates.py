@@ -51,6 +51,27 @@ class TemplateParseError(ValueError):
     """Шаблон не удалось разобрать — структура файла не соответствует ожидаемой."""
 
 
+class NotATemplate(TemplateParseError):
+    """
+    Файл вообще не является шаблоном колонии.
+
+    Отличается от TemplateParseError намеренно. Шаблон с незнакомой
+    структурой — это пробел в наших данных, и загрузка обязана падать
+    громко. А посторонний файл в папке — это просто посторонний файл,
+    и он не должен мешать разобрать остальные 68.
+    """
+
+
+# Имена файлов в поле source_file, которые загрузчик пропустил как
+# не-шаблоны. Заполняется при каждом вызове load_all_templates().
+_SKIPPED: list[str] = []
+
+
+def skipped_files() -> list[str]:
+    """Что было пропущено при последней загрузке — для диагностики."""
+    return list(_SKIPPED)
+
+
 @dataclass(frozen=True)
 class Pin:
     index: int          # 1-based, как в полях L и R
@@ -146,9 +167,17 @@ def parse_template(raw: dict, source_file: str | None = None) -> ParsedTemplate:
     "прочее": незнакомая структура означает, что таблица pin_type_ids
     неполна, и расчёт CPU/PG по такому шаблону будет занижен.
     """
-    for required in ("CmdCtrLv", "P", "L"):
-        if required not in raw:
-            raise TemplateParseError(f"В шаблоне отсутствует обязательное поле '{required}'")
+    missing = [f for f in ("CmdCtrLv", "P", "L") if f not in raw]
+    if missing:
+        # Ни одного из ключевых полей — перед нами не шаблон колонии,
+        # а какой-то другой json, случайно оказавшийся в папке.
+        if len(missing) == 3:
+            raise NotATemplate(
+                f"Файл не похож на шаблон колонии: нет полей {', '.join(missing)}"
+            )
+        raise TemplateParseError(
+            f"В шаблоне отсутствуют обязательные поля: {', '.join(missing)}"
+        )
 
     categories = _category_by_type_id()
     pins: list[Pin] = []
@@ -217,11 +246,19 @@ def load_all_templates(templates_dir: Path = DEFAULT_TEMPLATES_DIR) -> dict[str,
     в имени пропускаются.
     """
     directory = Path(templates_dir)
+    _SKIPPED.clear()
     if not directory.is_dir():
         return {}
+
     result: dict[str, ParsedTemplate] = {}
     for path in sorted(directory.glob("*.json")):
         if " - LS - " in path.name:
             continue
-        result[path.stem] = load_template_file(path)
+        try:
+            result[path.stem] = load_template_file(path)
+        except NotATemplate:
+            # Посторонний файл: пропускаем и запоминаем. Ронять загрузку
+            # всех шаблонов из-за одного чужого файла нельзя — именно так
+            # miner_p1.json из первой версии обрушивал весь разбор.
+            _SKIPPED.append(path.name)
     return result
