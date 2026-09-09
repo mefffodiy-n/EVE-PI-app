@@ -73,11 +73,19 @@ def _initial_payload() -> dict:
         "products": products,
         "product_ids": ids,
         "bases": [],
+        "regions": {},
+        "system_counts": {},
         "data_problems": [],
     }
 
     try:
-        payload["bases"] = load_planets().constellations()
+        book = load_planets()
+        payload["bases"] = book.constellations()
+        payload["regions"] = book.regions()
+        payload["system_counts"] = {
+            c: int((book.dataframe["Constellation"] == c).sum())
+            for c in payload["bases"]
+        }
     except FileNotFoundError:
         payload["data_problems"].append(
             "Не найден файл data/planet_industry.csv — списки констелляций "

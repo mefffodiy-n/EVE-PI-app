@@ -87,6 +87,31 @@ class PlanetBook:
     def constellations(self) -> list[str]:
         return sorted(self._df["Constellation"].dropna().unique())
 
+    def regions(self) -> dict[str, list[str]]:
+        """
+        Регионы и входящие в них созвездия.
+
+        Колонка «Region» в выгрузке необязательна: экспорт, с которого
+        начинался проект, её не содержит — там только созвездия одного
+        региона. Если колонка появится, группировка заработает сама;
+        пока её нет, все созвездия считаются одним регионом, и выбор
+        «весь регион» просто отмечает их все.
+        """
+        if "Region" in self._df.columns:
+            grouped: dict[str, list[str]] = {}
+            for region, part in self._df.groupby("Region"):
+                name = str(region).strip()
+                if name and name.lower() != "nan":
+                    grouped[name] = sorted(part["Constellation"].dropna().unique())
+            return dict(sorted(grouped.items()))
+        return {}
+
+    def systems_in_regions(self, regions: list[str]) -> list[str]:
+        if "Region" not in self._df.columns:
+            return []
+        subset = self._df[self._df["Region"].isin(regions)]
+        return sorted(subset["System"].dropna().unique())
+
     def systems_in(self, constellations: list[str]) -> list[str]:
         subset = self._df[self._df["Constellation"].isin(constellations)]
         return sorted(subset["System"].dropna().unique())
