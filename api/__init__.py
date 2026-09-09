@@ -52,15 +52,15 @@ def create_app(config: dict | None = None) -> Flask:
 
     from api.blueprints.export import bp as export_bp
     from api.blueprints.market import bp as market_bp
+    from api.blueprints.meta import bp as meta_bp
     from api.blueprints.plans import bp as plans_bp
     from api.blueprints.reference import bp as reference_bp
-    from api.blueprints.status import bp as status_bp
 
+    app.register_blueprint(meta_bp, url_prefix="/api")
     app.register_blueprint(reference_bp, url_prefix="/api")
     app.register_blueprint(plans_bp, url_prefix="/api")
     app.register_blueprint(market_bp, url_prefix="/api")
     app.register_blueprint(export_bp, url_prefix="/api")
-    app.register_blueprint(status_bp, url_prefix="/api")
 
     _register_error_handlers(app)
     _register_dev_cors(app)
