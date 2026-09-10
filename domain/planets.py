@@ -171,6 +171,36 @@ class PlanetBook:
                 return str(column)
         return None
 
+    def planets_with_all_resources(
+        self, resources: list[str], constellations: list[str] | None = None
+    ) -> pd.DataFrame:
+        """
+        Планеты, где есть СРАЗУ ВСЁ перечисленное сырьё.
+
+        Нужно для прямого производства P2: цепочка целиком помещается
+        на планету только если оба вида сырья добываются на ней же.
+        Таких планет мало, и это ожидаемо.
+
+        Сортировка по возрастанию радиуса: линки дешевле, а значит
+        на планету поместится больше фабрик.
+        """
+        columns = [self.resolve_resource_column(r) for r in resources]
+        if any(c is None for c in columns):
+            return self._df.iloc[0:0]
+
+        subset = self._df
+        if constellations:
+            subset = subset[subset["Constellation"].isin(constellations)]
+
+        mask = None
+        for column in columns:
+            values = pd.to_numeric(subset[column], errors="coerce")
+            present = values.notna() & (values > 0)
+            mask = present if mask is None else (mask & present)
+
+        result = subset[mask] if mask is not None else subset.iloc[0:0]
+        return result.sort_values(RADIUS_COLUMN, na_position="last")
+
     def system_coverage(
         self, resources: list[str], constellations: list[str] | None = None
     ) -> dict[str, int]:

@@ -595,6 +595,7 @@ body.light .sysbadge { background:rgba(29,111,168,.10); }
 .advice .foot { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:10px; }
 .advice .foot .hint { font-size:11px; color:var(--dim); }
 .rolebadge.excess { color:var(--amber); background:rgba(212,160,74,.15); }
+.rolebadge.direct { color:var(--t-p2); background:var(--t-p2-bg); }
 body.light .rolebadge.excess { background:rgba(154,107,18,.12); }
 </style>
 </head>
@@ -701,6 +702,14 @@ body.light .rolebadge.excess { background:rgba(154,107,18,.12); }
         <label for="margin" data-i18n="margin">Запас на истощение месторождений</label>
         <input id="margin" type="number" value="1.0" step="0.1" min="1" max="3">
       </div>
+      <div class="field">
+        <label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer">
+          <input type="checkbox" id="directP2" style="width:auto;margin-top:2px">
+          <span><span data-i18n="directP2">Делать P2 прямо на добывающих планетах</span>
+            <small style="display:block;color:var(--dim);font-size:11px" data-i18n="directP2Hint">
+              где есть оба вида сырья — не нужно возить P1</small></span>
+        </label>
+      </div>
 
       <h2 data-i18n="whereProcess">Где перерабатываем</h2>
       <div class="field">
@@ -766,7 +775,7 @@ const T={
   noReserve:'без запаса',sortLoad:'По загрузке',sortReserve:'По остатку запаса',
   sortPilot:'По имени персонажа',sortSystem:'По системе',
   cProc:'переработка',cMine:'добыча',crewHint:'Персонажи хранятся на сервере и не пропадают при перезаходе.',
-  planetSlots:'слотов планет',wholeRegion:'Весь регион',clearAll:'Снять всё',nothingChosen:'ничего не выбрано',systems:'систем',selectAll:'Выбрать все',pickProducts:'Выберите хотя бы один продукт',pickConst:'Выберите хотя бы одно созвездие',export:'Экспорт в Excel',shopping:'Список закупки: командные центры',shopTotal:'Всего командных центров',exportEmpty:'Сначала постройте план',exportFail:'Не удалось выгрузить файл',profitTitle:'Что выгоднее производить',collectedAgo:'снимок собран',minutesAgo:'мин назад',stale:'устарел',colProduct:'Продукт',colColonies:'Планет',colPerColony:'ISK / колония-час',colPerHour:'ISK / час',colPrice:'Цена за единицу',noPrice:'нет цены',noSnapshot:'Снимок цен не собран',advDeficit:'Персонажей не хватает на эту цепочку',advSurplus:'Персонажей больше, чем нужно',advDeficitLead:'Полный цикл требует {need} колоний, а в пуле {have} слотов. Вот что поместится целиком:',advSurplusLead:'Выбранное занимает {need} колоний из {have}. Свободно {spare} — можно добавить:',advTake:'Взять',advIgnoreDeficit:'Строить как есть',advIgnoreSurplus:'Занять свободных добычей',advIgnoreDeficitHint:'план будет с дефицитом сырья',advIgnoreSurplusHint:'добыча сырья той же цепочки, по убыванию дефицитности',colonies3:'колоний',excess:'Добыча (избыток)',mSpread:'Разброс по системам',logi:'всего задействовано',systemsAvg:'систем на персонажа',sysOne:'система',sysFew:'системы',sysMany:'систем',logiGood:'колонии собраны компактно',logiPoor:'урожай придётся собирать в разъездах',mColonies:'Колоний в плане',mChars:'Персонажей занято',mPeak:'Самая нагруженная',mShort:'Не хватает персонажей',planClosed:'план закрыт',fitsUpTo:'двойной шаблон помещается на планеты до',km:'км',suitableHere:'подходящих планет в системе',ofThem:'из них',decisionTitle:'План упёрся в размер планет',decisionText:'В выбранной домашней системе двойной шаблон не помещается ни на одну планету. Выберите, как поступить.',chooseOther:'Выбрать другую систему',useSingle:'Ставить по одному шаблону',singleNote:'планет и персонажей потребуется вдвое больше',savedPlans:'Сохранённые планы',save:'Сохранить',load:'Открыть',del:'Удалить',compare:'Сравнить',noSaved:'Пока ничего не сохранено',saveFirst:'Сначала постройте план',pickTwo:'Отметьте два плана для сравнения',cmpTitle:'Разница',colonies2:'колоний',chars2:'персонажей',peak2:'пиковая загрузка',onlyLeft:'Только в первом',onlyRight:'Только во втором',same:'Совпало'},
+  planetSlots:'слотов планет',wholeRegion:'Весь регион',clearAll:'Снять всё',nothingChosen:'ничего не выбрано',systems:'систем',selectAll:'Выбрать все',pickProducts:'Выберите хотя бы один продукт',pickConst:'Выберите хотя бы одно созвездие',export:'Экспорт в Excel',shopping:'Список закупки: командные центры',shopTotal:'Всего командных центров',exportEmpty:'Сначала постройте план',exportFail:'Не удалось выгрузить файл',profitTitle:'Что выгоднее производить',collectedAgo:'снимок собран',minutesAgo:'мин назад',stale:'устарел',colProduct:'Продукт',colColonies:'Планет',colPerColony:'ISK / колония-час',colPerHour:'ISK / час',colPrice:'Цена за единицу',noPrice:'нет цены',noSnapshot:'Снимок цен не собран',advDeficit:'Персонажей не хватает на эту цепочку',advSurplus:'Персонажей больше, чем нужно',advDeficitLead:'Полный цикл требует {need} колоний, а в пуле {have} слотов. Вот что поместится целиком:',advSurplusLead:'Выбранное занимает {need} колоний из {have}. Свободно {spare} — можно добавить:',advTake:'Взять',advIgnoreDeficit:'Строить как есть',advIgnoreSurplus:'Занять свободных добычей',advIgnoreDeficitHint:'план будет с дефицитом сырья',advIgnoreSurplusHint:'добыча сырья той же цепочки, по убыванию дефицитности',colonies3:'колоний',excess:'Добыча (избыток)',directP2:'Делать P2 прямо на добывающих планетах',directP2Hint:'где есть оба вида сырья — не нужно возить P1',mSpread:'Разброс по системам',logi:'всего задействовано',systemsAvg:'систем на персонажа',sysOne:'система',sysFew:'системы',sysMany:'систем',logiGood:'колонии собраны компактно',logiPoor:'урожай придётся собирать в разъездах',mColonies:'Колоний в плане',mChars:'Персонажей занято',mPeak:'Самая нагруженная',mShort:'Не хватает персонажей',planClosed:'план закрыт',fitsUpTo:'двойной шаблон помещается на планеты до',km:'км',suitableHere:'подходящих планет в системе',ofThem:'из них',decisionTitle:'План упёрся в размер планет',decisionText:'В выбранной домашней системе двойной шаблон не помещается ни на одну планету. Выберите, как поступить.',chooseOther:'Выбрать другую систему',useSingle:'Ставить по одному шаблону',singleNote:'планет и персонажей потребуется вдвое больше',savedPlans:'Сохранённые планы',save:'Сохранить',load:'Открыть',del:'Удалить',compare:'Сравнить',noSaved:'Пока ничего не сохранено',saveFirst:'Сначала постройте план',pickTwo:'Отметьте два плана для сравнения',cmpTitle:'Разница',colonies2:'колоний',chars2:'персонажей',peak2:'пиковая загрузка',onlyLeft:'Только в первом',onlyRight:'Только во втором',same:'Совпало'},
  en:{brandSub:'colony planner',tabDash:'Dashboard',tabSetup:'Settings',
   chipData:'data',help:'Help',about:'About',sso:'Log in with EVE SSO',
   online:'online',offline:'offline',noData:'no data',
@@ -779,7 +788,7 @@ const T={
   noReserve:'no headroom',sortLoad:'By load',sortReserve:'By remaining headroom',
   sortPilot:'By character name',sortSystem:'By system',
   cProc:'processing',cMine:'extraction',crewHint:'Characters live on the server and survive a reload.',
-  planetSlots:'planet slots',wholeRegion:'Whole region',clearAll:'Clear all',nothingChosen:'nothing selected',systems:'systems',selectAll:'Select all',pickProducts:'Select at least one product',pickConst:'Select at least one constellation',export:'Export to Excel',shopping:'Shopping list: command centres',shopTotal:'Command centres in total',exportEmpty:'Build a plan first',exportFail:'Export failed',profitTitle:'What is most profitable to produce',collectedAgo:'snapshot taken',minutesAgo:'min ago',stale:'stale',colProduct:'Product',colColonies:'Planets',colPerColony:'ISK / colony-hour',colPerHour:'ISK / hour',colPrice:'Unit price',noPrice:'no price',noSnapshot:'No price snapshot yet',advDeficit:'Not enough characters for this chain',advSurplus:'More characters than needed',advDeficitLead:'A full cycle needs {need} colonies, the pool has {have} slots. These fit entirely:',advSurplusLead:'Your choice takes {need} of {have} colonies. {spare} free — you could add:',advTake:'Take',advIgnoreDeficit:'Build as is',advIgnoreSurplus:'Put spare on extraction',advIgnoreDeficitHint:'the plan will report a raw material shortage',advIgnoreSurplusHint:'extraction of the same chain, scarcest first',colonies3:'colonies',excess:'Extraction (surplus)',mSpread:'Systems per character',logi:'systems used in total',systemsAvg:'systems each',sysOne:'system',sysFew:'systems',sysMany:'systems',logiGood:'colonies are compact',logiPoor:'harvesting will need travel',mColonies:'Colonies in the plan',mChars:'Characters used',mPeak:'Most loaded',mShort:'Characters missing',planClosed:'plan is complete',fitsUpTo:'a double template fits planets up to',km:'km',suitableHere:'suitable planets in this system',ofThem:'of them',decisionTitle:'The plan hit planet size limits',decisionText:'No planet in the chosen home system fits a double template. Pick how to proceed.',chooseOther:'Pick another system',useSingle:'Use single templates',singleNote:'twice as many planets and characters will be needed',savedPlans:'Saved plans',save:'Save',load:'Open',del:'Delete',compare:'Compare',noSaved:'Nothing saved yet',saveFirst:'Build a plan first',pickTwo:'Tick two plans to compare',cmpTitle:'Difference',colonies2:'colonies',chars2:'characters',peak2:'peak load',onlyLeft:'Only in the first',onlyRight:'Only in the second',same:'Unchanged'}
+  planetSlots:'planet slots',wholeRegion:'Whole region',clearAll:'Clear all',nothingChosen:'nothing selected',systems:'systems',selectAll:'Select all',pickProducts:'Select at least one product',pickConst:'Select at least one constellation',export:'Export to Excel',shopping:'Shopping list: command centres',shopTotal:'Command centres in total',exportEmpty:'Build a plan first',exportFail:'Export failed',profitTitle:'What is most profitable to produce',collectedAgo:'snapshot taken',minutesAgo:'min ago',stale:'stale',colProduct:'Product',colColonies:'Planets',colPerColony:'ISK / colony-hour',colPerHour:'ISK / hour',colPrice:'Unit price',noPrice:'no price',noSnapshot:'No price snapshot yet',advDeficit:'Not enough characters for this chain',advSurplus:'More characters than needed',advDeficitLead:'A full cycle needs {need} colonies, the pool has {have} slots. These fit entirely:',advSurplusLead:'Your choice takes {need} of {have} colonies. {spare} free — you could add:',advTake:'Take',advIgnoreDeficit:'Build as is',advIgnoreSurplus:'Put spare on extraction',advIgnoreDeficitHint:'the plan will report a raw material shortage',advIgnoreSurplusHint:'extraction of the same chain, scarcest first',colonies3:'colonies',excess:'Extraction (surplus)',directP2:'Make P2 right on the extraction planets',directP2Hint:'where both raw materials occur — no P1 hauling',mSpread:'Systems per character',logi:'systems used in total',systemsAvg:'systems each',sysOne:'system',sysFew:'systems',sysMany:'systems',logiGood:'colonies are compact',logiPoor:'harvesting will need travel',mColonies:'Colonies in the plan',mChars:'Characters used',mPeak:'Most loaded',mShort:'Characters missing',planClosed:'plan is complete',fitsUpTo:'a double template fits planets up to',km:'km',suitableHere:'suitable planets in this system',ofThem:'of them',decisionTitle:'The plan hit planet size limits',decisionText:'No planet in the chosen home system fits a double template. Pick how to proceed.',chooseOther:'Pick another system',useSingle:'Use single templates',singleNote:'twice as many planets and characters will be needed',savedPlans:'Saved plans',save:'Save',load:'Open',del:'Delete',compare:'Compare',noSaved:'Nothing saved yet',saveFirst:'Build a plan first',pickTwo:'Tick two plans to compare',cmpTitle:'Difference',colonies2:'colonies',chars2:'characters',peak2:'peak load',onlyLeft:'Only in the first',onlyRight:'Only in the second',same:'Unchanged'}
 };
 const t=k=>(T[lang]||T.ru)[k]||k;
 
@@ -945,7 +954,7 @@ function renderDash(){
           <div>
             <div class="pilot-name">${p.character}</div>
             <div class="sub">
-              <span class="rolebadge ${p.role.includes('избыток')?'excess':p.role.includes('Добыча')?'mine':'proc'}">${p.role}</span>
+              <span class="rolebadge ${p.role.includes('Прямое')?'direct':p.role.includes('избыток')?'excess':p.role.includes('Добыча')?'mine':'proc'}">${p.role}</span>
               <span class="sysbadge">${p.system} ${p.planet}</span>
               <span class="sec" style="color:${secColor(p.planet_type)}">${p.planet_type}</span>
               <span class="num">${Math.round(p.planet_radius_km).toLocaleString('ru')} км</span>
@@ -1468,6 +1477,23 @@ const DOC={
    констелляциях. Такие колонии помечены в плане как «Добыча (избыток)» —
    это не часть расчётной потребности, а загрузка простаивающих.</p>
 
+   <h3>P2 прямо на добывающей планете</h3>
+   <p>Обычно P2 делается в две ступени: добывающие колонии дают P1, груз везут
+   в домашнюю систему, там завод делает P2. Но если на планете есть оба вида
+   сырья, всю цепочку можно уместить на ней — два экстрактора, basic-фабрики
+   под оба P1 и advanced-фабрики под сам P2. С планеты уходит готовый продукт.</p>
+   <p>Включается галочкой «Делать P2 прямо на добывающих планетах». Ограничивает
+   Powergrid: два экстрактора съедают треть бюджета, поэтому помещается три
+   advanced-фабрики при Command Center Upgrades V и две при IV.</p>
+   <p>Честно о выигрыше: по числу колоний прямой путь обычно не выигрывает вовсе.
+   Его смысл в логистике — возить P1 между планетами не нужно. И подходящих
+   планет мало: например, Toxic Metals с Precious Metals вместе встречаются
+   редко, а Water с Reactive Metals — часто.</p>
+   <p>Оговорка о происхождении расчёта: готового шаблона такой застройки в
+   источнике нет, состав посчитан из стоимостей отдельных структур. Эти
+   стоимости проверены и воспроизводят итоги всех шаблонов набора точно,
+   но саму компоновку стоит перепроверить в игре перед крупной постройкой.</p>
+
    <h3>Логистика: почему колонии кучкуются</h3>
    <p>Добывающие колонии одного персонажа планировщик старается держать в одной
    системе. Разница практическая: шесть колоний в одной системе собираются за
@@ -1574,6 +1600,23 @@ const DOC={
    materials, starting with the scarcest in the chosen constellations. Such colonies
    are marked “Extraction (surplus)” — they are not part of the computed demand but
    a way to keep idle characters busy.</p>
+
+   <h3>P2 right on the extraction planet</h3>
+   <p>Normally P2 takes two stages: extraction colonies make P1, the freight goes to
+   the home system, and a factory there makes P2. But if a planet holds both raw
+   materials, the whole chain fits on it — two extractors, basic factories for both
+   P1s and advanced factories for the P2 itself. The finished product leaves the planet.</p>
+   <p>Enabled by the “Make P2 right on the extraction planets” checkbox. Powergrid is
+   the limit: two extractors eat a third of the budget, so three advanced factories
+   fit at Command Center Upgrades V and two at IV.</p>
+   <p>Honestly about the gain: in colony count the direct route usually wins nothing.
+   Its point is logistics — no hauling of P1 between planets. And suitable planets are
+   scarce: Toxic Metals and Precious Metals rarely occur together, while Water and
+   Reactive Metals often do.</p>
+   <p>A note on where the numbers come from: the source has no ready template for this
+   layout, so the composition is computed from individual structure costs. Those costs
+   are verified and reproduce every template total in the set exactly, but the layout
+   itself is worth checking in game before a large build.</p>
 
    <h3>Logistics: why colonies cluster</h3>
    <p>The planner tries to keep one character's extraction colonies in the same
@@ -1842,7 +1885,8 @@ async function calculate(allowSingle, surplusMining){
     target_products:picked('products'),
     extraction_margin:parseFloat(document.getElementById('margin').value)||1.0,
     allow_single_template_fallback:!!allowSingle,
-    surplus_mining:!!surplusMining};
+    surplus_mining:!!surplusMining,
+    direct_p2:document.getElementById('directP2').checked};
   document.getElementById('messages').innerHTML='';
   document.getElementById('decision').innerHTML='';
   const r=await fetch(`${API}/calculate`,{method:'POST',headers:{'Content-Type':'application/json'},
@@ -1934,7 +1978,7 @@ function renderTable(){
     return `<tr>
       <td class="idx num">${i+1}</td>
       <td><div style="color:var(--bright)">${r.character}</div>
-          <div style="margin-top:2px"><span class="rolebadge ${r.role.includes('избыток')?'excess':r.role.includes('Добыча')?'mine':'proc'}">${r.role}</span></div></td>
+          <div style="margin-top:2px"><span class="rolebadge ${r.role.includes('Прямое')?'direct':r.role.includes('избыток')?'excess':r.role.includes('Добыча')?'mine':'proc'}">${r.role}</span></div></td>
       <td><div class="num">${r.system} ${r.planet}</div>
           <div class="parts" style="margin:0">${r.planet_type} · ${Math.round(r.planet_radius_km).toLocaleString('ru')} км</div></td>
       <td><span style="color:var(--read)">${r.res_out}</span>
