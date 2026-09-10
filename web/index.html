@@ -500,6 +500,18 @@ details.msgs[open] > summary::before { content:'▾ '; }
 .cmp b { color:var(--bright); font-family:'IBM Plex Mono',monospace; }
 .cmp .up { color:var(--alarm); } .cmp .down { color:var(--calm); }
 .cmp ul { margin:6px 0 0; padding-left:18px; color:var(--dim); }
+
+/* ── Пороговые радиусы и выбор при предупреждении ─────────────── */
+.thresholds { font-size:11px; color:var(--dim); line-height:1.6; margin-top:4px; }
+.thresholds b { color:var(--read); font-family:'IBM Plex Mono',monospace; font-weight:500; }
+.thresholds .fit { color:var(--calm); } .thresholds .nofit { color:var(--amber); }
+
+.decision { border:1px solid var(--amber); background:rgba(212,160,74,.07);
+            padding:12px 14px; margin:0 14px 10px; }
+.decision h4 { margin:0 0 6px; font-size:13px; color:var(--bright); font-weight:600; }
+.decision p { margin:0 0 10px; font-size:12px; color:var(--read); max-width:74ch; }
+.decision .acts { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+.decision .hint { font-size:11px; color:var(--dim); }
 </style>
 </head>
 <body>
@@ -608,7 +620,7 @@ details.msgs[open] > summary::before { content:'▾ '; }
         <label for="factorySys" data-i18n="homeSystem">Домашняя система</label>
         <select id="factorySys"></select>
       </div>
-      <div class="field" id="thresholdNote" style="font-size:11px;color:var(--dim)"></div>
+      <div class="thresholds" id="thresholdNote"></div>
 
       <h2 data-i18n="crew">Персонажи</h2>
       <div class="crew" id="crew"><div style="color:var(--dim);font-size:12px">
@@ -627,6 +639,7 @@ details.msgs[open] > summary::before { content:'▾ '; }
     </aside>
 
     <main>
+      <div id="decision"></div>
       <div id="messages" style="padding:12px 14px 0"></div>
       <div id="profit"></div>
       <div id="tableWrap"><div class="empty">План не построен.</div></div>
@@ -665,7 +678,7 @@ const T={
   noReserve:'без запаса',sortLoad:'По загрузке',sortReserve:'По остатку запаса',
   sortPilot:'По имени персонажа',sortSystem:'По системе',
   cProc:'переработка',cMine:'добыча',crewHint:'Персонажи хранятся на сервере и не пропадают при перезаходе.',
-  planetSlots:'слотов планет',wholeRegion:'Весь регион',clearAll:'Снять всё',nothingChosen:'ничего не выбрано',systems:'систем',selectAll:'Выбрать все',pickProducts:'Выберите хотя бы один продукт',pickConst:'Выберите хотя бы одно созвездие',export:'Экспорт в Excel',shopping:'Список закупки: командные центры',shopTotal:'Всего командных центров',exportEmpty:'Сначала постройте план',exportFail:'Не удалось выгрузить файл',profitTitle:'Что выгоднее производить',collectedAgo:'снимок собран',minutesAgo:'мин назад',stale:'устарел',colProduct:'Продукт',colColonies:'Планет',colPerColony:'ISK / колония-час',colPerHour:'ISK / час',colPrice:'Цена за единицу',noPrice:'нет цены',noSnapshot:'Снимок цен не собран',savedPlans:'Сохранённые планы',save:'Сохранить',load:'Открыть',del:'Удалить',compare:'Сравнить',noSaved:'Пока ничего не сохранено',saveFirst:'Сначала постройте план',pickTwo:'Отметьте два плана для сравнения',cmpTitle:'Разница',colonies2:'колоний',chars2:'персонажей',peak2:'пиковая загрузка',onlyLeft:'Только в первом',onlyRight:'Только во втором',same:'Совпало'},
+  planetSlots:'слотов планет',wholeRegion:'Весь регион',clearAll:'Снять всё',nothingChosen:'ничего не выбрано',systems:'систем',selectAll:'Выбрать все',pickProducts:'Выберите хотя бы один продукт',pickConst:'Выберите хотя бы одно созвездие',export:'Экспорт в Excel',shopping:'Список закупки: командные центры',shopTotal:'Всего командных центров',exportEmpty:'Сначала постройте план',exportFail:'Не удалось выгрузить файл',profitTitle:'Что выгоднее производить',collectedAgo:'снимок собран',minutesAgo:'мин назад',stale:'устарел',colProduct:'Продукт',colColonies:'Планет',colPerColony:'ISK / колония-час',colPerHour:'ISK / час',colPrice:'Цена за единицу',noPrice:'нет цены',noSnapshot:'Снимок цен не собран',fitsUpTo:'двойной шаблон помещается на планеты до',km:'км',suitableHere:'подходящих планет в системе',ofThem:'из них',decisionTitle:'План упёрся в размер планет',decisionText:'В выбранной домашней системе двойной шаблон не помещается ни на одну планету. Выберите, как поступить.',chooseOther:'Выбрать другую систему',useSingle:'Ставить по одному шаблону',singleNote:'планет и персонажей потребуется вдвое больше',savedPlans:'Сохранённые планы',save:'Сохранить',load:'Открыть',del:'Удалить',compare:'Сравнить',noSaved:'Пока ничего не сохранено',saveFirst:'Сначала постройте план',pickTwo:'Отметьте два плана для сравнения',cmpTitle:'Разница',colonies2:'колоний',chars2:'персонажей',peak2:'пиковая загрузка',onlyLeft:'Только в первом',onlyRight:'Только во втором',same:'Совпало'},
  en:{brandSub:'colony planner',tabDash:'Dashboard',tabSetup:'Settings',
   chipData:'data',help:'Help',about:'About',sso:'Log in with EVE SSO',
   online:'online',offline:'offline',noData:'no data',
@@ -678,7 +691,7 @@ const T={
   noReserve:'no headroom',sortLoad:'By load',sortReserve:'By remaining headroom',
   sortPilot:'By character name',sortSystem:'By system',
   cProc:'processing',cMine:'extraction',crewHint:'Characters live on the server and survive a reload.',
-  planetSlots:'planet slots',wholeRegion:'Whole region',clearAll:'Clear all',nothingChosen:'nothing selected',systems:'systems',selectAll:'Select all',pickProducts:'Select at least one product',pickConst:'Select at least one constellation',export:'Export to Excel',shopping:'Shopping list: command centres',shopTotal:'Command centres in total',exportEmpty:'Build a plan first',exportFail:'Export failed',profitTitle:'What is most profitable to produce',collectedAgo:'snapshot taken',minutesAgo:'min ago',stale:'stale',colProduct:'Product',colColonies:'Planets',colPerColony:'ISK / colony-hour',colPerHour:'ISK / hour',colPrice:'Unit price',noPrice:'no price',noSnapshot:'No price snapshot yet',savedPlans:'Saved plans',save:'Save',load:'Open',del:'Delete',compare:'Compare',noSaved:'Nothing saved yet',saveFirst:'Build a plan first',pickTwo:'Tick two plans to compare',cmpTitle:'Difference',colonies2:'colonies',chars2:'characters',peak2:'peak load',onlyLeft:'Only in the first',onlyRight:'Only in the second',same:'Unchanged'}
+  planetSlots:'planet slots',wholeRegion:'Whole region',clearAll:'Clear all',nothingChosen:'nothing selected',systems:'systems',selectAll:'Select all',pickProducts:'Select at least one product',pickConst:'Select at least one constellation',export:'Export to Excel',shopping:'Shopping list: command centres',shopTotal:'Command centres in total',exportEmpty:'Build a plan first',exportFail:'Export failed',profitTitle:'What is most profitable to produce',collectedAgo:'snapshot taken',minutesAgo:'min ago',stale:'stale',colProduct:'Product',colColonies:'Planets',colPerColony:'ISK / colony-hour',colPerHour:'ISK / hour',colPrice:'Unit price',noPrice:'no price',noSnapshot:'No price snapshot yet',fitsUpTo:'a double template fits planets up to',km:'km',suitableHere:'suitable planets in this system',ofThem:'of them',decisionTitle:'The plan hit planet size limits',decisionText:'No planet in the chosen home system fits a double template. Pick how to proceed.',chooseOther:'Pick another system',useSingle:'Use single templates',singleNote:'twice as many planets and characters will be needed',savedPlans:'Saved plans',save:'Save',load:'Open',del:'Delete',compare:'Compare',noSaved:'Nothing saved yet',saveFirst:'Build a plan first',pickTwo:'Tick two plans to compare',cmpTitle:'Difference',colonies2:'colonies',chars2:'characters',peak2:'peak load',onlyLeft:'Only in the first',onlyRight:'Only in the second',same:'Unchanged'}
 };
 const t=k=>(T[lang]||T.ru)[k]||k;
 
@@ -884,6 +897,70 @@ function renderDash(){
   document.getElementById('counts').innerHTML=
     `<b>${plural(plan.length,'колония','колонии','колоний')}</b>`
     + (strained?` · <span class="idle">${strained} без запаса</span>`:' · запас везде есть');
+}
+
+/* ── Пороговые радиусы ────────────────────────────────────────
+   Показываются ДО расчёта, при выборе домашней системы: иначе
+   пользователь узнаёт о том, что планеты слишком крупные, только
+   после построения плана, потратив время впустую. */
+let thresholds=null, systemPlanets=[];
+
+async function loadThresholds(){
+  const ccu=Math.max(0,...crew.map(c=>c.ccu||0));
+  try{
+    const d=await (await fetch(`${API}/thresholds/${ccu}`)).json();
+    thresholds=d.status==='success'?d.thresholds:null;
+  }catch(e){ thresholds=null; }
+  renderThresholds();
+}
+
+function renderThresholds(){
+  const box=document.getElementById('thresholdNote'); if(!box) return;
+  const system=document.getElementById('factorySys').value;
+  if(!thresholds || !system){ box.innerHTML=''; return; }
+
+  const limit=thresholds.p2p3_2factory;
+  const limitP4=thresholds.p4_2factory;
+  const fitting=systemPlanets.filter(pl=>
+    ['Barren','Temperate'].includes(pl.type) && limit && pl.radius<=limit);
+  const suitable=systemPlanets.filter(pl=>['Barren','Temperate'].includes(pl.type));
+
+  box.innerHTML=`
+    ${limit?`<div>${t('fitsUpTo')} <b>${Math.round(limit).toLocaleString('ru')}</b> ${t('km')} (P2/P3)`
+      +(limitP4?`, <b>${Math.round(limitP4).toLocaleString('ru')}</b> ${t('km')} (P4)`:'')+`</div>`:''}
+    ${systemPlanets.length?`<div class="${fitting.length?'fit':'nofit'}">
+      ${t('suitableHere')}: <b>${suitable.length}</b>, ${t('ofThem')}
+      <b>${fitting.length}</b> ${fitting.length?'✓':'✗'}</div>`:''}`;
+}
+
+async function loadSystemPlanets(){
+  const system=document.getElementById('factorySys').value;
+  if(!system){ systemPlanets=[]; renderThresholds(); return; }
+  try{
+    const d=await (await fetch(`${API}/system-planets?system=${encodeURIComponent(system)}`)).json();
+    systemPlanets=d.status==='success'?(d.planets||[]):[];
+  }catch(e){ systemPlanets=[]; }
+  renderThresholds();
+}
+
+/* ── Выбор при упоре в размер планет ──────────────────────────
+   Планировщик намеренно НЕ подставляет одиночный шаблон молча:
+   это вдвое увеличивает число планет и персонажей, и решать должен
+   пользователь. Здесь этот выбор и предлагается. */
+function renderDecision(data){
+  const box=document.getElementById('decision');
+  if(!data || !data.needs_user_decision){ box.innerHTML=''; return; }
+  box.innerHTML=`<div class="decision">
+    <h4>${t('decisionTitle')}</h4>
+    <p>${t('decisionText')}</p>
+    ${(data.site_warnings||[]).map(w=>`<p style="color:var(--dim)">${w}</p>`).join('')}
+    <div class="acts">
+      <button class="mini" onclick="show('setup');document.getElementById('factorySys').focus()">
+        ${t('chooseOther')}</button>
+      <button class="mini" onclick="calculate(true)">${t('useSingle')}</button>
+      <span class="hint">${t('singleNote')}</span>
+    </div>
+  </div>`;
 }
 
 /* ── Сохранённые планы ───────────────────────────────────────
@@ -1197,8 +1274,15 @@ const DOC={
     <li>Выберите домашнюю систему для заводов. Переработка ставится на планеты
     с наименьшим радиусом, предпочтительно Barren и Temperate: чем меньше планета,
     тем дешевле линки. Для P4 эти типы обязательны — это правило игры.</li>
+    <li>Под выбором системы показан предел: до какого радиуса в неё
+    помещается двойной шаблон и сколько планет системы ему подходят.
+    Это видно до расчёта, а не после.</li>
     <li>Нажмите «Построить план». Результат появится на дашборде.</li>
    </ol>
+   <p>Если ни одна планета системы не подходит под двойной шаблон, план не
+   строится молча наполовину: появляется выбор — сменить домашнюю систему
+   или ставить по одному шаблону на планету. Второй вариант работает, но
+   планет и персонажей потребуется вдвое больше, поэтому решение за вами.</p>
 
    <h3>Что показывает дашборд</h3>
    <div class="rows">
@@ -1262,8 +1346,15 @@ const DOC={
     <li>Pick a home system for the factories. Processing goes on the smallest-radius
     planets, preferably Barren and Temperate: smaller planets make cheaper links.
     For P4 those types are mandatory — that is a game rule.</li>
+    <li>Below the system picker you see the limit: up to which radius a double
+    template fits planets here, and how many of the system's planets qualify.
+    This is shown before the calculation, not after.</li>
     <li>Press “Build plan”. The result appears on the Dashboard.</li>
    </ol>
+   <p>If no planet in the system fits a double template, the plan is not quietly
+   half-built: you get a choice — pick another home system, or use a single
+   template per planet. The latter works, but needs twice as many planets and
+   characters, so the decision is yours.</p>
 
    <h3>What the dashboard shows</h3>
    <div class="rows">
@@ -1403,7 +1494,7 @@ async function loadCrew(){
     const d=await (await fetch(`${API}/characters`)).json();
     crew=d.characters||[];
   }catch(e){ crew=[]; }
-  renderCrew();
+  renderCrew(); loadThresholds();
 }
 
 async function startLogin(){
@@ -1519,16 +1610,19 @@ async function loadSystems(){
   const r=await fetch(`${API}/systems`,{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({constellations:c})});
   fill('factorySys',(await r.json()).systems||[]);
+  loadSystemPlanets();
 }
 
-async function calculate(){
+async function calculate(allowSingle){
   if(!picked('products').length){ msg(t('pickProducts'),true); return; }
   if(!picked('constellations').length){ msg(t('pickConst'),true); return; }
   const body={constellations:picked('constellations'),
     factory_sys:document.getElementById('factorySys').value,
     target_products:picked('products'),
-    extraction_margin:parseFloat(document.getElementById('margin').value)||1.0};
+    extraction_margin:parseFloat(document.getElementById('margin').value)||1.0,
+    allow_single_template_fallback:!!allowSingle};
   document.getElementById('messages').innerHTML='';
+  document.getElementById('decision').innerHTML='';
   const r=await fetch(`${API}/calculate`,{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify(body)});
   const d=await r.json();
@@ -1538,8 +1632,11 @@ async function calculate(){
   lastRequest=body; currentPlanId=null;
   lastWarnings=d.warnings||[]; lastAssumptions=d.assumptions||[];
   renderMessages(lastWarnings,lastAssumptions);
-  renderAnswers(); renderTable(); renderDash(); renderCrew(); renderShopping();
-  show('dash');
+  renderDecision(d);
+  renderAnswers(); renderTable(); renderDash(); renderCrew(); renderShopping(); renderProfit();
+  // При упоре в размер планет остаёмся в настройках: выбор делать там,
+  // а пустой дашборд ничего не объясняет.
+  show(d.needs_user_decision ? 'setup' : 'dash');
 }
 
 function renderMessages(warnings,assumptions){

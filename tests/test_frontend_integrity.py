@@ -133,6 +133,20 @@ class TestScript:
         assert not duplicates, f"{name}: функции определены дважды: {', '.join(duplicates)}"
 
 
+    def test_no_script_outside_script_tag(self):
+        """
+        Код, вставленный по неуникальному маркеру, может попасть не только
+        в <style>, но и прямо в разметку. Тогда он не выполняется вовсе,
+        а внешне страница выглядит целой. Так уже терялся вызов функции.
+        """
+        name, text = _frontend()
+        body = text[text.index("<body>") : text.rindex("<script>")]
+        found = re.findall(r"\b(?:async\s+)?function\s+(\w+)\s*\(", body)
+        assert not found, (
+            f"{name}: определения функций вне <script>: {', '.join(found[:5])}"
+        )
+
+
 class TestVersion:
     def test_version_lives_in_one_place(self):
         """

@@ -131,6 +131,41 @@ def systems():
         )
 
 
+@bp.get("/system-planets")
+def system_planets():
+    """
+    Планеты одной системы: тип и радиус.
+
+    Нужно, чтобы показать пороговые радиусы ДО расчёта — пользователь
+    сразу видит, сколько планет в выбранной системе вообще подходит,
+    а не узнаёт об этом после построения плана.
+    """
+    from flask import request as flask_request
+
+    from domain.planets import RADIUS_COLUMN
+
+    system = (flask_request.args.get("system") or "").strip()
+    if not system:
+        return json_error("Не указана система")
+
+    try:
+        frame = load_planets().factory_candidates(system)
+    except FileNotFoundError:
+        return json_error("Нет данных по планетам", 503)
+
+    planets = []
+    for _, row in frame.iterrows():
+        radius = row.get(RADIUS_COLUMN)
+        if radius is None or radius != radius:
+            continue
+        planets.append({
+            "planet": str(row.get("Planet", "")),
+            "type": str(row.get("Type", "")),
+            "radius": float(radius),
+        })
+    return json_ok(system=system, planets=planets)
+
+
 @bp.get("/thresholds/<int:ccu_level>")
 @with_etag
 def thresholds(ccu_level: int):
