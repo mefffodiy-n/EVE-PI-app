@@ -29,6 +29,11 @@ Polyaramids) и удалён несуществующий `Positron Cord`.
 эндпоинт всё равно обязан ответить.
 
 **4. Flask, не FastAPI. Никакого Docker.** Обычное WSGI-приложение за nginx.
+БД — SQLAlchemy 2.0 + Alembic, адрес в `PI_DATABASE_URL` (`infra/config.py`).
+На разработке — SQLite-файл `data/pi_director.db` (нулевая настройка, Docker
+не нужен); в продакшене — Postgres (roadmap раздел 5: multi-tenant и
+конкурентная запись из воркеров). Переключение — только сменой URL и
+`alembic upgrade head`; модели те же.
 
 **5. Не нагружать сервер при большом числе пользователей.** Flask синхронный,
 поэтому: справочники считаются раз на процесс и отдаются с ETag, расчёт плана
@@ -120,6 +125,13 @@ domain/           расчёты, без Flask и без сети
   plan_messages.py каталог сообщений RU/EN (код+параметры, см. правило 9)
   features.py     реестр возможностей (см. правило 6)
 
+infra/            конфиг окружения и доступ к БД (общий для domain/api/scripts)
+  config.py       PI_ENV, PI_DATABASE_URL — единственное место чтения env
+  db.py           движок SQLAlchemy, session_scope, декларативная база
+  models.py       ORM-модели (пока одна таблица: characters)
+
+migrations/       Alembic: миграции схемы (env.py берёт URL из infra.config)
+
 api/              Flask, только чтение готовых данных
   __init__.py     фабрика приложения, отдача web/, обработка ошибок
   cache.py        LRU-кэш, ETag, разбор тела запроса
@@ -144,8 +156,10 @@ data/             только чтение
   templates/                68 игровых шаблонов (только вариант 00)
   planet_industry.csv       968 планет региона
   schematics.json           создаётся локально, в git не хранится
+  pi_director.db            SQLite dev-БД, создаётся `alembic upgrade head`, не в git
 
 web/index.html    весь интерфейс одним файлом, без сборки
+alembic.ini       конфиг Alembic (URL берётся из infra.config, не отсюда)
 ```
 
 ---
@@ -193,14 +207,18 @@ eve-webtools.com, вики EVE University): рецепты и количеств
 
 ```
 pip install -r requirements.txt
+python -m scripts.extract_schematics --write   # создаёт data/schematics.json
+python -m alembic upgrade head                 # создаёт таблицы БД
+python -m scripts.seed_dev_characters          # dev-персонажи (только PI_ENV=dev)
 python run.py                      # http://127.0.0.1:8000/ — именно корень
 python -m pytest tests/ -q         # все тесты
-python -m scripts.diagnose         # проверка данных и эндпоинтов
+python -m scripts.diagnose         # проверка данных, БД и эндпоинтов
 python -m scripts.scheduler        # сборщики по расписанию
 ```
 
-Первый запуск требует `python -m scripts.extract_schematics --write` —
-без `data/schematics.json` план не считается.
+Первые три команды — разовая подготовка: без `data/schematics.json` план
+не считается, без миграций нет таблицы `characters`, без seed планировщику
+некого распределять.
 
 Для правки вёрстки удобен Live Server; тогда сервер запускается как
 `PI_DEV_CORS=1 python run.py`, фронтенд сам определит другой origin.

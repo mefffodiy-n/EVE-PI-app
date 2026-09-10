@@ -7,14 +7,16 @@ auth-эндпоинта, как в main.py v1 (там /api/auth/callback вст�
 персонажей вместо реального обмена OAuth-кода на токен).
 
 Этот скрипт:
-  - запускается ТОЛЬКО вручную и ТОЛЬКО при ENV=dev;
+  - запускается ТОЛЬКО вручную и ТОЛЬКО при PI_ENV=dev;
   - пишет персонажей в ту же таблицу characters, которую в Фазе 3 будет
-    заполнять реальный ESI SSO callback — поэтому domain.planner не знает
-    и не должен знать, откуда взялся персонаж;
+    заполнять реальный ESI SSO callback (там source="esi"), — поэтому
+    domain.planner не знает и не должен знать, откуда взялся персонаж;
   - никогда не импортируется из api/ (заглушка физически не может утечь в прод).
 
-Использование (после появления infra/db в Фазе 1):
-    python -m scripts.seed_dev_characters
+Использование:
+    python -m scripts.extract_schematics --write   # один раз, если ещё нет
+    python -m alembic upgrade head                  # создать таблицы
+    python -m scripts.seed_dev_characters           # наполнить dev-персонажами
 """
 
 from __future__ import annotations
@@ -42,49 +44,96 @@ DEV_CHARACTERS = [
     ],
 ]
 
+DEV_SOURCE = "dev"
+
 
 def load_characters() -> list:
     """
-    Вернуть персонажей для планировщика.
+    Вернуть персонажей для планировщика — ВСЕХ из таблицы characters.
 
-    Фаза 1: читает dev-заглушки, если разрешено окружением.
-    Фаза 3: то же место будет читать реальных персонажей из БД,
-    заполненных sync_character_skills. Планировщик разницы не заметит —
-    поля те же.
+    Источник данных больше не важен планировщику: dev-заглушки (source
+    "dev") и реальные из ESI (source "esi") лежат в одной таблице с
+    одинаковыми полями. В проде без ESI и без seed таблица пуста — вернём
+    пустой список, и слой выше честно сообщит о нехватке персонажей.
 
-    Возвращает пустой список вне dev-окружения: молча подставлять
-    тестовых персонажей в проде нельзя.
+    Вне dev-окружения строки с source="dev" ИГНОРИРУЮТСЯ, даже если
+    попали в БД по ошибке конфигурации: правило проекта — тестовых
+    персонажей в проде быть не должно.
+
+    Отсутствие БД/таблицы (свежий клон без `alembic upgrade`) — тоже
+    пустой список, а не исключение: страница должна открыться.
     """
-    import os
+    from sqlalchemy import select
+    from sqlalchemy.exc import OperationalError
 
     from domain.planner import CharacterSlot
+    from infra import config
+    from infra.db import session_scope
+    from infra.models import Character
 
-    if os.environ.get("PI_ENV", "dev").lower() != "dev":
+    query = select(Character).order_by(Character.character_id)
+    if not config.IS_DEV:
+        query = query.where(Character.source != DEV_SOURCE)
+
+    try:
+        with session_scope() as session:
+            rows = session.scalars(query).all()
+    except OperationalError:
         return []
 
     return [
         CharacterSlot(
-            character_id=char_id,
-            name=name,
-            command_center_upgrades_level=ccu,
-            interplanetary_consolidation_level=ic,
+            character_id=row.character_id,
+            name=row.name,
+            command_center_upgrades_level=row.command_center_upgrades_level,
+            interplanetary_consolidation_level=row.interplanetary_consolidation_level,
         )
-        for char_id, name, ccu, ic, _ in DEV_CHARACTERS
+        for row in rows
     ]
 
 
-def seed() -> None:
+def seed() -> int:
     """
-    Записать DEV_CHARACTERS в БД (dev-окружение).
+    Записать DEV_CHARACTERS в таблицу characters (только PI_ENV=dev).
 
-    TODO(Фаза 1):
-      1. проверить infra.config.ENV == "dev", иначе — RuntimeError
-         ("seed_dev_characters запрещён вне dev-окружения");
-      2. записать в таблицу characters через тот же слой доступа к БД,
-         которым будет пользоваться будущий ESI SSO callback.
+    Идемпотентно: повторный запуск обновляет существующие строки по
+    character_id, не плодит дубли. Реальных персонажей (source != "dev")
+    не трогает.
+
+    Возвращает число записанных строк.
     """
-    raise NotImplementedError("TODO(Фаза 1): реализовать после появления infra/db")
+    from infra import config
+    from infra.db import session_scope
+    from infra.models import Character
+
+    if not config.IS_DEV:
+        raise RuntimeError(
+            "seed_dev_characters запрещён вне dev-окружения: "
+            f"PI_ENV={config.ENV!r}. Тестовых персонажей в проде быть не должно."
+        )
+
+    with session_scope() as session:
+        for char_id, name, ccu, ic, _comment in DEV_CHARACTERS:
+            existing = session.get(Character, char_id)
+            if existing is not None and existing.source != DEV_SOURCE:
+                # Настоящего персонажа с тем же id (маловероятно —
+                # dev-id начинаются с 900xx) не перезаписываем.
+                continue
+            if existing is None:
+                session.add(Character(
+                    character_id=char_id, name=name,
+                    command_center_upgrades_level=ccu,
+                    interplanetary_consolidation_level=ic,
+                    source=DEV_SOURCE,
+                ))
+            else:
+                existing.name = name
+                existing.command_center_upgrades_level = ccu
+                existing.interplanetary_consolidation_level = ic
+
+    return len(DEV_CHARACTERS)
 
 
 if __name__ == "__main__":
-    seed()
+    written = seed()
+    print(f"Записано dev-персонажей: {written}")
