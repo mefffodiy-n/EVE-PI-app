@@ -10,7 +10,6 @@
 from __future__ import annotations
 
 import json
-import os
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -67,19 +66,14 @@ def _auth_status() -> dict:
     """
     Готова ли настоящая авторизация через EVE SSO.
 
-    Проверяется наличие настроек приложения, а не обращение к ESI:
-    без client_id вход невозможен в принципе, и об этом лучше сказать
-    сразу, а не после неудачного перехода на страницу входа.
+    Проверяется наличие настроек приложения (`infra.config`), а не
+    обращение к ESI: без `client_id` вход невозможен в принципе.
     """
-    client_id = os.environ.get("EVE_CLIENT_ID", "").strip()
+    from infra import config
+
     return {
-        "sso_configured": bool(client_id),
-        "dev_mode": os.environ.get("PI_ENV", "dev").lower() == "dev",
-        "hint": (
-            "Задайте EVE_CLIENT_ID и EVE_CLIENT_SECRET из приложения на "
-            "developers.eveonline.com. Пока их нет, персонажи берутся из "
-            "dev-заглушек и реальные данные из игры не приходят."
-        ),
+        "sso_configured": config.sso_configured(),
+        "dev_mode": config.IS_DEV,
     }
 
 
@@ -88,7 +82,7 @@ def meta():
     """Версия, статус сервера, состояние входа — одним запросом."""
     return json_ok(
         version=VERSION,
-        phase=PHASE,
+        phase=PHASE,           # {ru, en} — фронт берёт по языку интерфейса
         server=_server_status(),
         auth=_auth_status(),
     )
@@ -97,11 +91,9 @@ def meta():
 @bp.get("/characters")
 def characters():
     """
-    Персонажи, доступные планировщику.
-
-    На Фазе 1 это dev-заглушки; в Фазе 3 то же место будет отдавать
-    реальных персонажей, привязанных через SSO. Фронтенду разница
-    не видна — поля те же.
+    Персонажи, доступные планировщику: и dev-заглушки, и вошедшие через
+    EVE SSO (`source` в таблице `characters`). Фронтенду происхождение
+    не видно — поля одинаковые.
     """
     from scripts.seed_dev_characters import load_characters
 
@@ -117,7 +109,6 @@ def characters():
             }
             for c in crew
         ],
-        source="dev" if crew else "none",
     )
 
 
