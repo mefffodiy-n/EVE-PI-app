@@ -44,6 +44,7 @@ def calculate():
     factory_sys = payload["factory_sys"].strip()
     targets = [str(t) for t in payload["target_products"]]
     allow_single = bool(payload.get("allow_single_template_fallback", False))
+    surplus_mining = bool(payload.get("surplus_mining", False))
 
     if not constellations:
         return json_error("Не выбрано ни одной констелляции")
@@ -58,7 +59,8 @@ def calculate():
             f"Максимум {MAX_TARGET_PRODUCTS} за один расчёт."
         )
 
-    key = cache_key(sorted(constellations), factory_sys, sorted(targets), allow_single)
+    key = cache_key(sorted(constellations), factory_sys, sorted(targets),
+                    allow_single, surplus_mining)
 
     def compute():
         # Персонажи: на Фазе 1 — dev-заглушки, в Фазе 3 те же поля придут
@@ -80,6 +82,7 @@ def calculate():
             factory_system=factory_sys,
             target_products=targets,
             allow_single_template_fallback=allow_single,
+            surplus_mining=surplus_mining,
         )
         result = build_plan(
             request_obj,
@@ -90,6 +93,50 @@ def calculate():
         return result.to_dict()
 
     return json_ok(**plan_cache.get_or_compute(key, compute))
+
+
+@bp.post("/advice")
+def advice():
+    """
+    Помещается ли задуманное в пул персонажей и что делать, если нет.
+
+    Отдельный эндпоинт, а не часть расчёта: подсказка нужна ДО того, как
+    строить план. Узнавать о нехватке персонажей из наполовину построенного
+    плана — значит тратить время впустую.
+    """
+    from domain.advice import advise
+    from domain.planets import load_planets  # noqa: F401 (проверка доступности данных)
+
+    payload, error = parse_json_body({"target_products": list})
+    if error:
+        return json_error(error)
+
+    targets = [str(t) for t in payload["target_products"]]
+    if not targets:
+        return json_error("Не выбрано ни одного целевого продукта")
+
+    from scripts.seed_dev_characters import load_characters
+
+    characters = load_characters()
+    if not characters:
+        return json_error("Нет персонажей — вместимость считать не от чего", 503)
+
+    # Цены нужны только для сортировки подсказок по выгоде. Их
+    # отсутствие не мешает посчитать вместимость, и модуль об этом скажет.
+    prices: dict[str, float] = {}
+    try:
+        from api.blueprints.market import _load_snapshot
+
+        raw = (_load_snapshot() or {}).get("prices") or {}
+        prices = {
+            name: entry["buy_max"]
+            for name, entry in raw.items()
+            if isinstance(entry, dict) and entry.get("buy_max")
+        }
+    except Exception:
+        prices = {}
+
+    return json_ok(**advise(targets, characters, prices).to_dict())
 
 
 # ── Сохранённые планы ────────────────────────────────────────────

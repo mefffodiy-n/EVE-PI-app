@@ -171,6 +171,77 @@ class PlanetBook:
                 return str(column)
         return None
 
+    def system_coverage(
+        self, resources: list[str], constellations: list[str] | None = None
+    ) -> dict[str, int]:
+        """
+        Сколько из нужных видов сырья есть в каждой системе.
+
+        Система, где добывается сразу четыре нужных ресурса, логистически
+        лучше четырёх систем с одним каждая: один персонаж соберёт всё
+        за один заход. Плотность при этом остаётся вторым критерием —
+        богатое месторождение в одиночной системе может перевесить.
+        """
+        subset = self._df
+        if constellations:
+            subset = subset[subset["Constellation"].isin(constellations)]
+
+        columns = [c for c in (self.resolve_resource_column(r) for r in resources) if c]
+        if not columns:
+            return {}
+
+        coverage: dict[str, int] = {}
+        for system, part in subset.groupby("System"):
+            count = 0
+            for column in columns:
+                values = pd.to_numeric(part[column], errors="coerce")
+                if (values > 0).any():
+                    count += 1
+            if count:
+                coverage[str(system)] = count
+        return coverage
+
+    def resource_scarcity(
+        self, resources: list[str], constellations: list[str] | None = None
+    ) -> list[dict]:
+        """
+        Ранжировать сырьё по дефицитности в выбранных констелляциях.
+
+        Дефицитность считается по двум признакам сразу: сколько планет
+        вообще содержат это сырьё и какова там плотность. Одного мало:
+        сырьё может встречаться на многих планетах, но всюду скудно, —
+        и наоборот.
+
+        Отдаётся по убыванию дефицитности: первым то, чего добывать
+        труднее всего, а значит именно оно первым станет узким местом.
+        """
+        rows: list[dict] = []
+        for name in resources:
+            column = self.resolve_resource_column(name)
+            if column is None:
+                rows.append({"resource": name, "planets": 0, "median_density": 0.0,
+                             "total_density": 0.0, "known": False})
+                continue
+
+            subset = self._df
+            if constellations:
+                subset = subset[subset["Constellation"].isin(constellations)]
+            values = pd.to_numeric(subset[column], errors="coerce")
+            values = values[values.notna() & (values > 0)]
+
+            rows.append({
+                "resource": name,
+                "planets": int(len(values)),
+                "median_density": float(values.median()) if len(values) else 0.0,
+                "total_density": float(values.sum()) if len(values) else 0.0,
+                "known": True,
+            })
+
+        # Меньше суммарной плотности — дефицитнее. При равенстве
+        # решает число планет: разбросанное сырьё добывать проще.
+        rows.sort(key=lambda r: (r["total_density"], r["planets"]))
+        return rows
+
     def planets_with_resource(
         self, resource_name: str, constellations: list[str] | None = None
     ) -> pd.DataFrame:

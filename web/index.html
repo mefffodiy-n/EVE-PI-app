@@ -17,17 +17,30 @@
   --void:#080b11; --hull:#0f141c; --seam:#1b2331;
   --dim:#6d7d92; --read:#ccd6e0; --bright:#f2f6fa;
   --amber:#d4a04a; --flux:#4f9cd6; --forge:#c8823c; --alarm:#cf6058; --calm:#4a9d7f;
+  /* Цвета тиров продукции: сырьё холоднее, готовое изделие теплее.
+     Ряд читается как шкала передела, а не как случайный набор. */
+  --t-p1:#5c8fb8; --t-p2:#4f9d8c; --t-p3:#a07cc4; --t-p4:#d4923c;
+  --t-p1-bg:rgba(92,143,184,.14); --t-p2-bg:rgba(79,157,140,.14);
+  --t-p3-bg:rgba(160,124,196,.14); --t-p4-bg:rgba(212,146,60,.14);
+  --accent-bg:rgba(212,160,74,.07);
   /* Цвета колец повторяют игровые: синий — инфраструктура,
      бирюзовый — экстрактор, оранжевый — производство. */
   --ring-infra:#3a9fd8; --ring-extract:#2fb89a; --ring-basic:#c8763a; --ring-adv:#d8a63c;
 }
 /* Светлая тема. Меняются только переменные — правил дублировать
    не нужно. */
+/* Светлая тема тёплая, а не серая: холодный белый в плотной таблице
+   утомляет и делает акценты крикливыми. Тёплая подложка приглушает
+   контраст, и те же цвета читаются спокойнее. */
 body.light {
-  --void:#eef1f5; --hull:#f7f9fb; --seam:#d3dae3;
-  --dim:#5d6b7d; --read:#26303c; --bright:#0d151f;
+  --void:#f4f1ea; --hull:#faf8f3; --seam:#ddd6c8;
+  --dim:#6b6459; --read:#2a2620; --bright:#14110c;
   --amber:#9a6b12; --flux:#1d6fa8; --forge:#a05f1c; --alarm:#b03e36; --calm:#2c7358;
   --ring-infra:#1d7fb8; --ring-extract:#1a8c72; --ring-basic:#a85c26; --ring-adv:#a87d20;
+  --t-p1:#2f6a92; --t-p2:#1f7a68; --t-p3:#7048a0; --t-p4:#a06a12;
+  --t-p1-bg:rgba(47,106,146,.10); --t-p2-bg:rgba(31,122,104,.10);
+  --t-p3-bg:rgba(112,72,160,.10); --t-p4-bg:rgba(160,106,18,.10);
+  --accent-bg:rgba(154,107,18,.08);
 }
 
 /* Смена темы переключает переменные на body, из-за чего браузер
@@ -512,6 +525,77 @@ details.msgs[open] > summary::before { content:'▾ '; }
 .decision p { margin:0 0 10px; font-size:12px; color:var(--read); max-width:74ch; }
 .decision .acts { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
 .decision .hint { font-size:11px; color:var(--dim); }
+
+/* ── Кнопка темы ──────────────────────────────────────────────
+   Значок показывает, КУДА переключимся: в светлой теме месяц
+   («станет темно»), в тёмной — солнце. Показывать текущее состояние
+   бессмысленно: оно и так видно по всему экрану. */
+.icon-btn .ic-moon { display:none; }
+body.light .icon-btn .ic-sun { display:none; }
+body.light .icon-btn .ic-moon { display:block; }
+.icon-btn { color:var(--amber); border-color:var(--seam); }
+.icon-btn:hover { background:var(--accent-bg); }
+
+/* ── Плашки тиров ─────────────────────────────────────────────
+   Цвет кодирует передел: холодный у сырья, тёплый у готового
+   изделия. Плашка, а не просто цвет текста: в плотной таблице
+   подложка читается быстрее, чем оттенок букв. */
+.tier { display:inline-block; padding:1px 6px; border-radius:3px; font-size:10px;
+        font-family:'IBM Plex Mono',monospace; font-weight:600; letter-spacing:.03em;
+        vertical-align:middle; }
+.tier.P1 { color:var(--t-p1); background:var(--t-p1-bg); }
+.tier.P2 { color:var(--t-p2); background:var(--t-p2-bg); }
+.tier.P3 { color:var(--t-p3); background:var(--t-p3-bg); }
+.tier.P4 { color:var(--t-p4); background:var(--t-p4-bg); }
+
+/* Роль колонии — тоже плашка, а не точка: добыча и переработка
+   различаются с одного взгляда даже в плотном списке. */
+.rolebadge { display:inline-block; padding:1px 7px; border-radius:3px; font-size:11px;
+             font-weight:500; }
+.rolebadge.mine { color:var(--ring-extract); background:rgba(47,184,154,.13); }
+.rolebadge.proc { color:var(--forge); background:rgba(200,130,60,.13); }
+body.light .rolebadge.mine { background:rgba(26,140,114,.11); }
+body.light .rolebadge.proc { background:rgba(160,95,28,.11); }
+
+/* Надзаголовки групп колонок — акцентным цветом: они объясняют,
+   зачем смотреть в колонки, и должны выделяться из шапки. */
+thead .group th { color:var(--flux); }
+thead .group th small { color:var(--dim); }
+
+/* Значения в карточках метрик окрашиваются по смыслу. */
+.answer .value.good { color:var(--calm); }
+.answer .value.bad  { color:var(--alarm); }
+.answer.accent { background:var(--accent-bg); }
+
+/* Строка-победитель в таблице выгоды — как в образце: подложка
+   и полоса слева, число янтарём. */
+.profit tr.best td:last-child { color:var(--amber); font-weight:600; }
+
+/* Названия систем моноширинным: они читаются как коды, а не слова. */
+.sysbadge { color:var(--flux); background:rgba(79,156,214,.10); }
+body.light .sysbadge { background:rgba(29,111,168,.10); }
+
+/* ── Подсказка по вместимости пула ────────────────────────────── */
+.advice { border:1px solid var(--seam); padding:12px 14px; margin:0 14px 10px;
+          background:var(--hull); }
+.advice.deficit { border-color:var(--alarm); background:rgba(207,96,88,.06); }
+.advice.surplus { border-color:var(--calm); background:rgba(74,157,127,.06); }
+.advice h4 { margin:0 0 4px; font-size:13px; font-weight:600; color:var(--bright); }
+.advice .lead { font-size:12px; color:var(--read); margin:0 0 10px; max-width:76ch; }
+.advice .lead b { font-family:'IBM Plex Mono',monospace; color:var(--bright); }
+.sugg { display:grid; grid-template-columns:1fr auto auto auto; gap:6px 14px;
+        align-items:center; font-size:12px; }
+.sugg > div { padding:5px 0; border-top:1px solid var(--seam); }
+.sugg .nm { color:var(--read); }
+.sugg .num { font-family:'IBM Plex Mono',monospace; color:var(--dim); text-align:right; }
+.sugg .num.isk { color:var(--bright); }
+.sugg button { background:none; border:1px solid var(--flux); color:var(--flux);
+               padding:3px 10px; cursor:pointer; font-size:11px; }
+.sugg button:hover { background:rgba(79,156,214,.12); }
+.advice .foot { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:10px; }
+.advice .foot .hint { font-size:11px; color:var(--dim); }
+.rolebadge.excess { color:var(--amber); background:rgba(212,160,74,.15); }
+body.light .rolebadge.excess { background:rgba(154,107,18,.12); }
 </style>
 </head>
 <body>
@@ -534,9 +618,12 @@ details.msgs[open] > summary::before { content:'▾ '; }
       <button data-lang="ru" class="on">RU</button><button data-lang="en">EN</button>
     </div>
     <button class="icon-btn" id="themeBtn" onclick="toggleTheme()" title="Тема">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+      <svg class="ic-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
         <circle cx="12" cy="12" r="4.2"/>
         <path d="M12 2v2.6M12 19.4V22M2 12h2.6M19.4 12H22M4.9 4.9l1.9 1.9M17.2 17.2l1.9 1.9M19.1 4.9l-1.9 1.9M6.8 17.2l-1.9 1.9"/>
+      </svg>
+      <svg class="ic-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+        <path d="M20.5 14.4A8.6 8.6 0 0 1 9.6 3.5a8.6 8.6 0 1 0 10.9 10.9z"/>
       </svg>
     </button>
     <button class="sso" onclick="startLogin()" data-i18n="sso">Войти через EVE SSO</button>
@@ -639,6 +726,7 @@ details.msgs[open] > summary::before { content:'▾ '; }
     </aside>
 
     <main>
+      <div id="advice"></div>
       <div id="decision"></div>
       <div id="messages" style="padding:12px 14px 0"></div>
       <div id="profit"></div>
@@ -678,7 +766,7 @@ const T={
   noReserve:'без запаса',sortLoad:'По загрузке',sortReserve:'По остатку запаса',
   sortPilot:'По имени персонажа',sortSystem:'По системе',
   cProc:'переработка',cMine:'добыча',crewHint:'Персонажи хранятся на сервере и не пропадают при перезаходе.',
-  planetSlots:'слотов планет',wholeRegion:'Весь регион',clearAll:'Снять всё',nothingChosen:'ничего не выбрано',systems:'систем',selectAll:'Выбрать все',pickProducts:'Выберите хотя бы один продукт',pickConst:'Выберите хотя бы одно созвездие',export:'Экспорт в Excel',shopping:'Список закупки: командные центры',shopTotal:'Всего командных центров',exportEmpty:'Сначала постройте план',exportFail:'Не удалось выгрузить файл',profitTitle:'Что выгоднее производить',collectedAgo:'снимок собран',minutesAgo:'мин назад',stale:'устарел',colProduct:'Продукт',colColonies:'Планет',colPerColony:'ISK / колония-час',colPerHour:'ISK / час',colPrice:'Цена за единицу',noPrice:'нет цены',noSnapshot:'Снимок цен не собран',fitsUpTo:'двойной шаблон помещается на планеты до',km:'км',suitableHere:'подходящих планет в системе',ofThem:'из них',decisionTitle:'План упёрся в размер планет',decisionText:'В выбранной домашней системе двойной шаблон не помещается ни на одну планету. Выберите, как поступить.',chooseOther:'Выбрать другую систему',useSingle:'Ставить по одному шаблону',singleNote:'планет и персонажей потребуется вдвое больше',savedPlans:'Сохранённые планы',save:'Сохранить',load:'Открыть',del:'Удалить',compare:'Сравнить',noSaved:'Пока ничего не сохранено',saveFirst:'Сначала постройте план',pickTwo:'Отметьте два плана для сравнения',cmpTitle:'Разница',colonies2:'колоний',chars2:'персонажей',peak2:'пиковая загрузка',onlyLeft:'Только в первом',onlyRight:'Только во втором',same:'Совпало'},
+  planetSlots:'слотов планет',wholeRegion:'Весь регион',clearAll:'Снять всё',nothingChosen:'ничего не выбрано',systems:'систем',selectAll:'Выбрать все',pickProducts:'Выберите хотя бы один продукт',pickConst:'Выберите хотя бы одно созвездие',export:'Экспорт в Excel',shopping:'Список закупки: командные центры',shopTotal:'Всего командных центров',exportEmpty:'Сначала постройте план',exportFail:'Не удалось выгрузить файл',profitTitle:'Что выгоднее производить',collectedAgo:'снимок собран',minutesAgo:'мин назад',stale:'устарел',colProduct:'Продукт',colColonies:'Планет',colPerColony:'ISK / колония-час',colPerHour:'ISK / час',colPrice:'Цена за единицу',noPrice:'нет цены',noSnapshot:'Снимок цен не собран',advDeficit:'Персонажей не хватает на эту цепочку',advSurplus:'Персонажей больше, чем нужно',advDeficitLead:'Полный цикл требует {need} колоний, а в пуле {have} слотов. Вот что поместится целиком:',advSurplusLead:'Выбранное занимает {need} колоний из {have}. Свободно {spare} — можно добавить:',advTake:'Взять',advIgnoreDeficit:'Строить как есть',advIgnoreSurplus:'Занять свободных добычей',advIgnoreDeficitHint:'план будет с дефицитом сырья',advIgnoreSurplusHint:'добыча сырья той же цепочки, по убыванию дефицитности',colonies3:'колоний',excess:'Добыча (избыток)',mSpread:'Разброс по системам',logi:'всего задействовано',systemsAvg:'систем на персонажа',sysOne:'система',sysFew:'системы',sysMany:'систем',logiGood:'колонии собраны компактно',logiPoor:'урожай придётся собирать в разъездах',mColonies:'Колоний в плане',mChars:'Персонажей занято',mPeak:'Самая нагруженная',mShort:'Не хватает персонажей',planClosed:'план закрыт',fitsUpTo:'двойной шаблон помещается на планеты до',km:'км',suitableHere:'подходящих планет в системе',ofThem:'из них',decisionTitle:'План упёрся в размер планет',decisionText:'В выбранной домашней системе двойной шаблон не помещается ни на одну планету. Выберите, как поступить.',chooseOther:'Выбрать другую систему',useSingle:'Ставить по одному шаблону',singleNote:'планет и персонажей потребуется вдвое больше',savedPlans:'Сохранённые планы',save:'Сохранить',load:'Открыть',del:'Удалить',compare:'Сравнить',noSaved:'Пока ничего не сохранено',saveFirst:'Сначала постройте план',pickTwo:'Отметьте два плана для сравнения',cmpTitle:'Разница',colonies2:'колоний',chars2:'персонажей',peak2:'пиковая загрузка',onlyLeft:'Только в первом',onlyRight:'Только во втором',same:'Совпало'},
  en:{brandSub:'colony planner',tabDash:'Dashboard',tabSetup:'Settings',
   chipData:'data',help:'Help',about:'About',sso:'Log in with EVE SSO',
   online:'online',offline:'offline',noData:'no data',
@@ -691,7 +779,7 @@ const T={
   noReserve:'no headroom',sortLoad:'By load',sortReserve:'By remaining headroom',
   sortPilot:'By character name',sortSystem:'By system',
   cProc:'processing',cMine:'extraction',crewHint:'Characters live on the server and survive a reload.',
-  planetSlots:'planet slots',wholeRegion:'Whole region',clearAll:'Clear all',nothingChosen:'nothing selected',systems:'systems',selectAll:'Select all',pickProducts:'Select at least one product',pickConst:'Select at least one constellation',export:'Export to Excel',shopping:'Shopping list: command centres',shopTotal:'Command centres in total',exportEmpty:'Build a plan first',exportFail:'Export failed',profitTitle:'What is most profitable to produce',collectedAgo:'snapshot taken',minutesAgo:'min ago',stale:'stale',colProduct:'Product',colColonies:'Planets',colPerColony:'ISK / colony-hour',colPerHour:'ISK / hour',colPrice:'Unit price',noPrice:'no price',noSnapshot:'No price snapshot yet',fitsUpTo:'a double template fits planets up to',km:'km',suitableHere:'suitable planets in this system',ofThem:'of them',decisionTitle:'The plan hit planet size limits',decisionText:'No planet in the chosen home system fits a double template. Pick how to proceed.',chooseOther:'Pick another system',useSingle:'Use single templates',singleNote:'twice as many planets and characters will be needed',savedPlans:'Saved plans',save:'Save',load:'Open',del:'Delete',compare:'Compare',noSaved:'Nothing saved yet',saveFirst:'Build a plan first',pickTwo:'Tick two plans to compare',cmpTitle:'Difference',colonies2:'colonies',chars2:'characters',peak2:'peak load',onlyLeft:'Only in the first',onlyRight:'Only in the second',same:'Unchanged'}
+  planetSlots:'planet slots',wholeRegion:'Whole region',clearAll:'Clear all',nothingChosen:'nothing selected',systems:'systems',selectAll:'Select all',pickProducts:'Select at least one product',pickConst:'Select at least one constellation',export:'Export to Excel',shopping:'Shopping list: command centres',shopTotal:'Command centres in total',exportEmpty:'Build a plan first',exportFail:'Export failed',profitTitle:'What is most profitable to produce',collectedAgo:'snapshot taken',minutesAgo:'min ago',stale:'stale',colProduct:'Product',colColonies:'Planets',colPerColony:'ISK / colony-hour',colPerHour:'ISK / hour',colPrice:'Unit price',noPrice:'no price',noSnapshot:'No price snapshot yet',advDeficit:'Not enough characters for this chain',advSurplus:'More characters than needed',advDeficitLead:'A full cycle needs {need} colonies, the pool has {have} slots. These fit entirely:',advSurplusLead:'Your choice takes {need} of {have} colonies. {spare} free — you could add:',advTake:'Take',advIgnoreDeficit:'Build as is',advIgnoreSurplus:'Put spare on extraction',advIgnoreDeficitHint:'the plan will report a raw material shortage',advIgnoreSurplusHint:'extraction of the same chain, scarcest first',colonies3:'colonies',excess:'Extraction (surplus)',mSpread:'Systems per character',logi:'systems used in total',systemsAvg:'systems each',sysOne:'system',sysFew:'systems',sysMany:'systems',logiGood:'colonies are compact',logiPoor:'harvesting will need travel',mColonies:'Colonies in the plan',mChars:'Characters used',mPeak:'Most loaded',mShort:'Characters missing',planClosed:'plan is complete',fitsUpTo:'a double template fits planets up to',km:'km',suitableHere:'suitable planets in this system',ofThem:'of them',decisionTitle:'The plan hit planet size limits',decisionText:'No planet in the chosen home system fits a double template. Pick how to proceed.',chooseOther:'Pick another system',useSingle:'Use single templates',singleNote:'twice as many planets and characters will be needed',savedPlans:'Saved plans',save:'Save',load:'Open',del:'Delete',compare:'Compare',noSaved:'Nothing saved yet',saveFirst:'Build a plan first',pickTwo:'Tick two plans to compare',cmpTitle:'Difference',colonies2:'colonies',chars2:'characters',peak2:'peak load',onlyLeft:'Only in the first',onlyRight:'Only in the second',same:'Unchanged'}
 };
 const t=k=>(T[lang]||T.ru)[k]||k;
 
@@ -857,7 +945,7 @@ function renderDash(){
           <div>
             <div class="pilot-name">${p.character}</div>
             <div class="sub">
-              <span>${p.role}</span>
+              <span class="rolebadge ${p.role.includes('избыток')?'excess':p.role.includes('Добыча')?'mine':'proc'}">${p.role}</span>
               <span class="sysbadge">${p.system} ${p.planet}</span>
               <span class="sec" style="color:${secColor(p.planet_type)}">${p.planet_type}</span>
               <span class="num">${Math.round(p.planet_radius_km).toLocaleString('ru')} км</span>
@@ -941,6 +1029,67 @@ async function loadSystemPlanets(){
     systemPlanets=d.status==='success'?(d.planets||[]):[];
   }catch(e){ systemPlanets=[]; }
   renderThresholds();
+}
+
+/* ── Подсказка по вместимости пула ───────────────────────────
+   Показывается ДО построения плана: узнавать о нехватке персонажей
+   из наполовину построенного плана — значит потратить время впустую.
+   Расчёт делает сервер (domain/advice.py), здесь только показ. */
+let adviceData=null;
+
+async function loadAdvice(){
+  const targets=picked('products');
+  const box=document.getElementById('advice');
+  if(!targets.length){ box.innerHTML=''; adviceData=null; return; }
+  try{
+    adviceData=await (await fetch(`${API}/advice`,{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({target_products:targets})})).json();
+  }catch(e){ adviceData=null; }
+  renderAdvice();
+}
+
+function fmt(template,values){
+  return Object.entries(values).reduce((t,[k,v])=>t.replace(`{${k}}`,`<b>${v}</b>`),template);
+}
+
+function renderAdvice(){
+  const box=document.getElementById('advice'); if(!box) return;
+  const a=adviceData;
+  if(!a || a.status!=='success' || !['deficit','surplus'].includes(a.verdict)){
+    box.innerHTML=''; return;
+  }
+  const deficit=a.verdict==='deficit';
+  const list=deficit?a.alternatives:a.additions;
+
+  const rows=(list||[]).map(s=>`
+    <div class="nm">${s.product} <span class="tier ${s.tier}">${s.tier}</span></div>
+    <div class="num">${s.colonies} ${t('colonies3')}</div>
+    <div class="num isk">${s.isk_per_colony_hour?isk(s.isk_per_colony_hour):'—'}</div>
+    <div><button onclick="takeSuggestion('${s.product.replace(/'/g,"\\'")}',${deficit})">
+      ${t('advTake')}</button></div>`).join('');
+
+  box.innerHTML=`<div class="advice ${a.verdict}">
+    <h4>${deficit?t('advDeficit'):t('advSurplus')}</h4>
+    <p class="lead">${deficit
+      ? fmt(t('advDeficitLead'),{need:a.needed_colonies,have:a.capacity.total_slots})
+      : fmt(t('advSurplusLead'),{need:a.needed_colonies,have:a.capacity.total_slots,spare:a.spare_slots})}</p>
+    ${rows?`<div class="sugg">${rows}</div>`:''}
+    ${(a.notes||[]).map(n=>`<p class="lead" style="color:var(--dim);margin:8px 0 0">${n}</p>`).join('')}
+    <div class="foot">
+      <button class="mini" onclick="calculate(false, ${!deficit})">
+        ${deficit?t('advIgnoreDeficit'):t('advIgnoreSurplus')}</button>
+      <span class="hint">${deficit?t('advIgnoreDeficitHint'):t('advIgnoreSurplusHint')}</span>
+    </div>
+  </div>`;
+}
+
+/* Взять предложенный продукт: при дефиците — вместо выбранного,
+   при избытке — вдобавок к нему. */
+function takeSuggestion(product, replace){
+  if(replace) chosen.products.clear();
+  chosen.products.add(product);
+  renderProducts(); loadAdvice();
 }
 
 /* ── Выбор при упоре в размер планет ──────────────────────────
@@ -1058,7 +1207,7 @@ async function runCompare(){
    Ранжирование считает сервер (domain/profit.py) по ISK на колонию
    в час. Здесь только показ: если бы браузер считал сам, два места
    могли бы давать разные ответы. */
-let profitData=null, lastWarnings=[], lastAssumptions=[];
+let profitData=null, lastWarnings=[], lastAssumptions=[], lastLogistics=null;
 
 async function loadProfit(){
   try{ profitData=await (await fetch(`${API}/market/best-product`)).json(); }
@@ -1091,7 +1240,7 @@ function renderProfit(){
     <tbody>${rows.map((r,i)=>`
       <tr class="${i===0&&r.isk_per_colony_hour?'best':''}${r.isk_per_colony_hour?'':' noprice'}">
         <td class="idx num">${i+1}</td>
-        <td class="name">${r.product}<span class="tierbadge">${r.tier}</span></td>
+        <td class="name">${r.product} <span class="tier ${r.tier}">${r.tier}</span></td>
         <td class="r num">${r.price_per_unit?isk(r.price_per_unit):t('noPrice')}</td>
         <td class="r num">${r.total_colonies}</td>
         <td class="r num">${isk(r.revenue_per_hour)}</td>
@@ -1302,6 +1451,42 @@ const DOC={
     если править лист вручную.</div>
    </div>
 
+   <h3>Если персонажей не хватает или слишком много</h3>
+   <p>Как только вы отметили целевые продукты, программа считает, поместится ли
+   полный цикл в ваш пул. Учитываются не только слоты планет, но и прокачка:
+   добывающий шаблон требует Command Center Upgrades IV, и «слотов хватает»
+   ещё не значит «поместится».</p>
+   <p>Если <b>не хватает персонажей</b>, предлагаются цепочки, которые поместятся
+   целиком, по убыванию выгоды. Среди них могут быть продукты тиром ниже —
+   это нормальный ответ: делать P3 непрерывно выгоднее, чем P4 с простоями.
+   Можно и проигнорировать: кнопка «Строить как есть» построит план, который
+   честно сообщит о дефиците сырья.</p>
+   <p>Если <b>персонажей больше, чем нужно</b>, предлагаются цепочки выше тиром,
+   помещающиеся в остаток, либо дополнительные линии того же или меньшего тира.
+   Отказ тоже возможен: кнопка «Занять свободных добычей» пустит их на добычу
+   сырья вашей же цепочки, начиная с самого дефицитного в выбранных
+   констелляциях. Такие колонии помечены в плане как «Добыча (избыток)» —
+   это не часть расчётной потребности, а загрузка простаивающих.</p>
+
+   <h3>Логистика: почему колонии кучкуются</h3>
+   <p>Добывающие колонии одного персонажа планировщик старается держать в одной
+   системе. Разница практическая: шесть колоний в одной системе собираются за
+   один заход, шесть в разных — за шесть перелётов.</p>
+   <p>Для этого системы, где встречается сразу несколько нужных видов сырья,
+   получают приоритет над системами с одним. Плотность остаётся вторым
+   критерием: богатое месторождение в одиночной системе может перевесить.</p>
+   <p>В карточке «Разброс по системам» видно, сколько систем в среднем приходится
+   на персонажа. Значение около единицы означает, что урожай собирается компактно;
+   если оно заметно больше двух, стоит присмотреться к набору созвездий.</p>
+
+   <h3>Как читать цвета</h3>
+   <p>Цвет здесь не украшение, а способ не читать подписи. Плашка тира окрашена
+   по переделу: холодные оттенки у сырья и P1, теплее к P3 и P4. Роль колонии
+   тоже плашкой — бирюзовая добыча, оранжевая переработка.</p>
+   <p>Числа окрашены по смыслу: зелёное значит запас есть, янтарное — на исходе,
+   красное — предел. Лучшая строка в таблице выгоды отмечена янтарной полосой
+   слева, как и самая напряжённая колония в плане.</p>
+
    <h3>Сохранённые планы</h3>
    <p>План можно сохранить под именем и вернуться к нему позже: планы лежат на сервере,
    поэтому переживают перезагрузку и открываются с другого устройства.</p>
@@ -1373,6 +1558,41 @@ const DOC={
     plan, summary and headroom check. The summary uses formulas, so it recalculates
     if you edit the sheet by hand.</div>
    </div>
+
+   <h3>If you have too few or too many characters</h3>
+   <p>As soon as you tick the target products, the app checks whether a full cycle
+   fits your pool. It counts not only planet slots but skills: the extraction
+   template needs Command Center Upgrades IV, so “enough slots” does not yet
+   mean “it fits”.</p>
+   <p>If there are <b>not enough characters</b>, you are offered chains that fit
+   entirely, ranked by profit. Some may be a lower tier — that is a sound answer:
+   running P3 continuously beats P4 with idle time. You can ignore it: “Build as
+   is” produces a plan that honestly reports the raw material shortage.</p>
+   <p>If there are <b>more characters than needed</b>, you are offered higher-tier
+   chains that fit the remainder, or extra lines of the same or lower tier. You can
+   decline too: “Put spare on extraction” sends them to mine your own chain's raw
+   materials, starting with the scarcest in the chosen constellations. Such colonies
+   are marked “Extraction (surplus)” — they are not part of the computed demand but
+   a way to keep idle characters busy.</p>
+
+   <h3>Logistics: why colonies cluster</h3>
+   <p>The planner tries to keep one character's extraction colonies in the same
+   system. The difference is practical: six colonies in one system are collected in
+   a single trip, six in different systems take six trips of travel.</p>
+   <p>To that end, systems holding several of the needed raw materials outrank systems
+   holding just one. Density remains the second criterion: a rich deposit in a lone
+   system can still win.</p>
+   <p>The “Systems per character” card shows the average. A value near one means the
+   harvest is compact; noticeably above two is a hint to revisit your constellations.</p>
+
+   <h3>How to read the colours</h3>
+   <p>Colour here is not decoration but a way to avoid reading labels. The tier badge
+   is coloured by processing stage: cool shades for raw materials and P1, warmer
+   towards P3 and P4. The colony role is a badge too — teal for extraction,
+   orange for processing.</p>
+   <p>Numbers are coloured by meaning: green means there is headroom, amber means it
+   is running out, red means the limit. The best row in the profitability table is
+   marked with an amber bar on the left, as is the most strained colony in the plan.</p>
 
    <h3>Saved plans</h3>
    <p>A plan can be saved under a name and reopened later: saved plans live on the server,
@@ -1586,6 +1806,7 @@ function togglePick(key,value,on){
   on?chosen[key].add(value):chosen[key].delete(value);
   key==='products'?renderProducts():renderConstellations();
   if(key==='constellations') loadSystems();
+  if(key==='products') loadAdvice();
 }
 function clearPick(key){ chosen[key].clear();
   key==='products'?renderProducts():renderConstellations();
@@ -1613,14 +1834,15 @@ async function loadSystems(){
   loadSystemPlanets();
 }
 
-async function calculate(allowSingle){
+async function calculate(allowSingle, surplusMining){
   if(!picked('products').length){ msg(t('pickProducts'),true); return; }
   if(!picked('constellations').length){ msg(t('pickConst'),true); return; }
   const body={constellations:picked('constellations'),
     factory_sys:document.getElementById('factorySys').value,
     target_products:picked('products'),
     extraction_margin:parseFloat(document.getElementById('margin').value)||1.0,
-    allow_single_template_fallback:!!allowSingle};
+    allow_single_template_fallback:!!allowSingle,
+    surplus_mining:!!surplusMining};
   document.getElementById('messages').innerHTML='';
   document.getElementById('decision').innerHTML='';
   const r=await fetch(`${API}/calculate`,{method:'POST',headers:{'Content-Type':'application/json'},
@@ -1628,7 +1850,7 @@ async function calculate(allowSingle){
   const d=await r.json();
   if(d.status!=='success'){ msg(d.message,true); return; }
 
-  plan=d.data||[]; staffing=d.staffing||{};
+  plan=d.data||[]; staffing=d.staffing||{}; lastLogistics=d.logistics||null;
   lastRequest=body; currentPlanId=null;
   lastWarnings=d.warnings||[]; lastAssumptions=d.assumptions||[];
   renderMessages(lastWarnings,lastAssumptions);
@@ -1664,10 +1886,13 @@ function renderCrew(){
   });
   box.innerHTML=crew.map(c=>{
     const b=busy[c.id]||{mine:0,proc:0}, used=b.mine+b.proc;
-    return `<div title="CCU ${c.ccu} · IC ${c.ic} · ${c.planet_slots} ${t('planetSlots')}">
+    const spread=(lastLogistics&&lastLogistics.characters||[]).find(x=>x.character===c.name);
+    const sys=spread?` · ${plural(spread.system_count,t('sysOne'),t('sysFew'),t('sysMany'))}`:'';
+    return `<div title="CCU ${c.ccu} · IC ${c.ic} · ${c.planet_slots} ${t('planetSlots')}${
+      spread?' · '+spread.systems.join(', '):''}">
       <div class="pilot-lg" style="width:22px;height:22px;font-size:9px">${initials(c.name)}</div>
       <span>${c.name}</span>
-      <span class="lv">${used}/${c.planet_slots}</span></div>`;
+      <span class="lv">${used}/${c.planet_slots}${sys}</span></div>`;
   }).join('')
   + `<div style="color:var(--dim);font-size:11px;margin-top:8px">${t('crewHint')}</div>`;
 }
@@ -1677,18 +1902,27 @@ function renderAnswers(){
   const worst=plan.reduce((w,r)=>Math.max(r.cpu_percent,r.pg_percent)>Math.max(w.cpu_percent||0,w.pg_percent||0)?r:w,{});
   const short=Object.values(staffing).reduce((n,s)=>n+(s.characters_needed||0),0);
   const cards=[
-    {label:'Колоний в плане',value:plan.length,note:`${mining.length} добыча · ${plan.length-mining.length} переработка`},
-    {label:'Персонажей занято',value:new Set(plan.map(r=>r.char_id)).size,
+    {label:t('mColonies'),value:plan.length,
+     note:`${mining.length} ${t('mining')} · ${plan.length-mining.length} ${t('processing')}`},
+    {label:t('mChars'),value:new Set(plan.map(r=>r.char_id)).size,
      note:`на ${plural(new Set(plan.map(r=>r.system+r.planet)).size,'планете','планетах','планетах')}`},
-    {label:'Самая нагруженная',value:worst.pg_percent?Math.max(worst.cpu_percent,worst.pg_percent).toFixed(0):'—',
+    {label:t('mPeak'),value:worst.pg_percent?Math.max(worst.cpu_percent,worst.pg_percent).toFixed(0):'—',
      unit:'%',warn:Math.max(worst.cpu_percent||0,worst.pg_percent||0)>=90,
+     bad:Math.max(worst.cpu_percent||0,worst.pg_percent||0)>=95,
      note:worst.system?`${worst.system} ${worst.planet}`:'нет данных'},
-    {label:'Не хватает персонажей',value:short||'0',warn:short>0,
-     note:short?Object.entries(staffing).map(([r,s])=>`${r}: CCU ${s.min_ccu_level}+`).join(' · '):'план закрыт'}
+    {label:t('mSpread'),
+     value:(lastLogistics&&lastLogistics.avg_systems_per_character)||'—',
+     note:lastLogistics
+        ? `${t('logi')} · ${plural(lastLogistics.systems_total,t('sysOne'),t('sysFew'),t('sysMany'))}`
+        : '',
+     good:lastLogistics&&lastLogistics.avg_systems_per_character<=1.5,
+     warn:lastLogistics&&lastLogistics.avg_systems_per_character>2.5},
+    {label:t('mShort'),value:short||'0',bad:short>0,good:!short,accent:short>0,
+     note:short?Object.entries(staffing).map(([r,s])=>`${r}: CCU ${s.min_ccu_level}+`).join(' · '):t('planClosed')}
   ];
   document.getElementById('answers').innerHTML=cards.map(c=>`
-    <div class="answer"><div class="label">${c.label}</div>
-      <div class="value${c.warn?' warn':''}">${c.value}${c.unit?`<span class="unit-s">${c.unit}</span>`:''}</div>
+    <div class="answer${c.accent?' accent':''}"><div class="label">${c.label}</div>
+      <div class="value${c.bad?' bad':c.warn?' warn':c.good?' good':''}">${c.value}${c.unit?`<span class="unit-s">${c.unit}</span>`:''}</div>
       <div class="note">${c.note}</div></div>`).join('');
 }
 
@@ -1700,10 +1934,11 @@ function renderTable(){
     return `<tr>
       <td class="idx num">${i+1}</td>
       <td><div style="color:var(--bright)">${r.character}</div>
-          <div class="parts" style="margin:0">${r.role}</div></td>
+          <div style="margin-top:2px"><span class="rolebadge ${r.role.includes('избыток')?'excess':r.role.includes('Добыча')?'mine':'proc'}">${r.role}</span></div></td>
       <td><div class="num">${r.system} ${r.planet}</div>
           <div class="parts" style="margin:0">${r.planet_type} · ${Math.round(r.planet_radius_km).toLocaleString('ru')} км</div></td>
-      <td>${r.res_out}<div class="parts" style="margin:0">${r.structures}${r.res_in?' ← '+r.res_in:''}</div></td>
+      <td><span style="color:var(--read)">${r.res_out}</span>
+          <div class="parts" style="margin:0">${r.structures}${r.res_in?' ← '+r.res_in:''}</div></td>
       <td><div class="stack"><i class="s-str" style="width:${pgb.structures||0}%"></i>
           <i class="s-hed" style="width:${pgb.heads||0}%"></i>
           <i class="s-lnk" style="width:${pgb.links||0}%"></i></div>
