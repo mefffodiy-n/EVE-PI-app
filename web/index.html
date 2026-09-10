@@ -203,6 +203,14 @@ button { font-family:inherit; }
             display:grid; place-items:center; font-size:11px; font-weight:600; color:#8fa3bd; }
 .pilot-lg img { width:100%; height:100%; object-fit:cover; }
 .pilot-name { color:var(--bright); font-weight:500; }
+.pilot-name .skills { color:var(--dim); font-weight:400; font-size:11px;
+  font-family:'IBM Plex Mono',monospace; margin-left:8px; }
+.sub .synced { color:var(--calm); border:1px solid var(--calm); border-radius:3px;
+  padding:0 5px; font-size:10px; text-transform:uppercase; letter-spacing:.04em;
+  white-space:nowrap; }
+.extractor-left { font-family:'IBM Plex Mono',monospace; color:var(--calm); }
+.extractor-left.soon { color:var(--amber); }
+.extractor-left.over { color:var(--alarm); font-weight:600; }
 .sub { color:var(--dim); font-size:12px; display:flex; gap:8px; align-items:center; margin-top:1px; }
 .sysbadge { background:#1a2332; border-radius:3px; padding:1px 6px;
             font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--read); }
@@ -824,6 +832,8 @@ const T={
   themeTitle:'Тема',viewList:'Список по персонажам',viewGrid:'Сетка',sortTitle:'Сортировка',loadLbl:'Загрузка',
   inGameColonies:'Мои колонии в игре',cycOver:'программа завершена',cycIdle:'программа не запущена',
   hUnit:'ч',minUnit:'мин',pPin:['пин','пина','пинов'],
+  progEnds:'до конца программы экстрактора',syncedColony:'колония в игре',
+  cycNoFactory:'ESI не отдаёт состояние фабрик — только экстракторы',
   role_mine:'Добыча',role_mine_surplus:'Добыча (избыток)',role_proc:'Переработка',role_direct_p2:'Прямое P2',
   factW:'фабрик',pFactory:['фабрика','фабрики','фабрик']},
  en:{brandSub:'colony planner',tabDash:'Dashboard',tabSetup:'Settings',
@@ -862,6 +872,8 @@ const T={
   themeTitle:'Theme',viewList:'By character',viewGrid:'Grid',sortTitle:'Sort',loadLbl:'Load',
   inGameColonies:'My in-game colonies',cycOver:'program ended',cycIdle:'no program running',
   hUnit:'h',minUnit:'min',pPin:['pin','pins','pins'],
+  progEnds:'until the extraction program ends',syncedColony:'built in game',
+  cycNoFactory:'ESI does not expose factory state — extractors only',
   role_mine:'Extraction',role_mine_surplus:'Extraction (surplus)',role_proc:'Processing',role_direct_p2:'Direct P2',
   factW:'factories',pFactory:['factory','factories','factories']}
 };
@@ -1350,6 +1362,16 @@ function fmtLeft(ms){
   return h>=1 ? `${h} ${t('hUnit')} ${m} ${t('minUnit')}` : `${m} ${t('minUnit')}`;
 }
 
+/* Найти реальную колонию под строку расчётного плана: тот же персонаж,
+   система и номер планеты. planet_index сборщик кладёт из имени планеты. */
+function matchColony(p){
+  // p.planet приходит из CSV как «5.0» — сравниваем числа.
+  const idx=parseInt(p.planet,10);
+  return coloniesData.find(c=>
+    c.character===p.character && c.system_name===p.system &&
+    c.planet_index===idx) || null;
+}
+
 function renderColonies(){
   const box=document.getElementById('colonies'); if(!box) return;
   if(!coloniesData.length){ box.innerHTML=''; return; }
@@ -1369,15 +1391,21 @@ function renderColonies(){
   box.innerHTML=`<div class="colonies"><h3>${t('inGameColonies')}</h3>${rows}</div>`;
 }
 
-/* Живой отсчёт: перерисовываем только числа, не весь блок. */
+/* Живой отсчёт: перерисовываем только числа, не весь блок.
+   Работает и для блока «Мои колонии», и для таймера в панели колонии. */
 setInterval(()=>{
   const now=Date.now();
-  document.querySelectorAll('#colonies .left[data-exp]').forEach(el=>{
+  document.querySelectorAll('[data-exp]').forEach(el=>{
     const left=+el.dataset.exp-now;
     el.textContent=fmtLeft(left);
     const row=el.closest('.colrow');
-    row.classList.toggle('soon', left>0 && left<7200000);
-    row.classList.toggle('over', left<=0);
+    if(row){
+      row.classList.toggle('soon', left>0 && left<7200000);
+      row.classList.toggle('over', left<=0);
+    } else {
+      el.classList.toggle('soon', left>0 && left<7200000);
+      el.classList.toggle('over', left<=0);
+    }
   });
 }, 60000);
 
@@ -1467,6 +1495,9 @@ function openColony(id){
   currentColony=id;
   const pgb=p.pg_breakdown||{};
   const planetId=ids['planet:'+p.planet_type];
+  const real=matchColony(p);                        // реальная колония из ESI или null
+  const char=crew.find(c=>c.name===p.character);    // синхронизированные скиллы персонажа
+  const expMs=real&&real.nearest_expiry?Date.parse(real.nearest_expiry):null;
 
   // Разворачиваем состав в отдельные строки: в игре каждая структура —
   // своя строка со своими показателями, а не одна плашка с числом.
@@ -1500,10 +1531,16 @@ function openColony(id){
         <div><div class="lbl">${t('capContent')}</div><div class="meta">${t('noData')}</div></div>
       </div>`;
     } else if(isECU){
+      const cyc = expMs!=null
+        ? `<div class="val extractor-left" data-exp="${expMs}">${fmtLeft(expMs-Date.now())}</div>
+           <div class="meta">${t('progEnds')}</div>`
+        : real
+          ? `<div class="meta">${t('cycIdle')}</div>`
+          : `<div class="meta">${t('cycNone')}</div>`;
       fields=`<div class="cols2">
         <div><div class="lbl">${t('cycNow')}</div>
           <div class="meter"><i style="width:0%;background:var(--ring-extract)"></i></div>
-          <div class="meta">${t('cycNone')}</div></div>
+          ${cyc}</div>
         <div><div class="lbl">${t('extractsW')}</div>
           <div class="val">${p.res_in||'—'}</div>
           <div class="meta">${t('heads10')}</div></div>
@@ -1513,7 +1550,7 @@ function openColony(id){
       fields=`<div class="cols2">
         <div><div class="state-wait">${t('cycUnknown')}</div>
           <div class="meter"><i style="width:0%"></i></div>
-          <div class="meta">${t('afterGame')}</div></div>
+          <div class="meta">${real?t('cycNoFactory'):t('afterGame')}</div></div>
         <div><div class="lbl">${t('producesW')}</div>
           <div class="val">${p.res_out}</div>
           <div class="lbl" style="margin-top:5px">${t('inputW')}</div>
@@ -1536,12 +1573,13 @@ function openColony(id){
     <div class="cp-head">
       ${orb(p,58)}
       <div>
-        <div class="pilot-name">${p.character}</div>
+        <div class="pilot-name">${p.character}${char?` <span class="skills">CCU ${char.ccu} · IC ${char.ic}</span>`:''}</div>
         <div class="sub">
           <span class="sysbadge">${p.system} ${p.planet}</span>
           <span class="sec" style="color:${secColor(p.planet_type)}">${p.planet_type}</span>
           <span class="num">${nloc(Math.round(p.planet_radius_km))} ${t('km')}</span>
           <span>${roleLabel(p)}</span>
+          ${real?`<span class="synced">${t('syncedColony')}${real.upgrade_level?` · CC${real.upgrade_level}`:''}</span>`:''}
         </div>
       </div>
       <button class="back" onclick="closeColony()">${t('back')}</button>

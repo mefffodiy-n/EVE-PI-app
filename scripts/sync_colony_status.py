@@ -32,6 +32,35 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 
+_ROMAN = {"I": 1, "V": 5, "X": 10}
+
+
+def _roman_to_int(text: str) -> int:
+    """«IV» → 4. Планет в системе EVE не больше ~13, хватает I..XIII."""
+    total = 0
+    prev = 0
+    for ch in reversed(text.strip().upper()):
+        value = _ROMAN.get(ch, 0)
+        if value == 0:
+            return 0
+        total += -value if value < prev else value
+        prev = max(prev, value)
+    return total
+
+
+def planet_index(planet_name: str, system_name: str) -> int:
+    """
+    Номер планеты из её имени: «Tanoo IV» при системе «Tanoo» → 4.
+    Совпадает с колонкой Planet в planet_industry.csv, по которой
+    фронтенд сопоставляет колонию со строкой плана.
+    """
+    if system_name and planet_name.startswith(system_name):
+        suffix = planet_name[len(system_name):].strip()
+    else:
+        suffix = planet_name.rsplit(" ", 1)[-1]
+    return _roman_to_int(suffix)
+
+
 def _parse_iso(value) -> datetime | None:
     if not value:
         return None
@@ -64,6 +93,23 @@ def _planet_name(client, planet_id: int) -> str:
     return f"планета {planet_id}"
 
 
+def _system_name(client, system_id: int, cache: dict) -> str:
+    """Имя системы по solar_system_id. Кэш на один прогон сборщика."""
+    from scripts.esi_client import EsiError
+
+    if system_id in cache:
+        return cache[system_id]
+    name = ""
+    try:
+        response = client.get(f"/universe/systems/{system_id}/")
+        if not response.from_cache and isinstance(response.data, dict):
+            name = str(response.data.get("name") or "")
+    except EsiError:
+        pass
+    cache[system_id] = name
+    return name
+
+
 def sync_one(client, session, character) -> str:
     """
     Обновить колонии одного персонажа. 'ok' | 'skipped' | 'error'.
@@ -79,6 +125,7 @@ def sync_one(client, session, character) -> str:
         return "skipped"
 
     cid = character.character_id
+    system_cache: dict[int, str] = {}
     try:
         listing = client.get(f"/characters/{cid}/planets/", token=token)
         planets = [] if listing.from_cache else (listing.data or [])
@@ -90,9 +137,14 @@ def sync_one(client, session, character) -> str:
             detail = client.get(f"/characters/{cid}/planets/{planet_id}/", token=token)
             expiry = None if detail.from_cache else nearest_expiry(detail.data or {})
 
+            name = _planet_name(client, planet_id)
+            system = _system_name(client, int(entry.get("solar_system_id", 0)), system_cache)
+
             row = session.get(Colony, (cid, planet_id))
             fields = dict(
-                planet_name=_planet_name(client, planet_id),
+                planet_name=name,
+                system_name=system,
+                planet_index=planet_index(name, system),
                 planet_type=str(entry.get("planet_type", "")),
                 upgrade_level=int(entry.get("upgrade_level", 0)),
                 num_pins=int(entry.get("num_pins", 0)),
