@@ -331,8 +331,10 @@ pi-director/
 - [x] `scripts/refresh_market_prices.py` — сбор цен по расписанию, а не по
       действию пользователя. Плюс `scripts/scheduler.py` для запуска обоих
       сборщиков одним процессом, без внешних зависимостей.
-- [ ] `refresh_tokens` — фоновое обновление ESI refresh-токенов.
-      **Заблокировано Фазой 3:** обновлять нечего, пока нет самих токенов.
+- [ ] `refresh_tokens` — фоновое обновление ESI-токенов. Инфраструктура
+      готова (Фаза 3: `esi_sso.refresh`, таблица `credentials`); нужен сам
+      джоб в `scheduler.py`. Реально обновлять нечего, пока никто не вошёл
+      через настоящий SSO.
 - [x] Защита от бана: клиент читает `X-ESI-Error-Limit-Remain` и сам
       останавливается за 10 ошибок до нуля — ноль означает 420 на всех
       маршрутах, включая исправные.
@@ -357,13 +359,22 @@ pi-director/
       таблицу `plans`. Публичный интерфейс (save/list/load/delete/compare)
       не изменился — `api/` и тесты править не пришлось. Старые json-файлы
       автоматически не импортируются.
-- [ ] PKCE OAuth-flow (замена фиктивного `/api/auth/callback`), включается по появлению
-      `client_id`/`client_secret` от developers.eveonline.com — до этого момента
-      разработка идёт на `seed_dev_characters.py` без потери темпа.
-- [ ] `sync_character_skills` — реальные уровни CCU/IC вместо ручных данных в БД.
+- [x] PKCE OAuth-flow написан: `api/blueprints/auth.py` (`/api/auth/login-url`
+      и `/api/auth/callback`), `scripts/esi_sso.py` — единая точка обращений к
+      `login.eveonline.com` (PKCE-пара, обмен кода, refresh, проверка JWT по
+      JWKS: подпись, issuer, audience `client_id` + «EVE Online», срок).
+      Callback пишет персонажа `source="esi"` и зашифрованные токены. Без
+      `PI_ESI_CLIENT_ID` и `PI_TOKEN_KEY` эндпоинты отдают 503 — ожидаемо,
+      разработка идёт на dev-заглушках. **Осталось получить `client_id`.**
+- [x] Шифрование токенов: `infra/crypto.py` (Fernet), таблица `credentials`
+      (access/refresh лежат зашифрованными). Multi-tenant — колонки
+      `account_id` в `characters` и `plans` заведены, пока NULL.
+- [ ] `refresh_tokens` в расписании (`scripts/scheduler.py`) — обновлять
+      access-токены по refresh до истечения. Инфраструктура готова
+      (`esi_sso.refresh`, таблица `credentials`), нужен сам джоб.
+- [ ] `sync_character_skills` — реальные уровни CCU/IC вместо нулей после
+      первого входа.
 - [ ] `sync_colony_status` — реальный статус колоний/экстракторов (по расписанию).
-- [ ] Шифрование токенов (отдельная таблица `credentials`), multi-tenant
-      (колонка `account_id` в `characters` уже заведена, пока NULL).
 - [x] Плавный переход заложен: `load_characters()` читает из таблицы `characters`
       независимо от источника, `planner.py`/`capacity.py` про источник не знают.
 
