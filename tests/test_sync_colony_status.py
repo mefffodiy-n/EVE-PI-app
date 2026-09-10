@@ -29,22 +29,28 @@ def _iso(minutes):
     return (datetime.now(timezone.utc) + timedelta(minutes=minutes)).isoformat()
 
 
+SYSTEM_ID = 30000142
+SYSTEM_NAME = "Jita"
+
+
 def _opener(planets: dict):
     """
     planets: {planet_id: {"type": str, "level": int, "pins": [expiry_iso|None], "name": str}}
     """
     listing = [
         {"planet_id": pid, "planet_type": p["type"],
-         "upgrade_level": p["level"], "num_pins": len(p["pins"]), "solar_system_id": 30000142}
+         "upgrade_level": p["level"], "num_pins": len(p["pins"]), "solar_system_id": SYSTEM_ID}
         for pid, p in planets.items()
     ]
 
     def opener(url, headers):
-        m = re.search(r"/planets/(\d+)/$", url)
+        m = re.search(r"/(\d+)/$", url)
         if url.endswith("/planets/"):
             body = listing
+        elif "/universe/systems/" in url:
+            body = {"name": SYSTEM_NAME, "system_id": SYSTEM_ID}
         elif "/universe/planets/" in url:
-            body = {"name": planets[int(m.group(1))]["name"], "system_id": 30000142}
+            body = {"name": planets[int(m.group(1))]["name"], "system_id": SYSTEM_ID}
         elif m:
             pins = [{"pin_id": i, "expiry_time": e} for i, e in enumerate(planets[int(m.group(1))]["pins"]) if e]
             body = {"pins": pins, "links": [], "routes": []}
@@ -74,21 +80,37 @@ class TestNearestExpiry:
         assert sync.nearest_expiry({"pins": [{"pin_id": 1}]}) is None
 
 
+class TestPlanetIndex:
+    @pytest.mark.parametrize("name,idx", [
+        ("Jita IV", 4), ("Jita I", 1), ("Jita IX", 9), ("Jita XIII", 13),
+        ("Serpentis Prime IV", 4),
+    ])
+    def test_from_name(self, name, idx):
+        sysname = name.rsplit(" ", 1)[0]
+        assert sync.planet_index(name, sysname) == idx
+
+    def test_unparseable_is_zero(self):
+        assert sync.planet_index("Weird Moon 3", "Weird") == 0
+
+
 class TestSync:
     def test_writes_colonies_with_name_and_expiry(self):
         _add_esi_character()
         soon = _iso(90)
         client = EsiClient(opener=_opener({
-            40009077: {"type": "barren", "level": 4, "pins": [soon, _iso(400)], "name": "Tanoo I"},
-            40009078: {"type": "temperate", "level": 3, "pins": [], "name": "Tanoo II"},
+            40009077: {"type": "barren", "level": 4, "pins": [soon, _iso(400)], "name": "Jita IV"},
+            40009078: {"type": "temperate", "level": 3, "pins": [], "name": "Jita V"},
         }))
         assert sync.main(client=client) == 0
         with session_scope() as s:
             rows = {r.planet_id: r for r in s.scalars(__import__("sqlalchemy").select(Colony)).all()}
-            assert rows[40009077].planet_name == "Tanoo I"
+            assert rows[40009077].planet_name == "Jita IV"
+            assert rows[40009077].system_name == "Jita"
+            assert rows[40009077].planet_index == 4
             assert rows[40009077].planet_type == "barren"
             assert abs((rows[40009077].nearest_expiry - datetime.fromisoformat(soon)).total_seconds()) < 2
             assert rows[40009078].nearest_expiry is None
+            assert rows[40009078].planet_index == 5
 
     def test_removes_colonies_no_longer_in_game(self):
         _add_esi_character()
