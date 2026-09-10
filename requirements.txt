@@ -14,6 +14,11 @@ openpyxl>=3.1
 SQLAlchemy>=2.0
 alembic>=1.13
 
+# EVE SSO (OAuth2 + PKCE, Фаза 3): шифрование токенов at rest и проверка
+# JWT по JWKS. Без действующего client_id auth-слой отдаёт 503.
+cryptography>=42
+PyJWT[crypto]>=2.8
+
 # WSGI-сервер для production. Docker не используется — приложение
 # разворачивается как обычный процесс за nginx.
 #   waitress — работает и на Windows, и на Linux, ставится без сборки;
