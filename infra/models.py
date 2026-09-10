@@ -98,3 +98,30 @@ class Credential(Base):
     updated_at: Mapped[datetime] = mapped_column(
         UtcDateTime, default=_utcnow, onupdate=_utcnow
     )
+
+
+class Colony(Base):
+    """
+    Реальная колония персонажа в игре — снимок из ESI
+    (`scripts/sync_colony_status.py`). Отдельно от расчётного плана:
+    план — «что стоит построить», колония — «что построено».
+    """
+
+    __tablename__ = "colonies"
+
+    character_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    planet_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+
+    planet_name: Mapped[str] = mapped_column(String(128))   # напр. «Jita IV»
+    planet_type: Mapped[str] = mapped_column(String(32))    # barren, temperate, …
+    upgrade_level: Mapped[int] = mapped_column(Integer)     # уровень командного центра
+    num_pins: Mapped[int] = mapped_column(Integer)
+
+    # Ближайшее время окончания программы экстрактора на этой планете
+    # (soonest expiry_time среди extractor-пинов). None — экстракторов нет
+    # или программы не запущены.
+    nearest_expiry: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
+
+    synced_at: Mapped[datetime] = mapped_column(
+        UtcDateTime, default=_utcnow, onupdate=_utcnow
+    )
