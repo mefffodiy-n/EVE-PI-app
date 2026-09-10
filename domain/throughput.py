@@ -67,7 +67,7 @@ class Demand:
     units_per_hour: dict[str, float] = field(default_factory=dict)
     factories: dict[str, float] = field(default_factory=dict)
     raw_materials: dict[str, float] = field(default_factory=dict)  # P0, единиц в час
-    assumptions_used: list[str] = field(default_factory=list)
+    assumptions_used: list[dict] = field(default_factory=list)  # {code, ...} — см. plan_messages
     missing: list[str] = field(default_factory=list)
 
     def add(self, product: str, rate: float) -> None:
@@ -116,16 +116,13 @@ def load_schematics() -> dict[str, Schematic]:
     return result
 
 
-def unverified_assumptions() -> list[str]:
-    """Список непроверенных допущений, влияющих на расчёт."""
-    result = []
-    for facility, entry in _cycles().items():
-        if not entry.get("verified", False):
-            result.append(
-                f"Длительность цикла {facility} принята {entry['minutes']} мин "
-                f"(не подтверждено источником)"
-            )
-    return result
+def unverified_assumptions() -> list[dict]:
+    """Непроверенные допущения, влияющие на расчёт: код + параметры."""
+    return [
+        {"code": "assume_cycle_duration", "facility": facility, "minutes": entry["minutes"]}
+        for facility, entry in _cycles().items()
+        if not entry.get("verified", False)
+    ]
 
 
 def expand_demand(

@@ -29,6 +29,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 
+from domain.plan_messages import render as render_message
 from domain.profit import ChainEconomics, colonies_for, evaluate
 from domain.recipes import RecipeBook, load_recipes
 from domain.throughput import Schematic, load_schematics
@@ -94,9 +95,15 @@ class Advice:
     spare_slots: int = 0
     alternatives: list[Suggestion] = field(default_factory=list)
     additions: list[Suggestion] = field(default_factory=list)
-    notes: list[str] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)       # рендер по-русски, для тестов
+    note_data: list[dict] = field(default_factory=list)  # {code, ...} для перевода
 
-    def to_dict(self) -> dict:
+    def note(self, code: str, **params) -> None:
+        entry = {"code": code, **params}
+        self.note_data.append(entry)
+        self.notes.append(render_message(entry, "ru"))
+
+    def to_dict(self, lang: str = "ru") -> dict:
         # Ключ называется verdict, а не status: в ответах API status
         # уже занят под success/error, и совпадение имён их столкнёт.
         return {
@@ -114,7 +121,8 @@ class Advice:
             "spare_slots": self.spare_slots,
             "alternatives": [s.to_dict() for s in self.alternatives],
             "additions": [s.to_dict() for s in self.additions],
-            "notes": self.notes,
+            "notes": self.notes if lang == "ru" or not self.note_data
+                     else [render_message(e, lang) for e in self.note_data],
         }
 
 
@@ -228,7 +236,7 @@ def advise(
 
     if not target_products:
         advice.status = "unknown"
-        advice.notes.append("Не выбрано ни одного целевого продукта.")
+        advice.note("advice_no_targets")
         return advice
 
     needed_processing = needed_mining = 0
@@ -236,7 +244,7 @@ def advise(
         try:
             processing, mining = _chain_size(product, schematics, recipes)
         except KeyError:
-            advice.notes.append(f"Для «{product}» нет данных о производстве.")
+            advice.note("advice_no_production_data", product=product)
             continue
         needed_processing += processing
         needed_mining += mining
@@ -245,16 +253,10 @@ def advise(
     advice.needed_mining = needed_mining
 
     if not prices:
-        advice.notes.append(
-            "Цены не собраны, поэтому предложения не отсортированы по выгоде. "
-            "Соберите снимок: python -m scripts.refresh_market_prices"
-        )
+        advice.note("advice_no_prices")
 
     if not capacity.has_mining_capable and needed_mining:
-        advice.notes.append(
-            f"Ни у одного персонажа нет Command Center Upgrades {MINER_MIN_CCU} — "
-            f"добывающий шаблон не поместится ни на одну планету."
-        )
+        advice.note("advice_no_mining_ccu", ccu=MINER_MIN_CCU)
 
     fits = _fits(needed_processing, needed_mining, capacity)
 
@@ -274,9 +276,7 @@ def advise(
                           TIER_ORDER.get(recipes.get(p).tier, 0)
                           for p in target_products if recipes.get(p))]
             if higher:
-                advice.notes.append(
-                    "Есть цепочки более высокого тира, помещающиеся в остаток."
-                )
+                advice.note("advice_higher_tier_available")
         return advice
 
     advice.status = "deficit"
@@ -285,10 +285,7 @@ def advise(
         prices, capacity, schematics, recipes, exclude=set(),
     )
     if not advice.alternatives:
-        advice.notes.append(
-            "В пул не помещается ни одна полная цепочка. Нужны ещё персонажи "
-            "или прокачка Interplanetary Consolidation у имеющихся."
-        )
+        advice.note("advice_nothing_fits")
     return advice
 
 
