@@ -186,5 +186,15 @@ FEATURES = FEATURES + (
 )
 
 
+FEATURES = FEATURES + (
+    Feature(
+        "direct_p2", "Прямое производство P2 на добывающей планете",
+        ("прямо на добывающих", "оба вида сырья"),
+        ("right on the extraction", "both raw materials"),
+        "0.8.0", "help",
+    ),
+)
+
+
 def by_section(section: str) -> tuple[Feature, ...]:
     return tuple(f for f in FEATURES if f.where == section)

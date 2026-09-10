@@ -45,6 +45,7 @@ def calculate():
     targets = [str(t) for t in payload["target_products"]]
     allow_single = bool(payload.get("allow_single_template_fallback", False))
     surplus_mining = bool(payload.get("surplus_mining", False))
+    direct_p2 = bool(payload.get("direct_p2", False))
 
     if not constellations:
         return json_error("Не выбрано ни одной констелляции")
@@ -60,7 +61,7 @@ def calculate():
         )
 
     key = cache_key(sorted(constellations), factory_sys, sorted(targets),
-                    allow_single, surplus_mining)
+                    allow_single, surplus_mining, direct_p2)
 
     def compute():
         # Персонажи: на Фазе 1 — dev-заглушки, в Фазе 3 те же поля придут
@@ -83,6 +84,7 @@ def calculate():
             target_products=targets,
             allow_single_template_fallback=allow_single,
             surplus_mining=surplus_mining,
+            direct_p2=direct_p2,
         )
         result = build_plan(
             request_obj,

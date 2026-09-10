@@ -135,6 +135,10 @@ class PlanRequest:
     include_direct_p2: bool = False           # Фаза 4: сценарий прямого R0 -> P2
     allow_single_template_fallback: bool = False
 
+    # Делать P2 целиком на добывающей планете, где есть оба вида сырья.
+    # Колоний это обычно не экономит, зато снимает перевозку P1.
+    direct_p2: bool = False
+
     # Занять свободных персонажей добычей сырья ТОЙ ЖЕ цепочки.
     # Включается, когда пользователь отказался расширять производство:
     # пусть лучше копится нужное сырьё, чем персонажи простаивают.
@@ -569,7 +573,15 @@ def build_plan(
         result.warnings.append("Не удалось построить план: нет пригодных целевых продуктов.")
         return result
 
-    demand = expand_demand(targets, schematics=schematics, recipes=recipes)
+    # Прямое производство P2 забирает часть целей на себя: для них
+    # раздельная цепочка не строится вовсе, иначе выпуск удвоится.
+    direct_plans: list[dict] = []
+    if request.direct_p2:
+        direct_plans = _plan_direct_p2(request, characters, recipes, schematics, planets)
+        for entry in direct_plans:
+            targets.pop(entry["product"], None)
+
+    demand = expand_demand(targets, schematics=schematics, recipes=recipes) if targets else Demand()
     result.demand = demand
     result.assumptions = list(demand.assumptions_used)
     result.assumptions.append(
@@ -581,6 +593,9 @@ def build_plan(
 
     pool = _CharacterPool(characters)
     row_counter = 0
+
+    for entry in direct_plans:
+        row_counter = _place_direct_p2(entry, result, pool, row_counter)
 
     # Какие системы дают больше всего нужного сырья. Считается один раз
     # на весь план: список сырья от продукта к продукту не меняется.
@@ -828,6 +843,103 @@ def build_plan(
 
     _note_extractor_stacking(result)
     return result
+
+
+def _plan_direct_p2(request, characters, recipes, schematics, planets) -> list[dict]:
+    """
+    Подобрать планеты под прямое производство P2.
+
+    Берутся только цели тира P2: выше по дереву цепочка на одну планету
+    не помещается физически. Если подходящих планет нет, цель молча
+    возвращается в обычный расчёт — без планет прямой путь невозможен,
+    и заменять его отказом было бы хуже.
+    """
+    from domain.direct_p2 import direct_candidates
+
+    ccu = max((c.command_center_upgrades_level for c in characters), default=0)
+    plans: list[dict] = []
+
+    for product in request.target_products:
+        recipe = recipes.get(product)
+        if recipe is None or recipe.tier != "P2":
+            continue
+        candidates = direct_candidates(
+            product, planets, request.constellations, ccu, recipes, schematics
+        )
+        if candidates:
+            plans.append({"product": product, "candidates": candidates})
+    return plans
+
+
+def _place_direct_p2(entry: dict, result: PlanResult, pool, row_counter: int) -> int:
+    """
+    Разместить колонии прямого P2.
+
+    Сколько ставить: столько, чтобы набрать выпуск одного обычного
+    завода (12 advanced-фабрик). Иначе сравнивать варианты не с чем —
+    и пользователь не поймёт, много это или мало.
+    """
+    from domain.direct_p2 import compare_with_split
+
+    product = entry["product"]
+    candidates = entry["candidates"]
+    if not candidates:
+        return row_counter
+
+    layout = candidates[0]["layout"]
+    needed = math.ceil(12 / layout.advanced)
+    placed = 0
+
+    for candidate in candidates:
+        if placed >= needed:
+            break
+        system = candidate["system"]
+        character = pool.take(
+            min_ccu=5 if candidate["layout"].advanced >= 3 else 4,
+            planet=(system, candidate["planet"]),
+            prefer_system=system,
+        )
+        if character is None:
+            continue
+
+        spot = candidate["layout"]
+        row_counter += 1
+        placed += 1
+        result.rows.append(PlanRow(
+            id=f"row-{row_counter}",
+            char_id=character.character_id,
+            character=character.name,
+            role="Прямое P2",
+            planet=candidate["planet"],
+            system=system,
+            constellation=candidate["constellation"],
+            cc_type=f"1x {candidate['planet_type']} Command Center",
+            res_out=product,
+            res_in=", ".join(candidate["raws"]),
+            structures=f"{spot.advanced} фабрик + {spot.basic} basic",
+            type_id=_type_ids().get(product),
+            template_key="direct_p2",
+            template_count=1,
+            planet_type=candidate["planet_type"],
+            planet_radius_km=candidate["radius_km"],
+            cpu_percent=spot.cpu_percent,
+            pg_percent=spot.pg_percent,
+            structures_detail=spot.structures_detail(),
+        ))
+
+    if placed:
+        comparison = compare_with_split(product, layout)
+        result.warnings.append(
+            f"{product} делается прямо на добывающих планетах: {placed} колоний "
+            f"вместо {comparison['split_colonies']} при раздельном пути. "
+            f"{comparison['note']}"
+        )
+    if placed < needed:
+        result.warnings.append(
+            f"{product}: подходящих планет с обоими видами сырья хватило "
+            f"только на {placed} колоний из {needed}."
+        )
+    return row_counter
 
 
 def _add_surplus_mining(request, result, pool, recipes, schematics, planets,
