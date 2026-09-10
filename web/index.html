@@ -1959,7 +1959,9 @@ function openModal(name){
   document.getElementById('modalBody').innerHTML=doc.html;
   const v=document.getElementById('aboutVersion'), ph=document.getElementById('aboutPhase');
   if(v) v.textContent=meta.version||'—';
-  if(ph) ph.textContent=meta.phase||'—';
+  // meta.phase — {ru, en}; старый формат (строка) поддержим на всякий.
+  const phase=meta.phase&&typeof meta.phase==='object' ? (meta.phase[lang]||meta.phase.ru) : meta.phase;
+  if(ph) ph.textContent=phase||'—';
   document.getElementById('modal').classList.add('on');
 }
 function closeModal(){ document.getElementById('modal').classList.remove('on'); currentModal=null; }
