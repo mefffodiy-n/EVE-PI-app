@@ -1,19 +1,21 @@
 """
 ORM-модели.
 
-Таблица `characters` — единственная на этапе подготовки Фазы 3. В неё
-пишут два источника:
-  - `scripts/seed_dev_characters.py` (source="dev", только ENV=dev);
-  - будущий ESI SSO callback (source="esi").
-`domain/planner.py` читает её через `scripts.seed_dev_characters.load_characters`
-и о происхождении данных не знает — поля одинаковые.
+  - `characters` — персонажи. Пишут два источника: `seed_dev_characters`
+    (source="dev", только PI_ENV=dev) и будущий ESI SSO callback
+    (source="esi"). `domain/planner.py` о происхождении не знает.
+  - `plans` — сохранённые планы (замена json-файлов в data/plans/).
+    Публичный интерфейс — `domain/plan_storage.py`.
+
+Колонка `account_id` есть в обеих таблицах под multi-tenant Фазы 3;
+пока всегда NULL, но заведена сразу, чтобы не делать ALTER позже.
 """
 
 from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Integer, String
+from sqlalchemy import JSON, DateTime, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from infra.db import Base
@@ -52,3 +54,24 @@ class Character(Base):
             f"ccu={self.command_center_upgrades_level}, "
             f"ic={self.interplanetary_consolidation_level}, source={self.source!r})"
         )
+
+
+class Plan(Base):
+    __tablename__ = "plans"
+
+    # uuid4().hex[:12] — генерирует plan_storage, не БД (id виден в URL,
+    # автоинкремент подсказывал бы число сохранённых планов).
+    id: Mapped[str] = mapped_column(String(12), primary_key=True)
+    name: Mapped[str] = mapped_column(String(128))
+
+    # ISO-строка UTC с точностью до секунды. Строкой, а не DateTime:
+    # фронтенд получает её как есть, менять формат нельзя. Сортировка
+    # по ISO-строке совпадает с хронологической.
+    created_at: Mapped[str] = mapped_column(String(32))
+
+    account_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    request: Mapped[dict] = mapped_column(JSON, default=dict)
+    rows: Mapped[list] = mapped_column(JSON, default=list)
+    warnings: Mapped[list] = mapped_column(JSON, default=list)
+    assumptions: Mapped[list] = mapped_column(JSON, default=list)

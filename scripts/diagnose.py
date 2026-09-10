@@ -222,15 +222,19 @@ def check_recipes_and_schematics() -> bool:
 
 
 def check_characters() -> bool:
-    print("\n[5] Персонажи")
+    print("\n[5] БД и персонажи")
     from sqlalchemy import inspect
 
     from infra.db import engine
     from scripts.seed_dev_characters import load_characters
 
-    if "characters" not in inspect(engine()).get_table_names():
-        _line(BAD, "нет таблицы characters — выполните `python -m alembic upgrade head`")
+    tables = set(inspect(engine()).get_table_names())
+    missing = {"characters", "plans"} - tables
+    if missing:
+        _line(BAD, f"нет таблиц {', '.join(sorted(missing))} — "
+                   f"выполните `python -m alembic upgrade head`")
         return False
+    _line(OK, "схема БД на месте (characters, plans)")
 
     characters = load_characters()
     if not characters:

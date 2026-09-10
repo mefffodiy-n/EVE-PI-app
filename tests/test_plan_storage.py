@@ -1,15 +1,13 @@
 """
 Тесты хранения планов.
 
-Планы лежат на сервере, а не в браузере: план должен переживать
-перезагрузку и смену устройства. Значит и проверять надо серверные
-свойства — изоляцию путей, устойчивость к повреждённым файлам,
-осмысленность сравнения.
+Планы лежат на сервере (таблица `plans`), а не в браузере: план должен
+переживать перезагрузку и смену устройства. Значит и проверять надо
+серверные свойства — валидацию идентификатора, лимиты, осмысленность
+сравнения. Изоляцию БД даёт autouse-фикстура в conftest.py.
 """
 
 from __future__ import annotations
-
-import json
 
 import pytest
 
@@ -22,13 +20,6 @@ ROWS = [
     {"system": "Y-2ANO", "planet": "3", "res_out": "Biofuels",
      "role": "Добыча", "char_id": 2, "cpu_percent": 37.2, "pg_percent": 96.7},
 ]
-
-
-@pytest.fixture(autouse=True)
-def isolated_dir(tmp_path, monkeypatch):
-    """Каждый тест работает в своей папке, чтобы не задевать чужие планы."""
-    monkeypatch.setattr(plan_storage, "PLANS_DIR", tmp_path / "plans")
-    yield
 
 
 class TestSaving:
@@ -73,13 +64,12 @@ class TestSafety:
         with pytest.raises(PlanStorageError):
             load(bad_id)
 
-    def test_broken_file_does_not_break_the_list(self):
-        """Один повреждённый файл не должен прятать остальные планы."""
-        good = save("Целый", {}, ROWS)
-        (plan_storage.PLANS_DIR / "0123456789ab.json").write_text("{битый", encoding="utf-8")
-        names = [p.name for p in list_plans()]
-        assert names == ["Целый"]
-        assert load(good.id).name == "Целый"
+    def test_list_survives_missing_table(self, monkeypatch):
+        """Свежий клон без `alembic upgrade` — список планов пуст, не 500."""
+        from infra import db
+
+        db.Base.metadata.drop_all(db.engine())
+        assert list_plans() == []
 
     def test_missing_plan_reports_clearly(self):
         with pytest.raises(PlanStorageError, match="не найден"):
