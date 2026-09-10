@@ -345,15 +345,21 @@ pi-director/
       (разброс упал с 6.0 до 2.5 систем на персонажа).
 
 ### Фаза 3 — Реальная ESI SSO и синхронизация персонажей
+- [x] Слой БД: SQLAlchemy 2.0 + Alembic (`infra/config.py`, `infra/db.py`,
+      `infra/models.py`, `migrations/`). Таблица `characters`. На разработке —
+      SQLite `data/pi_director.db` (Docker не нужен), в проде — Postgres сменой
+      `PI_DATABASE_URL`; модели те же. `seed_dev_characters.seed()` пишет
+      dev-персонажей туда же, куда будет писать OAuth callback (`source="dev"`
+      против `"esi"`); вне `PI_ENV=dev` seed запрещён, а dev-строки не читаются.
 - [ ] PKCE OAuth-flow (замена фиктивного `/api/auth/callback`), включается по появлению
       `client_id`/`client_secret` от developers.eveonline.com — до этого момента
-      разработка идёт на `seed_dev_characters.py` из Фазы 1 без потери темпа.
+      разработка идёт на `seed_dev_characters.py` без потери темпа.
 - [ ] `sync_character_skills` — реальные уровни CCU/IC вместо ручных данных в БД.
 - [ ] `sync_colony_status` — реальный статус колоний/экстракторов (по расписанию).
-- [ ] Шифрование токенов, multi-tenant модель данных.
-- [ ] Плавный переход: реальные персонажи и dev-заглушки пишутся в одну и ту же схему
-      таблицы `characters`, поэтому `planner.py`/`capacity.py` из Фазы 1 не переписываются —
-      меняется только источник данных выше по стеку.
+- [ ] Шифрование токенов (отдельная таблица `credentials`), multi-tenant
+      (колонка `account_id` в `characters` уже заведена, пока NULL).
+- [x] Плавный переход заложен: `load_characters()` читает из таблицы `characters`
+      независимо от источника, `planner.py`/`capacity.py` про источник не знают.
 
 ### Фаза 4 — Функциональное расширение
 - [x] Сценарий прямого R0→P2 (вторая часть CSV-матрицы). `domain/direct_p2.py`

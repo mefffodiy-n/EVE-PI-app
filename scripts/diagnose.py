@@ -223,11 +223,19 @@ def check_recipes_and_schematics() -> bool:
 
 def check_characters() -> bool:
     print("\n[5] Персонажи")
+    from sqlalchemy import inspect
+
+    from infra.db import engine
     from scripts.seed_dev_characters import load_characters
+
+    if "characters" not in inspect(engine()).get_table_names():
+        _line(BAD, "нет таблицы characters — выполните `python -m alembic upgrade head`")
+        return False
 
     characters = load_characters()
     if not characters:
-        _line(BAD, "персонажей нет (проверьте, что PI_ENV не выставлен в prod)")
+        _line(BAD, "персонажей нет — `python -m scripts.seed_dev_characters` "
+                   "(и проверьте, что PI_ENV не выставлен в prod)")
         return False
     _line(OK, f"персонажей: {len(characters)}, слотов планет: "
               f"{sum(c.planet_slots for c in characters)}")

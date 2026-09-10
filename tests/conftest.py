@@ -1,15 +1,16 @@
 """
 Общие фикстуры тестов.
 
-ПОЧЕМУ ЭТОТ ФАЙЛ ЕСТЬ. Снимки в data/cache/ (цены рынка, статус сервера) —
-локальные рантайм-артефакты: их пишут фоновые сборщики, в git их нет
-(см. .gitignore). Тест, который читал их напрямую, проходил или падал в
-зависимости от того, запускал ли разработчик scripts.scheduler на этой
-машине. Так и было: test_market_never_calls_external_service ждал пустой
-ответ, а получал реальные рекомендации с локального снимка цен.
+ПОЧЕМУ ЭТОТ ФАЙЛ ЕСТЬ. Всё, что тест читает не из кода, должно быть
+изолировано — иначе результат зависит от машины разработчика:
 
-Фикстура ниже уводит пути снимков в пустой временный каталог для КАЖДОГО
-теста. Тест, которому нужен снимок, пишет его туда сам.
+  - снимки в data/cache/ (цены, статус сервера) пишут фоновые сборщики;
+    так и было — test_market_never_calls_external_service ждал пустой
+    ответ, а получал рекомендации с локального снимка цен;
+  - БД (data/pi_director.db) наполняет `scripts.seed_dev_characters`.
+
+Обе фикстуры autouse: уводят пути во временный каталог для КАЖДОГО теста.
+Тест, которому нужны данные, кладёт их туда сам.
 """
 
 from __future__ import annotations
@@ -25,3 +26,27 @@ def isolate_cache_snapshots(tmp_path, monkeypatch):
 
     monkeypatch.setattr(market, "SNAPSHOT", tmp_path / "market_prices.json")
     monkeypatch.setattr(meta, "STATUS_SNAPSHOT", tmp_path / "server_status.json")
+
+
+@pytest.fixture(autouse=True)
+def isolate_database(tmp_path, monkeypatch):
+    """
+    Пустая SQLite в tmp на каждый тест. Таблицы создаются из моделей
+    (без Alembic — миграции проверяются отдельным тестом).
+    """
+    from infra import config, db
+
+    url = f"sqlite:///{tmp_path / 'test.db'}"
+    monkeypatch.setattr(config, "DATABASE_URL", url)
+    db.reset_engine(url)
+    db.create_all()
+    yield
+    db.reset_engine()  # следующий тест поставит свой url через эту же фикстуру
+
+
+@pytest.fixture
+def seeded_characters():
+    """13 dev-персонажей в изолированной БД (для тестов планировщика через API)."""
+    from scripts.seed_dev_characters import seed
+
+    return seed()
