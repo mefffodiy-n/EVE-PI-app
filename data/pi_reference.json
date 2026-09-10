@@ -265,6 +265,11 @@
   },
   "recommended_skills": {
     "_comment": "Из раздела README 'Skill Recommendations'.",
+    "_type_ids": {
+      "_source": "type_id скиллов PI. Читает scripts/sync_character_skills.py. Проверено: everef.net/types/2505 = Command Center Upgrades, everef.net/types/2495 = Interplanetary Consolidation.",
+      "command_center_upgrades": 2505,
+      "interplanetary_consolidation": 2495
+    },
     "miner": {
       "command_center_upgrades": 5,
       "interplanetary_consolidation": 4,
