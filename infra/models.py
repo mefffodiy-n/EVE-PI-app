@@ -15,10 +15,10 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, DateTime, Integer, String
+from sqlalchemy import JSON, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
-from infra.db import Base
+from infra.db import Base, UtcDateTime
 
 
 def _utcnow() -> datetime:
@@ -45,7 +45,7 @@ class Character(Base):
     account_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+        UtcDateTime, default=_utcnow, onupdate=_utcnow
     )
 
     def __repr__(self) -> str:  # pragma: no cover - для отладки
@@ -92,9 +92,9 @@ class Credential(Base):
     access_token: Mapped[str] = mapped_column(String)
     refresh_token: Mapped[str] = mapped_column(String)
 
-    access_expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    access_expires_at: Mapped[datetime] = mapped_column(UtcDateTime)
     scopes: Mapped[list] = mapped_column(JSON, default=list)
 
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+        UtcDateTime, default=_utcnow, onupdate=_utcnow
     )
