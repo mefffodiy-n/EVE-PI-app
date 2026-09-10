@@ -134,7 +134,7 @@ domain/           расчёты, без Flask и без сети
 infra/            конфиг окружения и доступ к БД (общий для domain/api/scripts)
   config.py       PI_ENV, PI_DATABASE_URL, настройки EVE SSO — чтение env
   db.py           движок SQLAlchemy, session_scope, декларативная база
-  models.py       ORM-модели: characters, plans, credentials
+  models.py       ORM-модели: characters, plans, credentials, colonies
   crypto.py       шифрование токенов ESI перед записью в БД (Fernet)
   credentials.py  запись зашифрованных токенов (общее для auth и refresh_tokens)
 
@@ -143,7 +143,7 @@ migrations/       Alembic: миграции схемы (env.py берёт URL и
 api/              Flask, только чтение готовых данных
   __init__.py     фабрика приложения, отдача web/, обработка ошибок
   cache.py        LRU-кэш, ETag, разбор тела запроса
-  blueprints/     reference, plans, market, export, meta, auth (см. правило 3)
+  blueprints/     reference, plans, market, export, meta (+ /colonies), auth (правило 3)
 
 scripts/          всё, что ходит в сеть или готовит данные
   esi_client.py            единая точка обращений к ESI-API
@@ -152,6 +152,7 @@ scripts/          всё, что ходит в сеть или готовит д
   refresh_market_prices.py цены по расписанию
   refresh_tokens.py        продление access-токенов ESI по расписанию
   sync_character_skills.py уровни CCU/IC персонажей из ESI (после входа)
+  sync_colony_status.py    снимок реальных колоний и таймеров экстракторов
   scheduler.py             запуск сборщиков без внешних зависимостей
   extract_schematics.py    количества вход/выход из шаблонов
   seed_dev_characters.py   заглушки персонажей (нет ESI-токенов)
@@ -244,11 +245,12 @@ python -m scripts.scheduler        # сборщики по расписанию
 
 ## Что дальше (см. roadmap.md)
 
-**Фаза 3 — подключение к игре.** Слой БД, шифрование токенов, OAuth-каркас
-(`auth.py` + `esi_sso.py`, PKCE), `refresh_tokens` и `sync_character_skills`
-в расписании уже написаны и проверены на мок-ESI — не работают только без
-`client_id` от developers.eveonline.com. Осталось: получить `client_id` и
-`sync_colony_status` (оживит кольца циклов экстракторов вместо «неизвестно»).
+**Фаза 3 — подключение к игре.** Весь код написан и проверен на мок-ESI:
+слой БД, шифрование токенов, OAuth-каркас (`auth.py` + `esi_sso.py`, PKCE),
+и три сборщика в расписании — `refresh_tokens`, `sync_character_skills`,
+`sync_colony_status` (реальные таймеры экстракторов, блок «Мои колонии в
+игре» на дашборде). **Не работает только без `client_id`** от
+developers.eveonline.com — это единственный оставшийся шаг фазы.
 
 **Фаза 6 — развёртывание.** Сейчас приложение живёт, пока открыт терминал.
 Нужны служба (waitress за nginx), автозапуск сборщиков, резервные копии БД.

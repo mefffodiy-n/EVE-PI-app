@@ -207,6 +207,35 @@ class TestExport:
         assert pg_cell.fill.start_color.rgb == "00FFF2CC"
 
 
+class TestColonies:
+    def test_empty_when_nothing_synced(self, client):
+        body = client.get("/api/colonies").get_json()
+        assert body["status"] == "success"
+        assert body["colonies"] == []
+
+    def test_returns_synced_colonies_soonest_first(self, client):
+        from datetime import datetime, timedelta, timezone
+
+        from infra.db import session_scope
+        from infra.models import Character, Colony
+
+        now = datetime.now(timezone.utc)
+        with session_scope() as s:
+            s.add(Character(character_id=1, name="Pilot", command_center_upgrades_level=5,
+                            interplanetary_consolidation_level=5, source="esi"))
+            s.add(Colony(character_id=1, planet_id=10, planet_name="B II", planet_type="barren",
+                         upgrade_level=4, num_pins=8, nearest_expiry=now + timedelta(hours=9)))
+            s.add(Colony(character_id=1, planet_id=11, planet_name="B III", planet_type="temperate",
+                         upgrade_level=3, num_pins=5, nearest_expiry=now + timedelta(hours=2)))
+            s.add(Colony(character_id=1, planet_id=12, planet_name="B IV", planet_type="lava",
+                         upgrade_level=1, num_pins=2, nearest_expiry=None))
+
+        rows = client.get("/api/colonies").get_json()["colonies"]
+        assert [r["planet_name"] for r in rows] == ["B III", "B II", "B IV"]
+        assert rows[0]["character"] == "Pilot"
+        assert rows[2]["nearest_expiry"] is None
+
+
 class TestMarket:
     def test_market_never_calls_external_service(self, client):
         """
