@@ -136,6 +136,7 @@ infra/            конфиг окружения и доступ к БД (об�
   db.py           движок SQLAlchemy, session_scope, декларативная база
   models.py       ORM-модели: characters, plans, credentials
   crypto.py       шифрование токенов ESI перед записью в БД (Fernet)
+  credentials.py  запись зашифрованных токенов (общее для auth и refresh_tokens)
 
 migrations/       Alembic: миграции схемы (env.py берёт URL из infra.config)
 
@@ -149,6 +150,7 @@ scripts/          всё, что ходит в сеть или готовит д
   esi_sso.py               единая точка обращений к login.eveonline.com
   refresh_server_status.py статус сервера по расписанию
   refresh_market_prices.py цены по расписанию
+  refresh_tokens.py        продление access-токенов ESI по расписанию
   scheduler.py             запуск сборщиков без внешних зависимостей
   extract_schematics.py    количества вход/выход из шаблонов
   seed_dev_characters.py   заглушки персонажей (нет ESI-токенов)
@@ -241,11 +243,11 @@ python -m scripts.scheduler        # сборщики по расписанию
 
 ## Что дальше (см. roadmap.md)
 
-**Фаза 3 — подключение к игре.** Слой БД, шифрование токенов и OAuth-каркас
-(`api/blueprints/auth.py` + `scripts/esi_sso.py`, PKCE) уже написаны — не
-работают только без `client_id` от developers.eveonline.com. Осталось:
-получить `client_id`, `sync_character_skills` и `sync_colony_status` (оживят
-кольца циклов), `refresh_tokens` в расписании.
+**Фаза 3 — подключение к игре.** Слой БД, шифрование токенов, OAuth-каркас
+(`auth.py` + `esi_sso.py`, PKCE) и `refresh_tokens` в расписании уже
+написаны — не работают только без `client_id` от developers.eveonline.com.
+Осталось: получить `client_id`, `sync_character_skills` и `sync_colony_status`
+(оживят кольца циклов и заменят нули CCU/IC после первого входа).
 
 **Фаза 6 — развёртывание.** Сейчас приложение живёт, пока открыт терминал.
 Нужны служба (waitress за nginx), автозапуск сборщиков, резервные копии БД.
