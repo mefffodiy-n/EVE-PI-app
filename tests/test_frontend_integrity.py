@@ -119,23 +119,27 @@ class TestStylesheet:
             f"{name}: в светлой теме не переопределены переменные: {', '.join(sorted(missing))}"
         )
 
-    def test_interactive_states_use_theme_variables_not_literals(self):
+    def test_no_opaque_colour_hex_literals(self):
         """
-        Фон у :hover / .on / .best задаётся переменной темы, не литералом.
-        Захардкоженный тёмный hex переживает переключение темы: в светлой
-        под курсором получался чёрный фон, а активные кнопки вида — чёрные.
-        Литерал мимо проверки полноты темы (та смотрит только --переменные).
+        Цвет (фон, обводка SVG, рамка, текст) не задаётся непрозрачным
+        hex-литералом — только var(--…) или rgba() (полупрозрачные
+        наложения работают в обеих темах). Литерал переживает переключение
+        темы: в светлой под курсором был чёрный фон, активные кнопки вида —
+        чёрные, панель колонии — чёрная, стрелки в кольцах — невидимые.
+        Проверка полноты темы это не ловит — она смотрит только --переменные.
         """
         name, text = _frontend()
         css = _style_block(text)
-        bad = re.findall(
-            r"([.#][\w.-]*(?::hover|\.on|\.best|\.active)[^{}]*\{[^{}]*?"
-            r"background(?:-color)?\s*:\s*#[0-9a-fA-F]{3,8})",
+        in_css = re.findall(
+            r"(?:background(?:-color)?|stroke|border(?:-[a-z]+)?|color)\s*:"
+            r"\s*[^;{}]*?(#[0-9a-fA-F]{3,8})",
             css,
         )
+        # Инлайновый style="…background:#…" в JS-шаблонах — тот же промах.
+        inline = re.findall(r'style="[^"]*background\s*:\s*(#[0-9a-fA-F]{3,8})', text)
+        bad = in_css + inline
         assert not bad, (
-            f"{name}: фон интерактивного состояния задан литералом, а не var(--…):\n  "
-            + "\n  ".join(b[:90] for b in bad[:5])
+            f"{name}: непрозрачный hex-литерал вместо var(--…): {', '.join(sorted(set(bad)))}"
         )
 
 
