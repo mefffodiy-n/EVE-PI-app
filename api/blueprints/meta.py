@@ -150,6 +150,8 @@ def colonies():
                     "character": names.get(row.character_id, str(row.character_id)),
                     "planet_id": row.planet_id,
                     "planet_name": row.planet_name,
+                    "system_name": row.system_name,
+                    "planet_index": row.planet_index,
                     "planet_type": row.planet_type,
                     "upgrade_level": row.upgrade_level,
                     "num_pins": row.num_pins,

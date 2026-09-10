@@ -223,16 +223,20 @@ class TestColonies:
         with session_scope() as s:
             s.add(Character(character_id=1, name="Pilot", command_center_upgrades_level=5,
                             interplanetary_consolidation_level=5, source="esi"))
-            s.add(Colony(character_id=1, planet_id=10, planet_name="B II", planet_type="barren",
+            s.add(Colony(character_id=1, planet_id=10, planet_name="B II", system_name="B",
+                         planet_index=2, planet_type="barren",
                          upgrade_level=4, num_pins=8, nearest_expiry=now + timedelta(hours=9)))
-            s.add(Colony(character_id=1, planet_id=11, planet_name="B III", planet_type="temperate",
+            s.add(Colony(character_id=1, planet_id=11, planet_name="B III", system_name="B",
+                         planet_index=3, planet_type="temperate",
                          upgrade_level=3, num_pins=5, nearest_expiry=now + timedelta(hours=2)))
-            s.add(Colony(character_id=1, planet_id=12, planet_name="B IV", planet_type="lava",
+            s.add(Colony(character_id=1, planet_id=12, planet_name="B IV", system_name="B",
+                         planet_index=4, planet_type="lava",
                          upgrade_level=1, num_pins=2, nearest_expiry=None))
 
         rows = client.get("/api/colonies").get_json()["colonies"]
         assert [r["planet_name"] for r in rows] == ["B III", "B II", "B IV"]
         assert rows[0]["character"] == "Pilot"
+        assert (rows[0]["system_name"], rows[0]["planet_index"]) == ("B", 3)
         assert rows[2]["nearest_expiry"] is None
 
 

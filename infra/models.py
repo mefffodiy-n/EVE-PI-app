@@ -113,6 +113,10 @@ class Colony(Base):
     planet_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
 
     planet_name: Mapped[str] = mapped_column(String(128))   # напр. «Jita IV»
+    # Система и номер планеты — чтобы фронтенд сопоставил колонию со
+    # строкой расчётного плана (там ключ — система + номер планеты).
+    system_name: Mapped[str] = mapped_column(String(64), default="")
+    planet_index: Mapped[int] = mapped_column(Integer, default=0)
     planet_type: Mapped[str] = mapped_column(String(32))    # barren, temperate, …
     upgrade_level: Mapped[int] = mapped_column(Integer)     # уровень командного центра
     num_pins: Mapped[int] = mapped_column(Integer)
