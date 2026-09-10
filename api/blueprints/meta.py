@@ -114,9 +114,51 @@ def characters():
                 "ccu": c.command_center_upgrades_level,
                 "ic": c.interplanetary_consolidation_level,
                 "planet_slots": c.planet_slots,
-                "source": "dev",
             }
             for c in crew
         ],
         source="dev" if crew else "none",
     )
+
+
+@bp.get("/colonies")
+def colonies():
+    """
+    Реальные колонии персонажей — снимок из ESI (sync_colony_status).
+
+    Это НЕ расчётный план: план — «что стоит построить», здесь — «что
+    построено». Фронтенд показывает отдельным блоком и подсвечивает
+    планеты, где программа экстрактора вот-вот кончится.
+
+    hours_left не считаем на сервере: фронтенд получает nearest_expiry
+    и обновляет обратный отсчёт без повторного запроса.
+    """
+    from sqlalchemy import select
+    from sqlalchemy.exc import OperationalError
+
+    from infra.db import session_scope
+    from infra.models import Character, Colony
+
+    try:
+        with session_scope() as session:
+            names = dict(session.execute(select(Character.character_id, Character.name)).all())
+            rows = session.scalars(
+                select(Colony).order_by(Colony.nearest_expiry.is_(None), Colony.nearest_expiry)
+            ).all()
+            payload = [
+                {
+                    "character": names.get(row.character_id, str(row.character_id)),
+                    "planet_id": row.planet_id,
+                    "planet_name": row.planet_name,
+                    "planet_type": row.planet_type,
+                    "upgrade_level": row.upgrade_level,
+                    "num_pins": row.num_pins,
+                    "nearest_expiry": row.nearest_expiry.isoformat() if row.nearest_expiry else None,
+                    "synced_at": row.synced_at.isoformat() if row.synced_at else None,
+                }
+                for row in rows
+            ]
+    except OperationalError:
+        payload = []
+
+    return json_ok(colonies=payload)
