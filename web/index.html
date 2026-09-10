@@ -15,6 +15,10 @@
    настройки — плотная таблица решений, где важны числа, а не иконки. */
 :root {
   --void:#080b11; --hull:#0f141c; --seam:#1b2331;
+  /* Подсветка при наведении и активном состоянии. Была захардкожена
+     тёмным литералом в :hover/.on — в светлой теме получался чёрный
+     фон под курсором и чёрные кнопки вида. */
+  --hover:#161d29;
   --dim:#6d7d92; --read:#ccd6e0; --bright:#f2f6fa;
   --amber:#d4a04a; --flux:#4f9cd6; --forge:#c8823c; --alarm:#cf6058; --calm:#4a9d7f;
   /* Цвета тиров продукции: сырьё холоднее, готовое изделие теплее.
@@ -34,6 +38,7 @@
    контраст, и те же цвета читаются спокойнее. */
 body.light {
   --void:#f4f1ea; --hull:#faf8f3; --seam:#ddd6c8;
+  --hover:#ece5d6;
   --dim:#6b6459; --read:#2a2620; --bright:#14110c;
   --amber:#9a6b12; --flux:#1d6fa8; --forge:#a05f1c; --alarm:#b03e36; --calm:#2c7358;
   --ring-infra:#1d7fb8; --ring-extract:#1a8c72; --ring-basic:#a85c26; --ring-adv:#a87d20;
@@ -141,8 +146,8 @@ button { font-family:inherit; }
          border-bottom:1px solid var(--seam); }
 .tool { width:30px; height:26px; display:grid; place-items:center; cursor:pointer;
         background:none; border:1px solid transparent; color:var(--dim); border-radius:3px; }
-.tool:hover { color:var(--read); background:#141b26; }
-.tool.on { color:var(--bright); border-color:var(--seam); background:#141b26; }
+.tool:hover { color:var(--read); background:var(--hover); }
+.tool.on { color:var(--bright); border-color:var(--seam); background:var(--hover); }
 .tool svg { width:15px; height:15px; }
 .counts { margin-left:auto; color:var(--dim); font-size:12px; }
 .counts b { color:var(--read); font-weight:500; }
@@ -154,7 +159,7 @@ button { font-family:inherit; }
 .menu.open .menu-pop { display:block; }
 .menu-pop button { display:flex; gap:8px; width:100%; text-align:left; background:none;
                    border:none; color:var(--read); padding:6px 12px; cursor:pointer; font-size:13px; }
-.menu-pop button:hover { background:#161e2a; }
+.menu-pop button:hover { background:var(--hover); }
 .menu-pop button .mark { width:12px; color:var(--flux); }
 
 /* ═══ Круг колонии: планета, кольцо, время, портрет ══════════════ */
@@ -195,9 +200,9 @@ button { font-family:inherit; }
 .orb .pilot img { width:100%; height:100%; object-fit:cover; }
 
 /* ═══ Вид «Детали»: строка на колонию ═══════════════════════════ */
-.colony { border-bottom:1px solid #121824; padding:12px 14px;
+.colony { border-bottom:1px solid var(--seam); padding:12px 14px;
           content-visibility:auto; contain-intrinsic-size:auto 190px; }
-.colony:hover { background:#0c1119; }
+.colony:hover { background:var(--hover); }
 .colony-head { display:flex; align-items:center; gap:10px; }
 .pilot-lg { width:30px; height:30px; border-radius:50%; background:#232d3d; flex:0 0 auto;
             display:grid; place-items:center; font-size:11px; font-weight:600; color:#8fa3bd; }
@@ -226,7 +231,7 @@ button { font-family:inherit; }
 
 /* ═══ Вид «Список»: строка на персонажа ═════════════════════════ */
 .pilot-row { display:flex; align-items:center; gap:12px; padding:10px 14px;
-             border-bottom:1px solid #121824; content-visibility:auto; contain-intrinsic-size:auto 78px; }
+             border-bottom:1px solid var(--seam); content-visibility:auto; contain-intrinsic-size:auto 78px; }
 .pilot-row .who { width:150px; flex:0 0 auto; }
 .pilot-row .orbs { display:flex; gap:10px; flex-wrap:wrap; }
 
@@ -303,8 +308,8 @@ thead .cols th { text-align:left; padding:5px 10px; font-size:11px; font-weight:
     letter-spacing:.05em; text-transform:uppercase; color:#55637a;
     border-bottom:1px solid var(--seam); }
 thead .cols th.r { text-align:right; }
-tbody tr { border-bottom:1px solid #131a24; content-visibility:auto; contain-intrinsic-size:auto 38px; }
-tbody tr:hover { background:#0d121a; }
+tbody tr { border-bottom:1px solid var(--seam); content-visibility:auto; contain-intrinsic-size:auto 38px; }
+tbody tr:hover { background:var(--hover); }
 td { padding:6px 10px; }
 td.r { text-align:right; }
 .idx { color:#465366; width:28px; text-align:right; }
