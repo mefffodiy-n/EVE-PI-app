@@ -5,38 +5,31 @@
 персонажа», «а если сменить домашнюю систему», «а если взять другой
 продукт». Пока план живёт до перезагрузки страницы, сравнивать нечего.
 
-ГДЕ ХРАНИМ. Файлы в data/plans/. Не в браузере — тогда план пропадал бы
-при смене устройства и очистке кэша, а показать его напарнику было бы
-нельзя. Не в базе — её в проекте пока нет, а заводить СУБД ради десятка
-json-файлов рано: файлов будет столько же, сколько вариантов у одного
-человека, то есть единицы.
+ГДЕ ХРАНИМ. Таблица `plans` (`infra/models.py`). Не в браузере — тогда
+план пропадал бы при смене устройства и очистке кэша, а показать его
+напарнику было бы нельзя.
 
-Когда появится многопользовательский режим (Фаза 3, вместе с ESI SSO),
-это место заменится на таблицу с привязкой к владельцу. Интерфейс
-модуля рассчитан на такую замену: снаружи видны только функции
-save/list/load/delete, а не пути к файлам.
+Раньше это были json-файлы в data/plans/. Замена на БД (Фаза 3): к плану
+привяжется владелец (`account_id`, пока NULL). Публичный интерфейс —
+save/list/load/delete/compare — не изменился, поэтому api/ и тесты
+править не пришлось.
 """
 
 from __future__ import annotations
 
-import json
 import re
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent
-PLANS_DIR = ROOT / "data" / "plans"
+from sqlalchemy import func, select
 
 # Ограничения — защита от разрастания и от мусора в именах.
 MAX_PLANS = 50
 MAX_NAME_LENGTH = 80
 MAX_ROWS = 500
 
-# Имя файла собирается из идентификатора, а не из названия плана:
-# название вводит пользователь, и в нём может быть что угодно, включая
-# слеши и точки, которыми легко выйти за пределы папки.
+# Идентификатор виден в URL и подставляется в запросы; проверяется строго.
 ID_PATTERN = re.compile(r"^[0-9a-f]{12}$")
 
 
@@ -86,17 +79,32 @@ class StoredPlan:
             "assumptions": self.assumptions,
         }
 
+    @classmethod
+    def _from_row(cls, row) -> "StoredPlan":
+        return cls(
+            id=row.id,
+            name=row.name,
+            created_at=row.created_at or "",
+            request=row.request or {},
+            rows=row.rows or [],
+            warnings=row.warnings or [],
+            assumptions=row.assumptions or [],
+        )
 
-def _path(plan_id: str) -> Path:
-    if not ID_PATTERN.match(plan_id):
+
+def _valid_id(plan_id: str) -> str:
+    if not ID_PATTERN.match(plan_id or ""):
         raise PlanStorageError(f"Недопустимый идентификатор плана: {plan_id!r}")
-    return PLANS_DIR / f"{plan_id}.json"
+    return plan_id
 
 
 def save(name: str, request: dict, rows: list[dict],
          warnings: list[str] | None = None,
          assumptions: list[str] | None = None) -> StoredPlan:
     """Сохранить план под заданным именем."""
+    from infra.db import session_scope
+    from infra.models import Plan
+
     name = (name or "").strip() or f"План от {datetime.now().strftime('%d.%m %H:%M')}"
     if len(name) > MAX_NAME_LENGTH:
         name = name[:MAX_NAME_LENGTH].rstrip() + "…"
@@ -104,13 +112,6 @@ def save(name: str, request: dict, rows: list[dict],
         raise PlanStorageError("Пустой план сохранять нечего")
     if len(rows) > MAX_ROWS:
         raise PlanStorageError(f"Слишком большой план: {len(rows)} строк, максимум {MAX_ROWS}")
-
-    existing = list_plans()
-    if len(existing) >= MAX_PLANS:
-        raise PlanStorageError(
-            f"Сохранено уже {len(existing)} планов, это предел. "
-            f"Удалите ненужные, чтобы освободить место."
-        )
 
     plan = StoredPlan(
         id=uuid.uuid4().hex[:12],
@@ -121,53 +122,64 @@ def save(name: str, request: dict, rows: list[dict],
         warnings=list(warnings or []),
         assumptions=list(assumptions or []),
     )
-    PLANS_DIR.mkdir(parents=True, exist_ok=True)
-    _path(plan.id).write_text(
-        json.dumps(plan.to_dict(), ensure_ascii=False, indent=1), encoding="utf-8"
-    )
+
+    with session_scope() as session:
+        count = session.scalar(select(func.count()).select_from(Plan)) or 0
+        if count >= MAX_PLANS:
+            raise PlanStorageError(
+                f"Сохранено уже {count} планов, это предел. "
+                f"Удалите ненужные, чтобы освободить место."
+            )
+        session.add(Plan(
+            id=plan.id, name=plan.name, created_at=plan.created_at,
+            request=plan.request, rows=plan.rows,
+            warnings=plan.warnings, assumptions=plan.assumptions,
+        ))
+
     return plan
 
 
 def load(plan_id: str) -> StoredPlan:
-    path = _path(plan_id)
-    if not path.is_file():
-        raise PlanStorageError("План не найден — возможно, он был удалён")
-    try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
-        raise PlanStorageError(f"Файл плана повреждён: {exc}") from exc
-    return StoredPlan(
-        id=raw.get("id", plan_id),
-        name=raw.get("name", "без названия"),
-        created_at=raw.get("created_at", ""),
-        request=raw.get("request", {}),
-        rows=raw.get("rows", []),
-        warnings=raw.get("warnings", []),
-        assumptions=raw.get("assumptions", []),
-    )
+    from infra.db import session_scope
+    from infra.models import Plan
+
+    _valid_id(plan_id)
+    with session_scope() as session:
+        row = session.get(Plan, plan_id)
+        if row is None:
+            raise PlanStorageError("План не найден — возможно, он был удалён")
+        return StoredPlan._from_row(row)
 
 
 def list_plans() -> list[StoredPlan]:
     """Все сохранённые планы, новые первыми."""
-    if not PLANS_DIR.is_dir():
+    from sqlalchemy.exc import OperationalError
+
+    from infra.db import session_scope
+    from infra.models import Plan
+
+    try:
+        with session_scope() as session:
+            rows = session.scalars(
+                select(Plan).order_by(Plan.created_at.desc())
+            ).all()
+            return [StoredPlan._from_row(r) for r in rows]
+    except OperationalError:
+        # Нет таблицы (свежий клон без `alembic upgrade`) — пустой список,
+        # страница со списком планов должна открыться.
         return []
-    plans: list[StoredPlan] = []
-    for path in PLANS_DIR.glob("*.json"):
-        try:
-            plans.append(load(path.stem))
-        except PlanStorageError:
-            # Повреждённый файл не должен ронять весь список: остальные
-            # планы читаются, а этот просто не показывается.
-            continue
-    plans.sort(key=lambda p: p.created_at, reverse=True)
-    return plans
 
 
 def delete(plan_id: str) -> bool:
-    path = _path(plan_id)
-    if not path.is_file():
-        return False
-    path.unlink()
+    from infra.db import session_scope
+    from infra.models import Plan
+
+    _valid_id(plan_id)
+    with session_scope() as session:
+        row = session.get(Plan, plan_id)
+        if row is None:
+            return False
+        session.delete(row)
     return True
 
 
