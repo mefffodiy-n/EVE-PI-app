@@ -103,6 +103,16 @@ class TestDeficit:
         result = advise(["Broadcast Node"], crew(3), {}, schematics, recipes)
         assert any("цены" in note.lower() for note in result.notes)
 
+    def test_notes_translate_to_english(self, schematics, recipes):
+        """Панель вместимости не переводилась при переключении на английский."""
+        import re
+
+        result = advise(["Broadcast Node"], crew(3), {}, schematics, recipes)
+        payload = result.to_dict("en")
+        assert payload["notes"]
+        assert not any(re.search("[А-Яа-я]", n) for n in payload["notes"])
+        assert result.to_dict("ru")["notes"] == result.notes
+
 
 class TestSurplus:
     def test_surplus_offers_additions_that_fit_the_remainder(self, schematics, recipes):

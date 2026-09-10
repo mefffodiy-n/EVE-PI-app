@@ -618,7 +618,7 @@ body.light .rolebadge.excess { background:rgba(154,107,18,.12); }
     <div class="lang">
       <button data-lang="ru" class="on">RU</button><button data-lang="en">EN</button>
     </div>
-    <button class="icon-btn" id="themeBtn" onclick="toggleTheme()" title="Тема">
+    <button class="icon-btn" id="themeBtn" onclick="toggleTheme()" title="Тема" data-i18n-title="themeTitle">
       <svg class="ic-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
         <circle cx="12" cy="12" r="4.2"/>
         <path d="M12 2v2.6M12 19.4V22M2 12h2.6M19.4 12H22M4.9 4.9l1.9 1.9M17.2 17.2l1.9 1.9M19.1 4.9l-1.9 1.9M6.8 17.2l-1.9 1.9"/>
@@ -644,26 +644,26 @@ body.light .rolebadge.excess { background:rgba(154,107,18,.12); }
 <!-- ═══ ДАШБОРД ═══════════════════════════════════════════════════ -->
 <div class="page on" id="page-dash">
   <div class="tools">
-    <button class="tool on" data-view="details" title="Детали">
+    <button class="tool on" data-view="details" title="Детали" data-i18n-title="details">
       <svg viewBox="0 0 16 16" fill="currentColor"><rect y="2" width="16" height="2"/><rect y="7" width="16" height="2"/><rect y="12" width="16" height="2"/></svg>
     </button>
-    <button class="tool" data-view="list" title="Список по персонажам">
+    <button class="tool" data-view="list" title="Список по персонажам" data-i18n-title="viewList">
       <svg viewBox="0 0 16 16" fill="currentColor"><rect y="2" width="3" height="2"/><rect x="5" y="2" width="11" height="2"/><rect y="7" width="3" height="2"/><rect x="5" y="7" width="11" height="2"/><rect y="12" width="3" height="2"/><rect x="5" y="12" width="11" height="2"/></svg>
     </button>
-    <button class="tool" data-view="grid" title="Сетка">
+    <button class="tool" data-view="grid" title="Сетка" data-i18n-title="viewGrid">
       <svg viewBox="0 0 16 16" fill="currentColor"><rect width="6" height="6"/><rect x="10" width="6" height="6"/><rect y="10" width="6" height="6"/><rect x="10" y="10" width="6" height="6"/></svg>
     </button>
     <div class="menu" id="sortMenu" style="margin-left:8px">
-      <button class="tool" onclick="document.getElementById('sortMenu').classList.toggle('open')" title="Сортировка">
+      <button class="tool" onclick="document.getElementById('sortMenu').classList.toggle('open')" title="Сортировка" data-i18n-title="sortTitle">
         <svg viewBox="0 0 16 16" fill="currentColor"><rect y="2" width="14" height="2"/><rect y="7" width="10" height="2"/><rect y="12" width="6" height="2"/></svg>
       </button>
       <div class="menu-pop" id="sortPop"></div>
     </div>
     <button class="mini" id="exportBtn" onclick="exportPlan()" style="margin-left:10px"
             data-i18n="export">Экспорт в Excel</button>
-    <div class="counts" id="counts">план не построен</div>
+    <div class="counts" id="counts" data-i18n="counts0">план не построен</div>
   </div>
-  <div id="dashBody"><div class="empty">План не построен. Откройте вкладку «Настройки», выберите продукты и постройте план.</div></div>
+  <div id="dashBody"><div class="empty" data-i18n="noPlanLong">План не построен. Откройте вкладку «Настройки», выберите продукты и постройте план.</div></div>
   <div id="shopping"></div>
   <div class="colony-page" id="colonyPage"></div>
 </div>
@@ -678,7 +678,7 @@ body.light .rolebadge.excess { background:rgba(154,107,18,.12); }
         <label data-i18n="targets">Целевые продукты</label>
         <div class="picker">
           <div class="picker-bar">
-            <input type="search" id="prodSearch" placeholder="поиск…" oninput="renderProducts()">
+            <input type="search" id="prodSearch" placeholder="поиск…" data-i18n-ph="searchPh" oninput="renderProducts()">
             <button class="mini" onclick="clearPick('products')" data-i18n="clearAll">Снять всё</button>
           </div>
           <div class="picker-list" id="productList"></div>
@@ -719,7 +719,7 @@ body.light .rolebadge.excess { background:rgba(154,107,18,.12); }
       <div class="thresholds" id="thresholdNote"></div>
 
       <h2 data-i18n="crew">Персонажи</h2>
-      <div class="crew" id="crew"><div style="color:var(--dim);font-size:12px">
+      <div class="crew" id="crew"><div style="color:var(--dim);font-size:12px" data-i18n="crewPre">
         Появятся после расчёта: планировщик сам распределяет персонажей
         по планетам с учётом их прокачки.</div></div>
 
@@ -727,7 +727,7 @@ body.light .rolebadge.excess { background:rgba(154,107,18,.12); }
 
       <h2 data-i18n="savedPlans">Сохранённые планы</h2>
       <div class="save-bar">
-        <input id="planName" placeholder="название плана">
+        <input id="planName" placeholder="название плана" data-i18n-ph="planNamePh">
         <button class="mini" onclick="savePlan()" data-i18n="save">Сохранить</button>
       </div>
       <div id="savedList"></div>
@@ -739,7 +739,7 @@ body.light .rolebadge.excess { background:rgba(154,107,18,.12); }
       <div id="decision"></div>
       <div id="messages" style="padding:12px 14px 0"></div>
       <div id="profit"></div>
-      <div id="tableWrap"><div class="empty">План не построен.</div></div>
+      <div id="tableWrap"><div class="empty" data-i18n="noPlan">План не построен.</div></div>
     </main>
   </div>
 </div>
@@ -755,6 +755,14 @@ const ICON=id=>`https://images.evetech.net/types/${id}/icon?size=64`;
 let ids={}, plan=[], staffing={}, view='details', sortBy='load';
 let lang='ru', crew=[], meta={};
 let regions={}, systemCounts={}, allProducts=[], allConstellations=[];
+let dataCounts=null;  // {bases, products} — для чипа data, перерисовывается при смене языка
+
+function renderDataChip(){
+  const el=document.getElementById('dataStatus'); if(!el) return;
+  if(dataCounts==='failed'){ el.textContent=t('dataFailed'); return; }
+  if(!dataCounts) return;
+  el.textContent=`${pl(dataCounts.bases,'pConst')} · ${pl(dataCounts.products,'pProd')}`;
+}
 const chosen={products:new Set(), constellations:new Set()};
 
 /* ── Двуязычие ────────────────────────────────────────────────────
@@ -771,11 +779,33 @@ const T={
   whereProcess:'Где перерабатываем',homeSystem:'Домашняя система',crew:'Персонажи',
   build:'Построить план',noPlan:'План не построен. Откройте вкладку «Настройки».',
   colonies:'колоний',mining:'добыча',processing:'переработка',
-  load:'Загрузка',details:'Детали',back:'Назад',reserveOk:'запас везде есть',
+  details:'Детали',back:'Назад',reserveOk:'запас везде есть',
   noReserve:'без запаса',sortLoad:'По загрузке',sortReserve:'По остатку запаса',
   sortPilot:'По имени персонажа',sortSystem:'По системе',
   cProc:'переработка',cMine:'добыча',crewHint:'Персонажи хранятся на сервере и не пропадают при перезаходе.',
-  planetSlots:'слотов планет',wholeRegion:'Весь регион',clearAll:'Снять всё',nothingChosen:'ничего не выбрано',systems:'систем',selectAll:'Выбрать все',pickProducts:'Выберите хотя бы один продукт',pickConst:'Выберите хотя бы одно созвездие',export:'Экспорт в Excel',shopping:'Список закупки: командные центры',shopTotal:'Всего командных центров',exportEmpty:'Сначала постройте план',exportFail:'Не удалось выгрузить файл',profitTitle:'Что выгоднее производить',collectedAgo:'снимок собран',minutesAgo:'мин назад',stale:'устарел',colProduct:'Продукт',colColonies:'Планет',colPerColony:'ISK / колония-час',colPerHour:'ISK / час',colPrice:'Цена за единицу',noPrice:'нет цены',noSnapshot:'Снимок цен не собран',advDeficit:'Персонажей не хватает на эту цепочку',advSurplus:'Персонажей больше, чем нужно',advDeficitLead:'Полный цикл требует {need} колоний, а в пуле {have} слотов. Вот что поместится целиком:',advSurplusLead:'Выбранное занимает {need} колоний из {have}. Свободно {spare} — можно добавить:',advTake:'Взять',advIgnoreDeficit:'Строить как есть',advIgnoreSurplus:'Занять свободных добычей',advIgnoreDeficitHint:'план будет с дефицитом сырья',advIgnoreSurplusHint:'добыча сырья той же цепочки, по убыванию дефицитности',colonies3:'колоний',excess:'Добыча (избыток)',directP2:'Делать P2 прямо на добывающих планетах',directP2Hint:'где есть оба вида сырья — не нужно возить P1',mSpread:'Разброс по системам',logi:'всего задействовано',systemsAvg:'систем на персонажа',sysOne:'система',sysFew:'системы',sysMany:'систем',logiGood:'колонии собраны компактно',logiPoor:'урожай придётся собирать в разъездах',mColonies:'Колоний в плане',mChars:'Персонажей занято',mPeak:'Самая нагруженная',mShort:'Не хватает персонажей',planClosed:'план закрыт',fitsUpTo:'двойной шаблон помещается на планеты до',km:'км',suitableHere:'подходящих планет в системе',ofThem:'из них',decisionTitle:'План упёрся в размер планет',decisionText:'В выбранной домашней системе двойной шаблон не помещается ни на одну планету. Выберите, как поступить.',chooseOther:'Выбрать другую систему',useSingle:'Ставить по одному шаблону',singleNote:'планет и персонажей потребуется вдвое больше',savedPlans:'Сохранённые планы',save:'Сохранить',load:'Открыть',del:'Удалить',compare:'Сравнить',noSaved:'Пока ничего не сохранено',saveFirst:'Сначала постройте план',pickTwo:'Отметьте два плана для сравнения',cmpTitle:'Разница',colonies2:'колоний',chars2:'персонажей',peak2:'пиковая загрузка',onlyLeft:'Только в первом',onlyRight:'Только во втором',same:'Совпало'},
+  planetSlots:'слотов планет',wholeRegion:'Весь регион',clearAll:'Снять всё',nothingChosen:'ничего не выбрано',systems:'систем',selectAll:'Выбрать все',pickProducts:'Выберите хотя бы один продукт',pickConst:'Выберите хотя бы одно созвездие',export:'Экспорт в Excel',shopping:'Список закупки: командные центры',shopTotal:'Всего командных центров',exportEmpty:'Сначала постройте план',exportFail:'Не удалось выгрузить файл',profitTitle:'Что выгоднее производить',collectedAgo:'снимок собран',minutesAgo:'мин назад',stale:'устарел',colProduct:'Продукт',colColonies:'Планет',colPerColony:'ISK / колония-час',colPerHour:'ISK / час',colPrice:'Цена за единицу',noPrice:'нет цены',noSnapshot:'Снимок цен не собран',advDeficit:'Персонажей не хватает на эту цепочку',advSurplus:'Персонажей больше, чем нужно',advDeficitLead:'Полный цикл требует {need} колоний, а в пуле {have} слотов. Вот что поместится целиком:',advSurplusLead:'Выбранное занимает {need} колоний из {have}. Свободно {spare} — можно добавить:',advTake:'Взять',advIgnoreDeficit:'Строить как есть',advIgnoreSurplus:'Занять свободных добычей',advIgnoreDeficitHint:'план будет с дефицитом сырья',advIgnoreSurplusHint:'добыча сырья той же цепочки, по убыванию дефицитности',colonies3:'колоний',excess:'Добыча (избыток)',directP2:'Делать P2 прямо на добывающих планетах',directP2Hint:'где есть оба вида сырья — не нужно возить P1',mSpread:'Разброс по системам',logi:'всего задействовано',systemsAvg:'систем на персонажа',sysOne:'система',sysFew:'системы',sysMany:'систем',logiGood:'колонии собраны компактно',logiPoor:'урожай придётся собирать в разъездах',mColonies:'Колоний в плане',mChars:'Персонажей занято',mPeak:'Самая нагруженная',mShort:'Не хватает персонажей',planClosed:'план закрыт',fitsUpTo:'двойной шаблон помещается на планеты до',km:'км',suitableHere:'подходящих планет в системе',ofThem:'из них',decisionTitle:'План упёрся в размер планет',decisionText:'В выбранной домашней системе двойной шаблон не помещается ни на одну планету. Выберите, как поступить.',chooseOther:'Выбрать другую систему',useSingle:'Ставить по одному шаблону',singleNote:'планет и персонажей потребуется вдвое больше',savedPlans:'Сохранённые планы',save:'Сохранить',load:'Открыть',del:'Удалить',compare:'Сравнить',noSaved:'Пока ничего не сохранено',saveFirst:'Сначала постройте план',pickTwo:'Отметьте два плана для сравнения',cmpTitle:'Разница',colonies2:'колоний',chars2:'персонажей',peak2:'пиковая загрузка',onlyLeft:'Только в первом',onlyRight:'Только во втором',same:'Совпало',
+  noPlanLong:'План не построен. Откройте вкладку «Настройки», выберите продукты и постройте план.',
+  planEmpty:'План пуст.',counts0:'план не построен',searchPh:'поиск…',planNamePh:'название плана',
+  crewPre:'Появятся после расчёта: планировщик сам распределяет персонажей по планетам с учётом их прокачки.',
+  dataFailed:'не загружены',snapshotMade:'Снимок сделан',
+  profitNote:'Ранжировано по ISK на колонию в час: ограниченный ресурс — планеты и персонажи. Налог POCO, доставка и биржевые сборы не учтены, поэтому числа — верхняя оценка.',
+  pgFrom:'Из чего сложилось (Power)',sStruct:'структуры',sHeads:'головы',sLinks:'линки',
+  capCap:'Вместимость',capContent:'Содержимое',cycNow:'Текущий цикл',cycNone:'данных о цикле нет',
+  extractsW:'Добывает',heads10:'10 голов',cycUnknown:'Состояние цикла неизвестно',
+  afterGame:'появится после подключения к игре',producesW:'Производит',inputW:'Вход',
+  sharedExtract:'На этой планете {n} наших экстрактора на одном сырье — выработка каждого будет ниже расчётной.',
+  onPlan:'к плану',onPlanets:'на',
+  thColony:'Колония',thColonySub:'кто и где',thProd:'Производство',thProdSub:'что делает и из чего',
+  thLoad:'Нагрузка',thLoadSub:'из чего сложилась и сколько осталось',thChar:'Персонаж',thPlanet:'Планета',
+  thProduct:'Продукт',thPgFrom:'Из чего сложилось (PG)',thReserve:'Запас',
+  pColony:['колония','колонии','колоний'],pPlanet:['планете','планетах','планетах'],
+  pNote:['замечание','замечания','замечаний'],pConst:['созвездие','созвездия','созвездий'],
+  pProd:['продукт','продукта','продуктов'],
+  ssoUnavailable:'Вход недоступен',
+  notJson:'{api} вернул не JSON. Запустите «python run.py» и откройте {flask}/',
+  themeTitle:'Тема',viewList:'Список по персонажам',viewGrid:'Сетка',sortTitle:'Сортировка',loadLbl:'Загрузка',
+  role_mine:'Добыча',role_mine_surplus:'Добыча (избыток)',role_proc:'Переработка',role_direct_p2:'Прямое P2',
+  factW:'фабрик',pFactory:['фабрика','фабрики','фабрик']},
  en:{brandSub:'colony planner',tabDash:'Dashboard',tabSetup:'Settings',
   chipData:'data',help:'Help',about:'About',sso:'Log in with EVE SSO',
   online:'online',offline:'offline',noData:'no data',
@@ -784,11 +814,33 @@ const T={
   whereProcess:'Where to process',homeSystem:'Home system',crew:'Characters',
   build:'Build plan',noPlan:'No plan yet. Open the Settings tab.',
   colonies:'colonies',mining:'extraction',processing:'processing',
-  load:'Load',details:'Details',back:'Back',reserveOk:'headroom everywhere',
+  details:'Details',back:'Back',reserveOk:'headroom everywhere',
   noReserve:'no headroom',sortLoad:'By load',sortReserve:'By remaining headroom',
   sortPilot:'By character name',sortSystem:'By system',
   cProc:'processing',cMine:'extraction',crewHint:'Characters live on the server and survive a reload.',
-  planetSlots:'planet slots',wholeRegion:'Whole region',clearAll:'Clear all',nothingChosen:'nothing selected',systems:'systems',selectAll:'Select all',pickProducts:'Select at least one product',pickConst:'Select at least one constellation',export:'Export to Excel',shopping:'Shopping list: command centres',shopTotal:'Command centres in total',exportEmpty:'Build a plan first',exportFail:'Export failed',profitTitle:'What is most profitable to produce',collectedAgo:'snapshot taken',minutesAgo:'min ago',stale:'stale',colProduct:'Product',colColonies:'Planets',colPerColony:'ISK / colony-hour',colPerHour:'ISK / hour',colPrice:'Unit price',noPrice:'no price',noSnapshot:'No price snapshot yet',advDeficit:'Not enough characters for this chain',advSurplus:'More characters than needed',advDeficitLead:'A full cycle needs {need} colonies, the pool has {have} slots. These fit entirely:',advSurplusLead:'Your choice takes {need} of {have} colonies. {spare} free — you could add:',advTake:'Take',advIgnoreDeficit:'Build as is',advIgnoreSurplus:'Put spare on extraction',advIgnoreDeficitHint:'the plan will report a raw material shortage',advIgnoreSurplusHint:'extraction of the same chain, scarcest first',colonies3:'colonies',excess:'Extraction (surplus)',directP2:'Make P2 right on the extraction planets',directP2Hint:'where both raw materials occur — no P1 hauling',mSpread:'Systems per character',logi:'systems used in total',systemsAvg:'systems each',sysOne:'system',sysFew:'systems',sysMany:'systems',logiGood:'colonies are compact',logiPoor:'harvesting will need travel',mColonies:'Colonies in the plan',mChars:'Characters used',mPeak:'Most loaded',mShort:'Characters missing',planClosed:'plan is complete',fitsUpTo:'a double template fits planets up to',km:'km',suitableHere:'suitable planets in this system',ofThem:'of them',decisionTitle:'The plan hit planet size limits',decisionText:'No planet in the chosen home system fits a double template. Pick how to proceed.',chooseOther:'Pick another system',useSingle:'Use single templates',singleNote:'twice as many planets and characters will be needed',savedPlans:'Saved plans',save:'Save',load:'Open',del:'Delete',compare:'Compare',noSaved:'Nothing saved yet',saveFirst:'Build a plan first',pickTwo:'Tick two plans to compare',cmpTitle:'Difference',colonies2:'colonies',chars2:'characters',peak2:'peak load',onlyLeft:'Only in the first',onlyRight:'Only in the second',same:'Unchanged'}
+  planetSlots:'planet slots',wholeRegion:'Whole region',clearAll:'Clear all',nothingChosen:'nothing selected',systems:'systems',selectAll:'Select all',pickProducts:'Select at least one product',pickConst:'Select at least one constellation',export:'Export to Excel',shopping:'Shopping list: command centres',shopTotal:'Command centres in total',exportEmpty:'Build a plan first',exportFail:'Export failed',profitTitle:'What is most profitable to produce',collectedAgo:'snapshot taken',minutesAgo:'min ago',stale:'stale',colProduct:'Product',colColonies:'Planets',colPerColony:'ISK / colony-hour',colPerHour:'ISK / hour',colPrice:'Unit price',noPrice:'no price',noSnapshot:'No price snapshot yet',advDeficit:'Not enough characters for this chain',advSurplus:'More characters than needed',advDeficitLead:'A full cycle needs {need} colonies, the pool has {have} slots. These fit entirely:',advSurplusLead:'Your choice takes {need} of {have} colonies. {spare} free — you could add:',advTake:'Take',advIgnoreDeficit:'Build as is',advIgnoreSurplus:'Put spare on extraction',advIgnoreDeficitHint:'the plan will report a raw material shortage',advIgnoreSurplusHint:'extraction of the same chain, scarcest first',colonies3:'colonies',excess:'Extraction (surplus)',directP2:'Make P2 right on the extraction planets',directP2Hint:'where both raw materials occur — no P1 hauling',mSpread:'Systems per character',logi:'systems used in total',systemsAvg:'systems each',sysOne:'system',sysFew:'systems',sysMany:'systems',logiGood:'colonies are compact',logiPoor:'harvesting will need travel',mColonies:'Colonies in the plan',mChars:'Characters used',mPeak:'Most loaded',mShort:'Characters missing',planClosed:'plan is complete',fitsUpTo:'a double template fits planets up to',km:'km',suitableHere:'suitable planets in this system',ofThem:'of them',decisionTitle:'The plan hit planet size limits',decisionText:'No planet in the chosen home system fits a double template. Pick how to proceed.',chooseOther:'Pick another system',useSingle:'Use single templates',singleNote:'twice as many planets and characters will be needed',savedPlans:'Saved plans',save:'Save',load:'Open',del:'Delete',compare:'Compare',noSaved:'Nothing saved yet',saveFirst:'Build a plan first',pickTwo:'Tick two plans to compare',cmpTitle:'Difference',colonies2:'colonies',chars2:'characters',peak2:'peak load',onlyLeft:'Only in the first',onlyRight:'Only in the second',same:'Unchanged',
+  noPlanLong:'No plan yet. Open the Settings tab, pick products and build a plan.',
+  planEmpty:'The plan is empty.',counts0:'no plan yet',searchPh:'search…',planNamePh:'plan name',
+  crewPre:'They appear after the calculation: the planner spreads characters across planets by their skills.',
+  dataFailed:'load failed',snapshotMade:'Snapshot taken',
+  profitNote:'Ranked by ISK per colony-hour: the scarce resources are planets and characters. POCO tax, hauling and market fees are not counted, so the figures are an upper bound.',
+  pgFrom:'Power breakdown',sStruct:'structures',sHeads:'heads',sLinks:'links',
+  capCap:'Capacity',capContent:'Contents',cycNow:'Current cycle',cycNone:'no cycle data',
+  extractsW:'Extracts',heads10:'10 heads',cycUnknown:'Cycle state unknown',
+  afterGame:'appears once connected to the game',producesW:'Produces',inputW:'Input',
+  sharedExtract:'This planet has {n} of our extractors on the same resource — each will yield below the estimate.',
+  onPlan:'on the plan',onPlanets:'across',
+  thColony:'Colony',thColonySub:'who and where',thProd:'Production',thProdSub:'what it makes and from what',
+  thLoad:'Load',thLoadSub:'how it adds up and what is left',thChar:'Character',thPlanet:'Planet',
+  thProduct:'Product',thPgFrom:'PG breakdown',thReserve:'Headroom',
+  pColony:['colony','colonies','colonies'],pPlanet:['planet','planets','planets'],
+  pNote:['note','notes','notes'],pConst:['constellation','constellations','constellations'],
+  pProd:['product','products','products'],
+  ssoUnavailable:'Login unavailable',
+  notJson:'{api} returned non-JSON. Run “python run.py” and open {flask}/',
+  themeTitle:'Theme',viewList:'By character',viewGrid:'Grid',sortTitle:'Sort',loadLbl:'Load',
+  role_mine:'Extraction',role_mine_surplus:'Extraction (surplus)',role_proc:'Processing',role_direct_p2:'Direct P2',
+  factW:'factories',pFactory:['factory','factories','factories']}
 };
 const t=k=>(T[lang]||T.ru)[k]||k;
 
@@ -804,11 +856,17 @@ const store={
 function applyLang(){
   document.documentElement.lang=lang;
   document.querySelectorAll('[data-i18n]').forEach(el=>el.textContent=t(el.dataset.i18n));
+  document.querySelectorAll('[data-i18n-ph]').forEach(el=>el.placeholder=t(el.dataset.i18nPh));
+  document.querySelectorAll('[data-i18n-title]').forEach(el=>el.title=t(el.dataset.i18nTitle));
   document.querySelectorAll('.lang button').forEach(b=>b.classList.toggle('on',b.dataset.lang===lang));
   store.set('pi-lang',lang);
+  renderDataChip(); renderMeta();
   buildSortMenu(); renderCrew(); renderDash(); renderShopping(); renderProfit(); renderSaved();
   if(allProducts.length){ renderProducts(); renderConstellations(); } if(plan.length){renderAnswers(); renderTable();}
   if(document.getElementById('modal').classList.contains('on')) openModal(currentModal);
+  if(currentColony && document.getElementById('colonyPage').classList.contains('on')) openColony(currentColony);
+  if(typeof relocalizePlan==='function') relocalizePlan();  // предупреждения сервера — на новый язык
+  if(typeof loadAdvice==='function' && adviceData) loadAdvice();  // панель вместимости — тоже с сервера
 }
 
 /* ── Тема ──────────────────────────────────────────────────────── */
@@ -824,9 +882,32 @@ function setTheme(name){
   store.set('pi-theme',name);
 }
 
-const STRUCT_RU={command_center:'Командный центр',launchpad:'Причал',storage_facility:'Склад',
-  extractor_control_unit:'Экстрактор',basic_industry_facility:'Базовая фабрика',
-  advanced_industry_facility:'Продвинутая фабрика',high_tech_industry_facility:'Высокотехнологичная фабрика'};
+const STRUCT={
+  ru:{command_center:'Командный центр',launchpad:'Причал',storage_facility:'Склад',
+    extractor_control_unit:'Экстрактор',basic_industry_facility:'Базовая фабрика',
+    advanced_industry_facility:'Продвинутая фабрика',high_tech_industry_facility:'Высокотехнологичная фабрика'},
+  en:{command_center:'Command centre',launchpad:'Launchpad',storage_facility:'Storage',
+    extractor_control_unit:'Extractor',basic_industry_facility:'Basic factory',
+    advanced_industry_facility:'Advanced factory',high_tech_industry_facility:'High-tech factory'}};
+const sname=kind=>(STRUCT[lang]||STRUCT.ru)[kind]||kind;
+/* Роль колонии: сервер шлёт role_key (mine|mine_surplus|proc|direct_p2)
+   и role_tier («P2/P3»); строка role остаётся русской и не для показа. */
+const ROLE_CLASS={mine:'mine',mine_surplus:'excess',proc:'proc',direct_p2:'direct'};
+const roleClass=row=>ROLE_CLASS[row.role_key]||'proc';
+const roleLabel=row=>t('role_'+(row.role_key||'proc'))+(row.role_tier?' '+row.role_tier:'');
+const isMining=row=>row.role_key==='mine'||row.role_key==='mine_surplus';
+/* Число фабрик: сервер шлёт factory_summary как данные, строка structures
+   осталась русской (нужна экспорту). */
+function factoryLabel(row){
+  const fs=row.factory_summary||{};
+  if(fs.advanced!=null) return `${fs.advanced} ${t('factW')} + ${fs.basic} basic`;
+  if(fs.factories!=null) return pl(fs.factories,'pFactory');
+  return row.structures||'';
+}
+/* Число в языковом формате и множественное число под язык. */
+const nloc=n=>Number(n).toLocaleString(lang==='en'?'en-US':'ru-RU');
+const pl=(n,forms)=>{ const f=(T[lang]||T.ru)[forms]||['','',''];
+  return lang==='ru'?plural(n,f[0],f[1],f[2]):`${n} ${n===1?f[0]:f[2]}`; };
 const RING={command_center:'--ring-infra',launchpad:'--ring-infra',storage_facility:'--ring-infra',
   extractor_control_unit:'--ring-extract',basic_industry_facility:'--ring-basic',
   advanced_industry_facility:'--ring-adv',high_tech_industry_facility:'--ring-adv'};
@@ -844,7 +925,9 @@ function initials(name){
     .map(w=>w[0].toUpperCase()).join('');
 }
 
-function plural(n,one,few,many){const a=Math.abs(n)%100,b=a%10;
+function plural(n,one,few,many){
+  if(lang!=='ru') return `${n} ${n===1?one:many}`;
+  const a=Math.abs(n)%100,b=a%10;
   if(a>10&&a<20)return `${n} ${many}`; if(b>1&&b<5)return `${n} ${few}`;
   if(b===1)return `${n} ${one}`; return `${n} ${many}`;}
 
@@ -855,7 +938,7 @@ function orb(row,size){
   const peak=Math.max(row.cpu_percent,row.pg_percent);
   const r=(size/2)-2, c=2*Math.PI*r;
   const color=peak>=95?'var(--alarm)':peak>=90?'var(--amber)':
-              (row.role.includes('Добыча')?'var(--ring-extract)':'var(--ring-adv)');
+              (isMining(row)?'var(--ring-extract)':'var(--ring-adv)');
   const planetId=ids['planet:'+row.planet_type], cargoId=row.type_id;
   return `<div class="orb" style="--orb:${size}px" onclick="openColony('${row.id}')"
             title="${row.character} · ${row.system} ${row.planet} · ${row.res_out}">
@@ -908,7 +991,7 @@ function structOrb(kind,count,planetType,opts){
          stroke-dasharray="${cIn*cyc/100} ${cIn}" stroke-linecap="round"/>`;
 
   return `<div class="orb${cyc!=null?' busy':''}" style="--orb:${size}px;cursor:default"
-       title="${STRUCT_RU[kind]}${count>1?' ×'+count:''}${kind==='command_center'?' ('+planetType+')':''}">
+       title="${sname(kind)}${count>1?' ×'+count:''}${kind==='command_center'?' ('+planetType+')':''}">
     <div class="disc" style="background:#0d131b">${id?`<img src="${ICON(id)}" style="width:58%;height:58%;object-fit:contain">`:''}</div>
     <svg class="ring" viewBox="0 0 ${size} ${size}">
       <circle class="track" cx="${size/2}" cy="${size/2}" r="${R}"/>
@@ -941,7 +1024,7 @@ function sorted(){
 
 function renderDash(){
   const box=document.getElementById('dashBody');
-  if(!plan.length){ box.innerHTML='<div class="empty">План не построен. Откройте вкладку «Настройки».</div>'; return; }
+  if(!plan.length){ box.innerHTML=`<div class="empty">${t('noPlan')}</div>`; return; }
   const rows=sorted();
 
   if(view==='details'){
@@ -954,17 +1037,17 @@ function renderDash(){
           <div>
             <div class="pilot-name">${p.character}</div>
             <div class="sub">
-              <span class="rolebadge ${p.role.includes('Прямое')?'direct':p.role.includes('избыток')?'excess':p.role.includes('Добыча')?'mine':'proc'}">${p.role}</span>
+              <span class="rolebadge ${roleClass(p)}">${roleLabel(p)}</span>
               <span class="sysbadge">${p.system} ${p.planet}</span>
               <span class="sec" style="color:${secColor(p.planet_type)}">${p.planet_type}</span>
-              <span class="num">${Math.round(p.planet_radius_km).toLocaleString('ru')} км</span>
+              <span class="num">${nloc(Math.round(p.planet_radius_km))} ${t('km')}</span>
             </div>
           </div>
           <div class="tail">
-            <div class="lbl">Загрузка</div>
+            <div class="lbl">${t('loadLbl')}</div>
             <div class="val${peak>=90?' hot':''}">CPU ${p.cpu_percent.toFixed(1)}% · PG ${p.pg_percent.toFixed(1)}%</div>
           </div>
-          <button class="details-btn" onclick="openColony('${p.id}')">Детали</button>
+          <button class="details-btn" onclick="openColony('${p.id}')">${t('details')}</button>
         </div>
         <div class="strip">${expandStructures(p).map(kind=>structOrb(kind,1,p.planet_type,
               kind==="command_center"?{cpu:p.cpu_percent,pg:p.pg_percent}:{})).join('')}</div>
@@ -980,7 +1063,7 @@ function renderDash(){
         <div class="who">
           <div class="pilot-lg" style="margin-bottom:4px">${initials(name)}</div>
           <div class="pilot-name" style="font-size:12px">${name}</div>
-          <div class="sub" style="font-size:11px">${plural(items.length,'колония','колонии','колоний')}</div>
+          <div class="sub" style="font-size:11px">${pl(items.length,'pColony')}</div>
         </div>
         <div class="orbs">${items.map(p=>orb(p,52)).join('')}</div>
       </div>`).join('');
@@ -992,8 +1075,8 @@ function renderDash(){
 
   const strained=plan.filter(p=>Math.max(p.cpu_percent,p.pg_percent)>=90).length;
   document.getElementById('counts').innerHTML=
-    `<b>${plural(plan.length,'колония','колонии','колоний')}</b>`
-    + (strained?` · <span class="idle">${strained} без запаса</span>`:' · запас везде есть');
+    `<b>${pl(plan.length,'pColony')}</b>`
+    + (strained?` · <span class="idle">${strained} ${t('noReserve')}</span>`:` · ${t('reserveOk')}`);
 }
 
 /* ── Пороговые радиусы ────────────────────────────────────────
@@ -1023,8 +1106,8 @@ function renderThresholds(){
   const suitable=systemPlanets.filter(pl=>['Barren','Temperate'].includes(pl.type));
 
   box.innerHTML=`
-    ${limit?`<div>${t('fitsUpTo')} <b>${Math.round(limit).toLocaleString('ru')}</b> ${t('km')} (P2/P3)`
-      +(limitP4?`, <b>${Math.round(limitP4).toLocaleString('ru')}</b> ${t('km')} (P4)`:'')+`</div>`:''}
+    ${limit?`<div>${t('fitsUpTo')} <b>${nloc(Math.round(limit))}</b> ${t('km')} (P2/P3)`
+      +(limitP4?`, <b>${nloc(Math.round(limitP4))}</b> ${t('km')} (P4)`:'')+`</div>`:''}
     ${systemPlanets.length?`<div class="${fitting.length?'fit':'nofit'}">
       ${t('suitableHere')}: <b>${suitable.length}</b>, ${t('ofThem')}
       <b>${fitting.length}</b> ${fitting.length?'✓':'✗'}</div>`:''}`;
@@ -1053,7 +1136,7 @@ async function loadAdvice(){
   try{
     adviceData=await (await fetch(`${API}/advice`,{method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({target_products:targets})})).json();
+      body:JSON.stringify({target_products:targets,lang})})).json();
   }catch(e){ adviceData=null; }
   renderAdvice();
 }
@@ -1167,7 +1250,8 @@ async function savePlan(){
   const name=document.getElementById('planName').value;
   const r=await fetch(`${API}/plans`,{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({name,rows:plan,request:lastRequest||{},
-      warnings:lastWarnings||[],assumptions:lastAssumptions||[]})});
+      warnings:[...((lastPlanResp&&lastPlanResp.critical_warnings)||[]),...(lastWarnings||[])],
+      assumptions:lastAssumptions||[]})});
   const d=await r.json();
   if(d.status!=='success'){ alert(d.message); return; }
   currentPlanId=d.plan.id;
@@ -1180,7 +1264,8 @@ async function openSaved(id){
   if(d.status!=='success'){ alert(d.message); return; }
   plan=d.plan.rows||[]; currentPlanId=id;
   lastWarnings=d.plan.warnings||[]; lastAssumptions=d.plan.assumptions||[];
-  renderMessages(lastWarnings,lastAssumptions);
+  lastPlanResp={critical_warnings:[]};  // сохранённый план хранит строки как есть
+  renderMessages();
   renderAnswers(); renderTable(); renderDash(); renderCrew(); renderShopping(); renderSaved();
   show('dash');
 }
@@ -1216,7 +1301,7 @@ async function runCompare(){
    Ранжирование считает сервер (domain/profit.py) по ISK на колонию
    в час. Здесь только показ: если бы браузер считал сам, два места
    могли бы давать разные ответы. */
-let profitData=null, lastWarnings=[], lastAssumptions=[], lastLogistics=null;
+let profitData=null, lastWarnings=[], lastAssumptions=[], lastLogistics=null, lastPlanResp=null;
 
 async function loadProfit(){
   try{ profitData=await (await fetch(`${API}/market/best-product`)).json(); }
@@ -1255,7 +1340,7 @@ function renderProfit(){
         <td class="r num">${isk(r.revenue_per_hour)}</td>
         <td class="r num" style="color:${r.isk_per_colony_hour?'var(--bright)':'inherit'}">${isk(r.isk_per_colony_hour)}</td>
       </tr>`).join('')}</tbody></table>
-    <div class="profit-note">${profitData.note||''}</div></div>`;
+    <div class="profit-note">${t('profitNote')}</div></div>`;
 }
 
 /* ── Список закупки ──────────────────────────────────────────
@@ -1288,7 +1373,7 @@ async function exportPlan(){
   btn.disabled=true;
   try{
     const r=await fetch(`${API}/export`,{method:'POST',
-      headers:{'Content-Type':'application/json'},body:JSON.stringify({plan_data:plan})});
+      headers:{'Content-Type':'application/json'},body:JSON.stringify({plan_data:plan,lang})});
     if(!r.ok){
       const d=await r.json().catch(()=>({}));
       throw new Error(d.message||`HTTP ${r.status}`);
@@ -1305,8 +1390,10 @@ async function exportPlan(){
 }
 
 /* ── Панель колонии: разбор по структурам, как в игре ─────────── */
+let currentColony=null;
 function openColony(id){
   const p=plan.find(x=>x.id===id); if(!p)return;
+  currentColony=id;
   const pgb=p.pg_breakdown||{};
   const planetId=ids['planet:'+p.planet_type];
 
@@ -1333,32 +1420,32 @@ function openColony(id){
           <div class="meter"><i class="pg${p.pg_percent<90?' ok':''}" style="width:${Math.min(p.pg_percent,100)}%"></i></div></div>
       </div>
       <div class="meta" style="margin-top:6px">
-        Из чего сложилось (Power): структуры ${pgb.structures||0}% · головы ${pgb.heads||0}% · линки ${pgb.links||0}%</div>`;
+        ${t('pgFrom')}: ${t('sStruct')} ${pgb.structures||0}% · ${t('sHeads')} ${pgb.heads||0}% · ${t('sLinks')} ${pgb.links||0}%</div>`;
     } else if(isStore){
       fields=`<div class="cols2">
-        <div><div class="lbl">Вместимость</div>
+        <div><div class="lbl">${t('capCap')}</div>
           <div class="meter"><i class="ok" style="width:0%;background:var(--ring-infra)"></i></div>
           <div class="val">0 / ${kind==='launchpad'?'10 000':'12 000'} m³</div></div>
-        <div><div class="lbl">Содержимое</div><div class="meta">нет данных</div></div>
+        <div><div class="lbl">${t('capContent')}</div><div class="meta">${t('noData')}</div></div>
       </div>`;
     } else if(isECU){
       fields=`<div class="cols2">
-        <div><div class="lbl">Текущий цикл</div>
+        <div><div class="lbl">${t('cycNow')}</div>
           <div class="meter"><i style="width:0%;background:var(--ring-extract)"></i></div>
-          <div class="meta">данных о цикле нет</div></div>
-        <div><div class="lbl">Добывает</div>
+          <div class="meta">${t('cycNone')}</div></div>
+        <div><div class="lbl">${t('extractsW')}</div>
           <div class="val">${p.res_in||'—'}</div>
-          <div class="meta">10 голов</div></div>
+          <div class="meta">${t('heads10')}</div></div>
       </div>`;
     } else if(isFactory){
       const inputs=(p.res_in||'').split(',').map(x=>x.trim()).filter(Boolean);
       fields=`<div class="cols2">
-        <div><div class="state-wait">Состояние цикла неизвестно</div>
+        <div><div class="state-wait">${t('cycUnknown')}</div>
           <div class="meter"><i style="width:0%"></i></div>
-          <div class="meta">появится после подключения к игре</div></div>
-        <div><div class="lbl">Производит</div>
+          <div class="meta">${t('afterGame')}</div></div>
+        <div><div class="lbl">${t('producesW')}</div>
           <div class="val">${p.res_out}</div>
-          <div class="lbl" style="margin-top:5px">Вход</div>
+          <div class="lbl" style="margin-top:5px">${t('inputW')}</div>
           <div class="inputs">${inputs.map(n=>ids[n]
             ?`<span class="have" title="${n}"><img src="${ICON(ids[n])}" alt=""></span>`
             :`<span title="${n}">·</span>`).join('')}</div></div>
@@ -1368,7 +1455,7 @@ function openColony(id){
     return `<div class="unit">
       ${structOrb(kind,1,p.planet_type,isCC?{cpu:p.cpu_percent,pg:p.pg_percent,size:52}:{size:52})}
       <div class="panel">
-        <div class="title">${STRUCT_RU[kind]} <span class="code">${code}</span></div>
+        <div class="title">${sname(kind)} <span class="code">${code}</span></div>
         ${fields}
       </div>
     </div>`;
@@ -1382,15 +1469,14 @@ function openColony(id){
         <div class="sub">
           <span class="sysbadge">${p.system} ${p.planet}</span>
           <span class="sec" style="color:${secColor(p.planet_type)}">${p.planet_type}</span>
-          <span class="num">${Math.round(p.planet_radius_km).toLocaleString('ru')} км</span>
-          <span>${p.role}</span>
+          <span class="num">${nloc(Math.round(p.planet_radius_km))} ${t('km')}</span>
+          <span>${roleLabel(p)}</span>
         </div>
       </div>
-      <button class="back" onclick="closeColony()">Назад</button>
+      <button class="back" onclick="closeColony()">${t('back')}</button>
     </div>
     ${(p.shared_extraction_count||1)>1?`<div class="msg" style="margin:0 16px 8px">
-      На этой планете ${p.shared_extraction_count} наших экстрактора на одном сырье —
-      выработка каждого будет ниже расчётной.</div>`:''}
+      ${t('sharedExtract').replace('{n}',p.shared_extraction_count)}</div>`:''}
     ${body}`;
 
   document.getElementById('dashBody').style.display='none';
@@ -1400,6 +1486,7 @@ function openColony(id){
 }
 
 function closeColony(){
+  currentColony=null;
   document.getElementById('colonyPage').classList.remove('on');
   document.getElementById('dashBody').style.display='';
   document.getElementById('shopping').style.display='';
@@ -1734,22 +1821,27 @@ function closeModal(){ document.getElementById('modal').classList.remove('on'); 
 /* ── Состояние сервера и персонажи ────────────────────────────── */
 async function loadMeta(){
   try{
-    const d=await (await fetch(`${API}/meta`)).json();
-    meta=d;
-    document.getElementById('appVersion').textContent=d.version||'—';
-    const chip=document.getElementById('chipEsi'), dot=chip.querySelector('.dot');
-    const sv=d.server||{};
-    if(sv.available && sv.players!=null){
-      dot.className='dot'+(sv.stale?' stale':' live');
-      document.getElementById('esiPlayers').textContent=
-        `${sv.players.toLocaleString('ru')} ${t('online')}`;
-      chip.title=sv.stale?`Снимок сделан ${sv.age_minutes} мин назад`:'';
-    } else {
-      dot.className='dot';
-      document.getElementById('esiPlayers').textContent=t('noData');
-      chip.title=sv.hint||'';
-    }
-  }catch(e){ document.getElementById('esiPlayers').textContent=t('noData'); }
+    meta=await (await fetch(`${API}/meta`)).json();
+  }catch(e){ meta={_failed:true}; }
+  renderMeta();
+}
+/* Отрисовка из сохранённого meta — вызывается и при смене языка,
+   иначе чип «в игре / online» остаётся на языке первой загрузки. */
+function renderMeta(){
+  const chip=document.getElementById('chipEsi'); if(!chip) return;
+  const dot=chip.querySelector('.dot');
+  const v=document.getElementById('appVersion'); if(v) v.textContent=meta.version||'—';
+  const sv=meta.server||{};
+  if(meta._failed){ document.getElementById('esiPlayers').textContent=t('noData'); return; }
+  if(sv.available && sv.players!=null){
+    dot.className='dot'+(sv.stale?' stale':' live');
+    document.getElementById('esiPlayers').textContent=`${nloc(sv.players)} ${t('online')}`;
+    chip.title=sv.stale?`${t('snapshotMade')} ${sv.age_minutes} ${t('minutesAgo')}`:'';
+  } else {
+    dot.className='dot';
+    document.getElementById('esiPlayers').textContent=t('noData');
+    chip.title=sv.hint||'';
+  }
 }
 
 async function loadCrew(){
@@ -1764,7 +1856,7 @@ async function startLogin(){
   const r=await fetch(`${API}/auth/login-url`);
   const d=await r.json();
   if(d.status==='success' && d.url){ location.href=d.url; return; }
-  alert(d.message||'Вход недоступен');
+  alert(d.message||t('ssoUnavailable'));
 }
 
 /* ── Настройки ──────────────────────────────────────────────── */
@@ -1772,7 +1864,7 @@ async function boot(){
   try{
     const res=await fetch(`${API}/initial-data`);
     if(!(res.headers.get('content-type')||'').includes('application/json'))
-      throw new Error(`${API} вернул не JSON. Запустите «python run.py» и откройте ${FLASK}/`);
+      throw new Error(t('notJson').replace('{api}',API).replace('{flask}',FLASK));
     const d=await res.json();
     ids=d.product_ids||{};
     allConstellations=d.bases||[];
@@ -1780,12 +1872,11 @@ async function boot(){
     regions=d.regions||{};
     systemCounts=d.system_counts||{};
     renderProducts(); renderConstellations();
-    document.getElementById('dataStatus').textContent=
-      `${plural((d.bases||[]).length,'созвездие','созвездия','созвездий')} · `
-      +`${plural((d.products||[]).length,'продукт','продукта','продуктов')}`;
+    dataCounts={bases:(d.bases||[]).length, products:(d.products||[]).length};
+    renderDataChip();
     (d.data_problems||[]).forEach(t=>msg(t,true));
-  
-  }catch(e){ msg(e.message,true); document.getElementById('dataStatus').textContent='не загружены'; }
+
+  }catch(e){ msg(e.message,true); dataCounts='failed'; renderDataChip(); }
 
   buildSortMenu();
 }
@@ -1877,6 +1968,28 @@ async function loadSystems(){
   loadSystemPlanets();
 }
 
+/* Единая точка POST /api/calculate: подставляет язык, чтобы предупреждения
+   и допущения пришли на языке интерфейса. */
+async function postCalculate(body){
+  try{
+    const r=await fetch(`${API}/calculate`,{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({...body, lang})});
+    return await r.json();
+  }catch(e){ msg(e.message,true); return null; }
+}
+
+/* Смена языка после построения плана: перезапрашиваем только тексты
+   сервера (предупреждения, допущения, блок решения) — план не меняется. */
+async function relocalizePlan(){
+  if(!plan.length || !lastRequest) return;
+  const d=await postCalculate(lastRequest);
+  if(!d || d.status!=='success') return;
+  lastPlanResp=d;
+  lastWarnings=d.warnings||[]; lastAssumptions=d.assumptions||[];
+  renderMessages(); renderDecision(d);
+}
+
 async function calculate(allowSingle, surplusMining){
   if(!picked('products').length){ msg(t('pickProducts'),true); return; }
   if(!picked('constellations').length){ msg(t('pickConst'),true); return; }
@@ -1889,15 +2002,13 @@ async function calculate(allowSingle, surplusMining){
     direct_p2:document.getElementById('directP2').checked};
   document.getElementById('messages').innerHTML='';
   document.getElementById('decision').innerHTML='';
-  const r=await fetch(`${API}/calculate`,{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify(body)});
-  const d=await r.json();
-  if(d.status!=='success'){ msg(d.message,true); return; }
+  const d=await postCalculate(body);
+  if(!d || d.status!=='success'){ if(d) msg(d.message,true); return; }
 
   plan=d.data||[]; staffing=d.staffing||{}; lastLogistics=d.logistics||null;
-  lastRequest=body; currentPlanId=null;
+  lastRequest=body; currentPlanId=null; lastPlanResp=d;
   lastWarnings=d.warnings||[]; lastAssumptions=d.assumptions||[];
-  renderMessages(lastWarnings,lastAssumptions);
+  renderMessages();
   renderDecision(d);
   renderAnswers(); renderTable(); renderDash(); renderCrew(); renderShopping(); renderProfit();
   // При упоре в размер планет остаёмся в настройках: выбор делать там,
@@ -1905,13 +2016,14 @@ async function calculate(allowSingle, surplusMining){
   show(d.needs_user_decision ? 'setup' : 'dash');
 }
 
-function renderMessages(warnings,assumptions){
+function renderMessages(){
   const box=document.getElementById('messages');
-  const crit=warnings.filter(w=>w.includes('ДЕФИЦИТ'));
-  const rest=warnings.filter(w=>!w.includes('ДЕФИЦИТ')).concat(assumptions);
+  const crit=(lastPlanResp&&lastPlanResp.critical_warnings)||[];
+  const critSet=new Set(crit);
+  const rest=(lastWarnings||[]).filter(w=>!critSet.has(w)).concat(lastAssumptions||[]);
   box.innerHTML=crit.map(w=>`<div class="msg bad">${w}</div>`).join('');
   if(rest.length) box.insertAdjacentHTML('beforeend',
-    `<details class="msgs"><summary>${plural(rest.length,'замечание','замечания','замечаний')} к плану</summary>
+    `<details class="msgs"><summary>${pl(rest.length,'pNote')} ${t('onPlan')}</summary>
      ${rest.map(w=>`<div class="msg">${w}</div>`).join('')}</details>`);
 }
 
@@ -1926,7 +2038,7 @@ function renderCrew(){
   const busy={};
   plan.forEach(r=>{
     const c=busy[r.char_id]=busy[r.char_id]||{mine:0,proc:0};
-    r.role.includes('Добыча')?c.mine++:c.proc++;
+    isMining(r)?c.mine++:c.proc++;
   });
   box.innerHTML=crew.map(c=>{
     const b=busy[c.id]||{mine:0,proc:0}, used=b.mine+b.proc;
@@ -1942,18 +2054,18 @@ function renderCrew(){
 }
 
 function renderAnswers(){
-  const mining=plan.filter(r=>r.role.includes('Добыча'));
+  const mining=plan.filter(isMining);
   const worst=plan.reduce((w,r)=>Math.max(r.cpu_percent,r.pg_percent)>Math.max(w.cpu_percent||0,w.pg_percent||0)?r:w,{});
   const short=Object.values(staffing).reduce((n,s)=>n+(s.characters_needed||0),0);
   const cards=[
     {label:t('mColonies'),value:plan.length,
      note:`${mining.length} ${t('mining')} · ${plan.length-mining.length} ${t('processing')}`},
     {label:t('mChars'),value:new Set(plan.map(r=>r.char_id)).size,
-     note:`на ${plural(new Set(plan.map(r=>r.system+r.planet)).size,'планете','планетах','планетах')}`},
+     note:`${t('onPlanets')} ${pl(new Set(plan.map(r=>r.system+r.planet)).size,'pPlanet')}`},
     {label:t('mPeak'),value:worst.pg_percent?Math.max(worst.cpu_percent,worst.pg_percent).toFixed(0):'—',
      unit:'%',warn:Math.max(worst.cpu_percent||0,worst.pg_percent||0)>=90,
      bad:Math.max(worst.cpu_percent||0,worst.pg_percent||0)>=95,
-     note:worst.system?`${worst.system} ${worst.planet}`:'нет данных'},
+     note:worst.system?`${worst.system} ${worst.planet}`:t('noData')},
     {label:t('mSpread'),
      value:(lastLogistics&&lastLogistics.avg_systems_per_character)||'—',
      note:lastLogistics
@@ -1962,7 +2074,7 @@ function renderAnswers(){
      good:lastLogistics&&lastLogistics.avg_systems_per_character<=1.5,
      warn:lastLogistics&&lastLogistics.avg_systems_per_character>2.5},
     {label:t('mShort'),value:short||'0',bad:short>0,good:!short,accent:short>0,
-     note:short?Object.entries(staffing).map(([r,s])=>`${r}: CCU ${s.min_ccu_level}+`).join(' · '):t('planClosed')}
+     note:short?Object.values(staffing).map(s=>`${t('role_'+(s.role_key||'proc'))}: CCU ${s.min_ccu_level}+`).join(' · '):t('planClosed')}
   ];
   document.getElementById('answers').innerHTML=cards.map(c=>`
     <div class="answer${c.accent?' accent':''}"><div class="label">${c.label}</div>
@@ -1971,33 +2083,33 @@ function renderAnswers(){
 }
 
 function renderTable(){
-  if(!plan.length){ document.getElementById('tableWrap').innerHTML='<div class="empty">План пуст.</div>'; return; }
+  if(!plan.length){ document.getElementById('tableWrap').innerHTML=`<div class="empty">${t('planEmpty')}</div>`; return; }
   const rows=[...plan].sort((a,b)=>Math.max(b.cpu_percent,b.pg_percent)-Math.max(a.cpu_percent,a.pg_percent));
   const body=rows.map((r,i)=>{
     const peak=Math.max(r.cpu_percent,r.pg_percent), reserve=100-peak, pgb=r.pg_breakdown||{};
     return `<tr>
       <td class="idx num">${i+1}</td>
       <td><div style="color:var(--bright)">${r.character}</div>
-          <div style="margin-top:2px"><span class="rolebadge ${r.role.includes('Прямое')?'direct':r.role.includes('избыток')?'excess':r.role.includes('Добыча')?'mine':'proc'}">${r.role}</span></div></td>
+          <div style="margin-top:2px"><span class="rolebadge ${roleClass(r)}">${roleLabel(r)}</span></div></td>
       <td><div class="num">${r.system} ${r.planet}</div>
-          <div class="parts" style="margin:0">${r.planet_type} · ${Math.round(r.planet_radius_km).toLocaleString('ru')} км</div></td>
+          <div class="parts" style="margin:0">${r.planet_type} · ${nloc(Math.round(r.planet_radius_km))} ${t('km')}</div></td>
       <td><span style="color:var(--read)">${r.res_out}</span>
-          <div class="parts" style="margin:0">${r.structures}${r.res_in?' ← '+r.res_in:''}</div></td>
+          <div class="parts" style="margin:0">${factoryLabel(r)}${r.res_in?' ← '+r.res_in:''}</div></td>
       <td><div class="stack"><i class="s-str" style="width:${pgb.structures||0}%"></i>
           <i class="s-hed" style="width:${pgb.heads||0}%"></i>
           <i class="s-lnk" style="width:${pgb.links||0}%"></i></div>
-          <div class="parts">структуры ${pgb.structures||0} · головы ${pgb.heads||0} · линки ${pgb.links||0}</div></td>
+          <div class="parts">${t('sStruct')} ${pgb.structures||0} · ${t('sHeads')} ${pgb.heads||0} · ${t('sLinks')} ${pgb.links||0}</div></td>
       <td class="r"><span class="pct ${r.cpu_percent>=90?'hot':r.cpu_percent>=75?'warm':''}">${r.cpu_percent.toFixed(1)}</span></td>
       <td class="r"><span class="pct ${r.pg_percent>=90?'hot':r.pg_percent>=75?'warm':''}">${r.pg_percent.toFixed(1)}</span></td>
       <td class="r"><span class="pct" style="color:${reserve<5?'var(--alarm)':reserve<15?'var(--amber)':'var(--calm)'}">${reserve.toFixed(1)}</span></td>
     </tr>`;}).join('');
   document.getElementById('tableWrap').innerHTML=`<table>
     <thead>
-      <tr class="group"><th colspan="3">Колония<small>кто и где</small></th>
-        <th>Производство<small>что делает и из чего</small></th>
-        <th colspan="4">Нагрузка<small>из чего сложилась и сколько осталось</small></th></tr>
-      <tr class="cols"><th>#</th><th>Персонаж</th><th>Планета</th><th>Продукт</th>
-        <th>Из чего сложилось (PG)</th><th class="r">CPU %</th><th class="r">PG %</th><th class="r">Запас</th></tr>
+      <tr class="group"><th colspan="3">${t('thColony')}<small>${t('thColonySub')}</small></th>
+        <th>${t('thProd')}<small>${t('thProdSub')}</small></th>
+        <th colspan="4">${t('thLoad')}<small>${t('thLoadSub')}</small></th></tr>
+      <tr class="cols"><th>#</th><th>${t('thChar')}</th><th>${t('thPlanet')}</th><th>${t('thProduct')}</th>
+        <th>${t('thPgFrom')}</th><th class="r">CPU %</th><th class="r">PG %</th><th class="r">${t('thReserve')}</th></tr>
     </thead><tbody>${body}</tbody></table>`;
 }
 
