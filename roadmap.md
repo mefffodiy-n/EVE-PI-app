@@ -235,8 +235,9 @@ pi-director/
   задача минимальна (не пустить мусор в domain), отдельная схема избыточна.
 - **WSGI-сервер**: waitress (Windows, основная среда разработки) либо
   gunicorn (Linux). Docker не используется.
-- **БД**: PostgreSQL + SQLAlchemy 2.0 + Alembic (замена SQLite — нужна для
-  multi-tenant и конкурентного доступа воркеров и API).
+- **БД**: SQLAlchemy 2.0 + Alembic. На разработке — SQLite `data/pi_director.db`
+  (реализовано, Фаза 3); в проде — PostgreSQL (нужен для multi-tenant и
+  конкурентного доступа воркеров и API), переключение сменой `PI_DATABASE_URL`.
 - **Планировщик**: APScheduler (если инфраструктура простая, один процесс) или
   Celery + Redis (если нужна отказоустойчивость/несколько воркеров) — в любом
   случае это единственная точка вызова ESI.
@@ -346,11 +347,16 @@ pi-director/
 
 ### Фаза 3 — Реальная ESI SSO и синхронизация персонажей
 - [x] Слой БД: SQLAlchemy 2.0 + Alembic (`infra/config.py`, `infra/db.py`,
-      `infra/models.py`, `migrations/`). Таблица `characters`. На разработке —
-      SQLite `data/pi_director.db` (Docker не нужен), в проде — Postgres сменой
-      `PI_DATABASE_URL`; модели те же. `seed_dev_characters.seed()` пишет
-      dev-персонажей туда же, куда будет писать OAuth callback (`source="dev"`
-      против `"esi"`); вне `PI_ENV=dev` seed запрещён, а dev-строки не читаются.
+      `infra/models.py`, `migrations/`). Таблицы `characters` и `plans`. На
+      разработке — SQLite `data/pi_director.db` (Docker не нужен), в проде —
+      Postgres сменой `PI_DATABASE_URL`; модели те же. `seed_dev_characters.seed()`
+      пишет dev-персонажей туда же, куда будет писать OAuth callback
+      (`source="dev"` против `"esi"`); вне `PI_ENV=dev` seed запрещён, а
+      dev-строки не читаются.
+- [x] `domain/plan_storage.py` переведён с json-файлов в `data/plans/` на
+      таблицу `plans`. Публичный интерфейс (save/list/load/delete/compare)
+      не изменился — `api/` и тесты править не пришлось. Старые json-файлы
+      автоматически не импортируются.
 - [ ] PKCE OAuth-flow (замена фиктивного `/api/auth/callback`), включается по появлению
       `client_id`/`client_secret` от developers.eveonline.com — до этого момента
       разработка идёт на `seed_dev_characters.py` без потери темпа.
