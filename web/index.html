@@ -475,6 +475,22 @@ details.msgs[open] > summary::before { content:'▾ '; }
                 font-size:16px; color:var(--bright); }
 .shop-total { margin-top:10px; color:var(--dim); font-size:12px; }
 
+/* ── Реальные колонии из игры ────────────────────────────────── */
+.colonies { border-top:1px solid var(--seam); padding:14px; }
+.colonies h3 { font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--dim);
+  margin:0 0 10px; }
+.colrow { display:grid; grid-template-columns:150px 1fr auto auto; gap:6px 16px;
+  align-items:baseline; padding:6px 0; border-bottom:1px solid var(--seam); font-size:12px; }
+.colrow:last-child { border-bottom:none; }
+.colrow .who { color:var(--bright); }
+.colrow .pl { color:var(--read); }
+.colrow .pl .sec { color:var(--dim); margin-left:6px; }
+.colrow .pins { color:var(--dim); }
+.colrow .left { font-family:'IBM Plex Mono',monospace; color:var(--calm); text-align:right;
+  min-width:90px; }
+.colrow.soon .left { color:var(--amber); }
+.colrow.over .left { color:var(--alarm); font-weight:600; }
+
 /* ── Оценка выгоды ────────────────────────────────────────────── */
 .profit { padding:14px; border-top:1px solid var(--seam); }
 .profit-head { display:flex; align-items:baseline; gap:12px; margin-bottom:10px; flex-wrap:wrap; }
@@ -664,6 +680,7 @@ body.light .rolebadge.excess { background:rgba(154,107,18,.12); }
     <div class="counts" id="counts" data-i18n="counts0">план не построен</div>
   </div>
   <div id="dashBody"><div class="empty" data-i18n="noPlanLong">План не построен. Откройте вкладку «Настройки», выберите продукты и постройте план.</div></div>
+  <div id="colonies"></div>
   <div id="shopping"></div>
   <div class="colony-page" id="colonyPage"></div>
 </div>
@@ -805,6 +822,8 @@ const T={
   ssoUnavailable:'Вход недоступен',
   notJson:'{api} вернул не JSON. Запустите «python run.py» и откройте {flask}/',
   themeTitle:'Тема',viewList:'Список по персонажам',viewGrid:'Сетка',sortTitle:'Сортировка',loadLbl:'Загрузка',
+  inGameColonies:'Мои колонии в игре',cycOver:'программа завершена',cycIdle:'программа не запущена',
+  hUnit:'ч',minUnit:'мин',pPin:['пин','пина','пинов'],
   role_mine:'Добыча',role_mine_surplus:'Добыча (избыток)',role_proc:'Переработка',role_direct_p2:'Прямое P2',
   factW:'фабрик',pFactory:['фабрика','фабрики','фабрик']},
  en:{brandSub:'colony planner',tabDash:'Dashboard',tabSetup:'Settings',
@@ -841,6 +860,8 @@ const T={
   ssoUnavailable:'Login unavailable',
   notJson:'{api} returned non-JSON. Run “python run.py” and open {flask}/',
   themeTitle:'Theme',viewList:'By character',viewGrid:'Grid',sortTitle:'Sort',loadLbl:'Load',
+  inGameColonies:'My in-game colonies',cycOver:'program ended',cycIdle:'no program running',
+  hUnit:'h',minUnit:'min',pPin:['pin','pins','pins'],
   role_mine:'Extraction',role_mine_surplus:'Extraction (surplus)',role_proc:'Processing',role_direct_p2:'Direct P2',
   factW:'factories',pFactory:['factory','factories','factories']}
 };
@@ -863,7 +884,7 @@ function applyLang(){
   document.querySelectorAll('.lang button').forEach(b=>b.classList.toggle('on',b.dataset.lang===lang));
   store.set('pi-lang',lang);
   renderDataChip(); renderMeta();
-  buildSortMenu(); renderCrew(); renderDash(); renderShopping(); renderProfit(); renderSaved();
+  buildSortMenu(); renderCrew(); renderDash(); renderShopping(); renderProfit(); renderColonies(); renderSaved();
   if(allProducts.length){ renderProducts(); renderConstellations(); } if(plan.length){renderAnswers(); renderTable();}
   if(document.getElementById('modal').classList.contains('on')) openModal(currentModal);
   if(currentColony && document.getElementById('colonyPage').classList.contains('on')) openColony(currentColony);
@@ -1310,6 +1331,55 @@ async function loadProfit(){
   catch(e){ profitData=null; }
   renderProfit();
 }
+
+/* ── Реальные колонии из игры (sync_colony_status) ────────────────
+   Это НЕ расчётный план: план — «что стоит построить», здесь — «что
+   построено». Обратный отсчёт до конца программы экстрактора считаем
+   в браузере из nearest_expiry — сервер не дёргаем каждую минуту. */
+let coloniesData=[];
+
+async function loadColonies(){
+  try{ coloniesData=(await (await fetch(`${API}/colonies`)).json()).colonies||[]; }
+  catch(e){ coloniesData=[]; }
+  renderColonies();
+}
+
+function fmtLeft(ms){
+  if(ms<=0) return t('cycOver');
+  const h=Math.floor(ms/3600000), m=Math.floor(ms%3600000/60000);
+  return h>=1 ? `${h} ${t('hUnit')} ${m} ${t('minUnit')}` : `${m} ${t('minUnit')}`;
+}
+
+function renderColonies(){
+  const box=document.getElementById('colonies'); if(!box) return;
+  if(!coloniesData.length){ box.innerHTML=''; return; }
+  const now=Date.now();
+  const rows=coloniesData.map(c=>{
+    const exp=c.nearest_expiry?Date.parse(c.nearest_expiry):null;
+    const left=exp!=null?exp-now:null;
+    const cls=left==null?'':left<=0?' over':left<7200000?' soon':'';
+    const when=left==null?t('cycIdle'):fmtLeft(left);
+    return `<div class="colrow${cls}">
+      <span class="who">${c.character}</span>
+      <span class="pl">${c.planet_name} <span class="sec">${c.planet_type}</span></span>
+      <span class="pins">${pl(c.num_pins,'pPin')}</span>
+      <span class="left" ${exp!=null?`data-exp="${exp}"`:''}>${when}</span>
+    </div>`;
+  }).join('');
+  box.innerHTML=`<div class="colonies"><h3>${t('inGameColonies')}</h3>${rows}</div>`;
+}
+
+/* Живой отсчёт: перерисовываем только числа, не весь блок. */
+setInterval(()=>{
+  const now=Date.now();
+  document.querySelectorAll('#colonies .left[data-exp]').forEach(el=>{
+    const left=+el.dataset.exp-now;
+    el.textContent=fmtLeft(left);
+    const row=el.closest('.colrow');
+    row.classList.toggle('soon', left>0 && left<7200000);
+    row.classList.toggle('over', left<=0);
+  });
+}, 60000);
 
 function isk(v){
   return v==null ? '—' : Math.round(v).toLocaleString(lang==='ru'?'ru':'en-US');
@@ -2148,7 +2218,7 @@ setTheme(store.get('pi-theme','dark'));
 lang=store.get('pi-lang','ru');
 
 measureTopbar();
-boot(); loadMeta(); loadCrew(); loadProfit(); loadSaved(); applyLang();
+boot(); loadMeta(); loadCrew(); loadProfit(); loadColonies(); loadSaved(); applyLang();
 // Онлайн меняется медленно; снимок обновляет фоновый сборщик,
 // поэтому опрашиваем раз в минуту и только читаем готовое.
 setInterval(loadMeta, 60000);
