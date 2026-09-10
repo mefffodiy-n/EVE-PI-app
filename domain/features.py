@@ -193,6 +193,18 @@ FEATURES = FEATURES + (
         ("right on the extraction", "both raw materials"),
         "0.8.0", "help",
     ),
+    Feature(
+        "eve_sso_login", "Вход через EVE Online (SSO)",
+        ("войти через eve", "eve sso"),
+        ("log in with eve", "eve sso"),
+        "0.9.0", "help",
+    ),
+    Feature(
+        "in_game_colonies", "Реальные колонии и таймеры экстракторов из игры",
+        ("мои колонии в игре", "до конца программы"),
+        ("my in-game colonies", "until the extraction program"),
+        "0.9.0", "help",
+    ),
 )
 
 
