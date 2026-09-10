@@ -97,10 +97,9 @@ def callback():
 
 def _store(character_id: int, name: str, tokens: dict, claims: dict) -> None:
     """Записать персонажа (source="esi") и зашифрованные токены."""
-    from infra.crypto import encrypt
+    from infra.credentials import save_tokens
     from infra.db import session_scope
-    from infra.models import Character, Credential
-    from scripts.esi_sso import expires_at
+    from infra.models import Character
 
     scopes = claims.get("scp")
     scopes = scopes if isinstance(scopes, list) else ([scopes] if scopes else [])
@@ -120,15 +119,4 @@ def _store(character_id: int, name: str, tokens: dict, claims: dict) -> None:
             char.name = name
             char.source = "esi"
 
-        cred = session.get(Credential, character_id)
-        fields = dict(
-            access_token=encrypt(tokens["access_token"]),
-            refresh_token=encrypt(tokens["refresh_token"]),
-            access_expires_at=expires_at(tokens.get("expires_in", 1200)),
-            scopes=scopes,
-        )
-        if cred is None:
-            session.add(Credential(character_id=character_id, **fields))
-        else:
-            for key, value in fields.items():
-                setattr(cred, key, value)
+        save_tokens(session, character_id, tokens, scopes)

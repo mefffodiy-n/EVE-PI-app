@@ -65,11 +65,19 @@ def _market_prices() -> int:
     return run(DEFAULT_STATION)
 
 
+def _refresh_tokens() -> int:
+    from scripts.refresh_tokens import main as run
+    return run()
+
+
 JOBS = [
     Job("Статус сервера", _server_status, 10,
         "число игроков онлайн меняется медленно, чаще опрашивать незачем"),
     Job("Рыночные цены", _market_prices, 60,
         "цены на продукцию PI устойчивы, а Fuzzwork — чужой сервис"),
+    Job("Обновление токенов ESI", _refresh_tokens, 15,
+        "access-токен живёт ~20 минут; продлеваем до истечения, "
+        "пока пусто — мгновенный no-op"),
 ]
 
 # Пауза после неудачи растёт, чтобы не долбить недоступный сервис.

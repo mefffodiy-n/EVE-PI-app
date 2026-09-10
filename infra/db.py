@@ -11,17 +11,43 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from datetime import datetime, timezone
 from typing import Iterator
 
-from sqlalchemy import create_engine
+from sqlalchemy import DateTime, create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from sqlalchemy.types import TypeDecorator
 
 from infra import config
 
 
 class Base(DeclarativeBase):
     """Общая база для всех ORM-моделей (infra/models.py)."""
+
+
+class UtcDateTime(TypeDecorator):
+    """
+    Дата-время всегда в UTC и всегда timezone-aware.
+
+    SQLite не хранит зону и отдаёт наивные datetime; Postgres — aware.
+    Без этого сравнение `expires_at > now(tz)` падает на SQLite. Декоратор
+    приводит оба конца к aware UTC, поэтому код одинаков на обоих движках.
+    DDL тот же, что у DateTime(timezone=True) — миграции не меняются.
+    """
+
+    impl = DateTime(timezone=True)
+    cache_ok = True
+
+    def process_bind_param(self, value: datetime | None, dialect):
+        if value is not None and value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value
+
+    def process_result_value(self, value: datetime | None, dialect):
+        if value is not None and value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value
 
 
 _engine: Engine | None = None
