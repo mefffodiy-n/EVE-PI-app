@@ -1,0 +1,42 @@
+# nginx для PI Director. Скопировать в sites-available / conf.d,
+# подставить домен и пути к сертификатам.
+#
+# Приложение (waitress) слушает только 127.0.0.1 — снаружи виден лишь nginx.
+
+server {
+    listen 80;
+    server_name pi.example.com;
+    # Весь HTTP — на HTTPS. EVE SSO требует https в callback URL.
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name pi.example.com;
+
+    ssl_certificate     /etc/ssl/pi.example.com/fullchain.pem;
+    ssl_certificate_key /etc/ssl/pi.example.com/privkey.pem;
+
+    # Ограничение размера тела: расчёт плана — до 20 продуктов, экспорт —
+    # до 500 строк. Мегабайта хватает с запасом, всё крупнее — мусор.
+    client_max_body_size 1m;
+
+    # Статика фронтенда — напрямую с диска, минуя Python.
+    location = / {
+        root /path/to/EVE-PI-app/web;
+        try_files /index.html =404;
+    }
+    location /assets/ {
+        root /path/to/EVE-PI-app/web;
+    }
+
+    # API и всё остальное — на waitress.
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 60s;
+    }
+}

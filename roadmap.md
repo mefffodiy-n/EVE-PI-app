@@ -425,11 +425,18 @@ pi-director/
       джобами Фазы 3.
 
 ### Фаза 6 — Развёртывание (не требует ESI)
-- [ ] Запуск как службы: waitress за nginx, сборщики в планировщике заданий
-      Windows. Сейчас приложение работает только при открытом терминале.
-- [ ] Резервное копирование  и снимков кэша.
-- [ ] Журналирование: куда писать и что именно, чтобы разбирать сбои
-      сборщиков без чтения консоли.
+- [x] `scripts/serve.py` — production-запуск через waitress (`PI_HOST`/
+      `PI_PORT`/`PI_THREADS`), отдельно от dev-режима `run.py`. `deploy/` —
+      README + образцы: службы Windows через NSSM (веб и сборщики), nginx
+      (`nginx.conf.sample`), задание бэкапа (`backup-task.xml`). Установка
+      на конкретный сервер — по `deploy/README.md`, это уже ops.
+- [x] `scripts/backup.py` — согласованная копия SQLite (`.backup()`) и
+      снимков `data/cache/` в `{PI_BACKUP_DIR}/pi-backup-<ts>/`, старые
+      чистятся до `PI_BACKUP_KEEP` (14). Джоб в `scheduler.py` раз в сутки;
+      для Postgres — `pg_dump` (в README).
+- [x] Журналирование: `infra/logging.py` — файл `{PI_LOG_DIR}/<компонент>.log`
+      с ротацией (2 МБ × 5) плюс консоль, уровень `PI_LOG_LEVEL`. Подключён
+      в `scheduler.py`, `serve.py`, фабрике приложения (кроме тестов).
 
 
 ## 6a. Что осталось непроверенным в расчёте
