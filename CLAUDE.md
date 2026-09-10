@@ -151,6 +151,7 @@ scripts/          всё, что ходит в сеть или готовит д
   refresh_server_status.py статус сервера по расписанию
   refresh_market_prices.py цены по расписанию
   refresh_tokens.py        продление access-токенов ESI по расписанию
+  sync_character_skills.py уровни CCU/IC персонажей из ESI (после входа)
   scheduler.py             запуск сборщиков без внешних зависимостей
   extract_schematics.py    количества вход/выход из шаблонов
   seed_dev_characters.py   заглушки персонажей (нет ESI-токенов)
@@ -244,10 +245,10 @@ python -m scripts.scheduler        # сборщики по расписанию
 ## Что дальше (см. roadmap.md)
 
 **Фаза 3 — подключение к игре.** Слой БД, шифрование токенов, OAuth-каркас
-(`auth.py` + `esi_sso.py`, PKCE) и `refresh_tokens` в расписании уже
-написаны — не работают только без `client_id` от developers.eveonline.com.
-Осталось: получить `client_id`, `sync_character_skills` и `sync_colony_status`
-(оживят кольца циклов и заменят нули CCU/IC после первого входа).
+(`auth.py` + `esi_sso.py`, PKCE), `refresh_tokens` и `sync_character_skills`
+в расписании уже написаны и проверены на мок-ESI — не работают только без
+`client_id` от developers.eveonline.com. Осталось: получить `client_id` и
+`sync_colony_status` (оживит кольца циклов экстракторов вместо «неизвестно»).
 
 **Фаза 6 — развёртывание.** Сейчас приложение живёт, пока открыт терминал.
 Нужны служба (waitress за nginx), автозапуск сборщиков, резервные копии БД.

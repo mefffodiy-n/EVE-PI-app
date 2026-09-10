@@ -155,11 +155,13 @@ class EsiClient:
             self._blocked_until = time.time() + seconds
 
     # ── Запрос ───────────────────────────────────────────────────
-    def get(self, path: str, use_etag: bool = True) -> EsiResponse:
+    def get(self, path: str, use_etag: bool = True, token: str | None = None) -> EsiResponse:
         """
-        Выполнить GET к публичному маршруту ESI.
+        Выполнить GET к маршруту ESI.
 
-        path — часть после домена, например "/status/".
+        path  — часть после домена, например "/status/".
+        token — access-токен персонажа для авторизованных маршрутов
+                (скиллы, колонии). Публичные маршруты передают None.
         """
         if self.blocked_for:
             raise EsiRateLimited(
@@ -173,6 +175,8 @@ class EsiClient:
             "X-Compatibility-Date": self.compatibility_date,
             "Accept": "application/json",
         }
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
         if use_etag and url in self._etags:
             headers["If-None-Match"] = self._etags[url]
 
@@ -209,6 +213,18 @@ class EsiClient:
 
         if status == 304:
             return EsiResponse(304, None, response_headers, from_cache=True)
+
+        # Путь через opener (тесты) не бросает HTTPError сам — приводим
+        # к тому же поведению, что и реальный urlopen.
+        if status in (420, 429):
+            retry = int(response_headers.get("Retry-After")
+                        or response_headers.get("X-ESI-Error-Limit-Reset") or 60)
+            self._blocked_until = time.time() + retry
+            raise EsiRateLimited(
+                f"ESI ограничил обращения (HTTP {status}), повтор через {retry} с", retry
+            )
+        if status >= 400:
+            raise EsiError(f"HTTP {status} на {path}")
 
         etag = response_headers.get("ETag")
         if use_etag and etag:

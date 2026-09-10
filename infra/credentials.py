@@ -14,6 +14,10 @@ from sqlalchemy.orm import Session
 
 DEFAULT_TTL_SECONDS = 1200
 
+# Токен считаем негодным для запроса, если истекает в ближайшие полминуты:
+# запрос может не успеть дойти.
+_STALE_MARGIN = timedelta(seconds=30)
+
 
 def _expires_at(expires_in) -> datetime:
     try:
@@ -40,3 +44,26 @@ def save_tokens(session: Session, character_id: int, tokens: dict, scopes: list)
     else:
         for key, value in fields.items():
             setattr(cred, key, value)
+
+
+def get_access_token(session: Session, character_id: int) -> str | None:
+    """
+    Расшифрованный access-токен персонажа, если он есть и ещё годен.
+
+    None означает: токена нет, он просрочен или не расшифровывается.
+    Обновление — задача `scripts/refresh_tokens.py`; сборщики скиллов и
+    колоний идут в расписании после него, поэтому здесь достаточно
+    проверки, а не рефреша.
+    """
+    from infra.crypto import TokenCryptoError, decrypt
+    from infra.models import Credential
+
+    cred = session.get(Credential, character_id)
+    if cred is None:
+        return None
+    if cred.access_expires_at <= datetime.now(timezone.utc) + _STALE_MARGIN:
+        return None
+    try:
+        return decrypt(cred.access_token)
+    except TokenCryptoError:
+        return None
