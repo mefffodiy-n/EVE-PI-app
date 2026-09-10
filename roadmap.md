@@ -331,10 +331,10 @@ pi-director/
 - [x] `scripts/refresh_market_prices.py` — сбор цен по расписанию, а не по
       действию пользователя. Плюс `scripts/scheduler.py` для запуска обоих
       сборщиков одним процессом, без внешних зависимостей.
-- [ ] `refresh_tokens` — фоновое обновление ESI-токенов. Инфраструктура
-      готова (Фаза 3: `esi_sso.refresh`, таблица `credentials`); нужен сам
-      джоб в `scheduler.py`. Реально обновлять нечего, пока никто не вошёл
-      через настоящий SSO.
+- [x] `scripts/refresh_tokens.py` в расписании `scheduler.py` (раз в 15 мин):
+      продлевает access-токены по refresh до истечения, отозванные удаляет
+      (Character остаётся, персонажу нужен повторный вход). Пока никто не
+      вошёл через настоящий SSO — мгновенный no-op.
 - [x] Защита от бана: клиент читает `X-ESI-Error-Limit-Remain` и сам
       останавливается за 10 ошибок до нуля — ноль означает 420 на всех
       маршрутах, включая исправные.
@@ -369,9 +369,9 @@ pi-director/
 - [x] Шифрование токенов: `infra/crypto.py` (Fernet), таблица `credentials`
       (access/refresh лежат зашифрованными). Multi-tenant — колонки
       `account_id` в `characters` и `plans` заведены, пока NULL.
-- [ ] `refresh_tokens` в расписании (`scripts/scheduler.py`) — обновлять
-      access-токены по refresh до истечения. Инфраструктура готова
-      (`esi_sso.refresh`, таблица `credentials`), нужен сам джоб.
+- [x] `scripts/refresh_tokens.py` в `scheduler.py` (раз в 15 мин): продлевает
+      access-токены по refresh до истечения; отозванные удаляет (нужен
+      повторный вход). Общая запись токенов — `infra/credentials.py`.
 - [ ] `sync_character_skills` — реальные уровни CCU/IC вместо нулей после
       первого входа.
 - [ ] `sync_colony_status` — реальный статус колоний/экстракторов (по расписанию).
