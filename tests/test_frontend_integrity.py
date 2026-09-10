@@ -119,6 +119,29 @@ class TestStylesheet:
             f"{name}: в светлой теме не переопределены переменные: {', '.join(sorted(missing))}"
         )
 
+    def test_no_opaque_colour_hex_literals(self):
+        """
+        Цвет (фон, обводка SVG, рамка, текст) не задаётся непрозрачным
+        hex-литералом — только var(--…) или rgba() (полупрозрачные
+        наложения работают в обеих темах). Литерал переживает переключение
+        темы: в светлой под курсором был чёрный фон, активные кнопки вида —
+        чёрные, панель колонии — чёрная, стрелки в кольцах — невидимые.
+        Проверка полноты темы это не ловит — она смотрит только --переменные.
+        """
+        name, text = _frontend()
+        css = _style_block(text)
+        in_css = re.findall(
+            r"(?:background(?:-color)?|stroke|border(?:-[a-z]+)?|color)\s*:"
+            r"\s*[^;{}]*?(#[0-9a-fA-F]{3,8})",
+            css,
+        )
+        # Инлайновый style="…background:#…" в JS-шаблонах — тот же промах.
+        inline = re.findall(r'style="[^"]*background\s*:\s*(#[0-9a-fA-F]{3,8})', text)
+        bad = in_css + inline
+        assert not bad, (
+            f"{name}: непрозрачный hex-литерал вместо var(--…): {', '.join(sorted(set(bad)))}"
+        )
+
 
 class TestScript:
     def test_no_duplicate_function_definitions(self):
