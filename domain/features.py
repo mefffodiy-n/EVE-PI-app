@@ -134,5 +134,21 @@ FEATURES: tuple[Feature, ...] = (
 )
 
 
+FEATURES = FEATURES + (
+    Feature(
+        "size_thresholds", "Пороговые радиусы при выборе системы",
+        ("предел", "помещается на планеты до"),
+        ("limit", "fits planets up to"),
+        "0.6.0", "help",
+    ),
+    Feature(
+        "single_template_choice", "Выбор при упоре в размер планет",
+        ("по одному шаблону", "вдвое больше"),
+        ("single template", "twice as many"),
+        "0.6.0", "help",
+    ),
+)
+
+
 def by_section(section: str) -> tuple[Feature, ...]:
     return tuple(f for f in FEATURES if f.where == section)
