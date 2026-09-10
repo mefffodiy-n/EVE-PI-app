@@ -23,7 +23,7 @@ from flask import Blueprint
 
 from api.cache import cache_key, json_error, json_ok, parse_json_body, plan_cache
 from domain.planets import load_planets
-from domain.planner import PlanRequest, build_plan
+from domain.planner import PlanRequest, PlanResult, build_plan
 from domain.recipes import load_recipes
 from scripts.seed_dev_characters import load_characters
 
@@ -46,6 +46,7 @@ def calculate():
     allow_single = bool(payload.get("allow_single_template_fallback", False))
     surplus_mining = bool(payload.get("surplus_mining", False))
     direct_p2 = bool(payload.get("direct_p2", False))
+    lang = "en" if str(payload.get("lang", "ru")).lower().startswith("en") else "ru"
 
     if not constellations:
         return json_error("Не выбрано ни одной констелляции")
@@ -63,20 +64,14 @@ def calculate():
     key = cache_key(sorted(constellations), factory_sys, sorted(targets),
                     allow_single, surplus_mining, direct_p2)
 
-    def compute():
+    def compute() -> PlanResult:
         # Персонажи: на Фазе 1 — dev-заглушки, в Фазе 3 те же поля придут
         # из sync_character_skills. Планировщик об источнике не знает.
         characters = load_characters()
         if not characters:
-            return {
-                "data": [],
-                "warning": "Нет персонажей. Заполните их командой "
-                           "`python -m scripts.seed_dev_characters` (только dev-окружение).",
-                "warnings": [],
-                "assumptions": [],
-                "needs_user_decision": False,
-                "site_warnings": [],
-            }
+            empty = PlanResult()
+            empty.warn("no_characters")
+            return empty
 
         request_obj = PlanRequest(
             constellations=constellations,
@@ -86,15 +81,15 @@ def calculate():
             surplus_mining=surplus_mining,
             direct_p2=direct_p2,
         )
-        result = build_plan(
+        return build_plan(
             request_obj,
             characters,
             recipes=load_recipes(),
             planets=load_planets(),
         )
-        return result.to_dict()
 
-    return json_ok(**plan_cache.get_or_compute(key, compute))
+    result = plan_cache.get_or_compute(key, compute)
+    return json_ok(**result.to_dict(lang))
 
 
 @bp.post("/advice")
@@ -114,6 +109,7 @@ def advice():
         return json_error(error)
 
     targets = [str(t) for t in payload["target_products"]]
+    lang = "en" if str(payload.get("lang", "ru")).lower().startswith("en") else "ru"
     if not targets:
         return json_error("Не выбрано ни одного целевого продукта")
 
@@ -138,7 +134,7 @@ def advice():
     except Exception:
         prices = {}
 
-    return json_ok(**advise(targets, characters, prices).to_dict())
+    return json_ok(**advise(targets, characters, prices).to_dict(lang))
 
 
 # ── Сохранённые планы ────────────────────────────────────────────

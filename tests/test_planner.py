@@ -282,17 +282,25 @@ class TestFrontendContract:
         rows = _plan(planets, characters).to_dict()["data"]
         assert rows
         required = {
-            "id", "char_id", "character", "role", "planet",
+            "id", "char_id", "character", "role", "role_key", "planet",
             "system", "cc_type", "res_out", "structures", "type_id", "hours_left",
         }
         assert required <= set(rows[0])
 
-    def test_extraction_role_contains_keyword_frontend_checks(self, planets, characters):
-        """index.html отличает добычу по подстроке «Добыча» в поле role."""
+    def test_extraction_role_exposed_as_language_neutral_key(self, planets, characters):
+        """
+        index.html переводит роль по role_key, а не по русской подстроке в
+        role: раньше бейдж «Переработка P2/P3» не переводился на английский.
+        Строка role остаётся русской — её по подстроке ищет plan_storage.
+        """
         result = _plan(planets, characters)
         mining = [r for r in result.rows if r.template_key == "miner_00"]
         assert mining
+        assert all(r.role_key == "mine" for r in mining)
         assert all("Добыча" in r.role for r in mining)
+        proc = [r for r in result.rows if r.role.startswith("Переработка")]
+        assert all(r.role_key == "proc" for r in proc)
+        assert all(r.role_tier in ("P2/P3", "P4") for r in proc)
 
     def test_structures_string_contains_extractable_number(self, planets, characters):
         """index.html достаёт число фабрик из строки structures."""
@@ -300,3 +308,48 @@ class TestFrontendContract:
 
         for row in _plan(planets, characters).rows:
             assert re.search(r"\d+", row.structures)
+
+    def test_factory_summary_is_language_neutral_data(self, planets, characters):
+        """index.html рисует «N фабрик» из factory_summary, а не из русской строки."""
+        for row in _plan(planets, characters).to_dict()["data"]:
+            fs = row["factory_summary"]
+            assert fs, row["structures"]
+            assert "factories" in fs or {"advanced", "basic"} <= set(fs)
+
+
+class TestMessagesI18n:
+    """Предупреждения и допущения переводятся; раньше «ДЕФИЦИТ ДОБЫЧИ…»
+    показывался по-английски как есть."""
+
+    CYRILLIC = __import__("re").compile("[А-Яа-яЁё]")
+
+    def _deficit_plan(self):
+        empty = PlanetBook(pd.DataFrame([
+            {"Constellation": "ALPHA", "System": "HOME", "Planet": "4", "Type": "Barren",
+             RADIUS_COLUMN: 5820, "Carbon Compounds": 0, "Noble Metals": 0},
+        ]))
+        return _plan(empty, [CharacterSlot(90001, "Solo", 5, 5)])
+
+    def test_english_render_has_no_cyrillic(self):
+        payload = self._deficit_plan().to_dict("en")
+        assert payload["critical_warnings"], "у дефицитного плана есть критические"
+        assert payload["assumptions"]
+        for block in ("warnings", "critical_warnings", "assumptions", "site_warnings"):
+            for text in payload[block]:
+                assert not self.CYRILLIC.search(text), (block, text)
+
+    def test_russian_render_matches_plain_attribute(self):
+        result = self._deficit_plan()
+        payload = result.to_dict("ru")
+        rendered = set(payload["warnings"]) | set(payload["critical_warnings"])
+        assert rendered == set(result.warnings)
+
+    def test_critical_warnings_are_separated(self):
+        payload = self._deficit_plan().to_dict("ru")
+        assert any("КРИТИЧЕСКИЙ" in w for w in payload["critical_warnings"])
+
+    def test_every_catalog_code_is_bilingual(self):
+        from domain.plan_messages import _CATALOG
+
+        for code, entry in _CATALOG.items():
+            assert entry.get("ru") and entry.get("en"), code
