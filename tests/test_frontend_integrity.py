@@ -119,6 +119,25 @@ class TestStylesheet:
             f"{name}: в светлой теме не переопределены переменные: {', '.join(sorted(missing))}"
         )
 
+    def test_interactive_states_use_theme_variables_not_literals(self):
+        """
+        Фон у :hover / .on / .best задаётся переменной темы, не литералом.
+        Захардкоженный тёмный hex переживает переключение темы: в светлой
+        под курсором получался чёрный фон, а активные кнопки вида — чёрные.
+        Литерал мимо проверки полноты темы (та смотрит только --переменные).
+        """
+        name, text = _frontend()
+        css = _style_block(text)
+        bad = re.findall(
+            r"([.#][\w.-]*(?::hover|\.on|\.best|\.active)[^{}]*\{[^{}]*?"
+            r"background(?:-color)?\s*:\s*#[0-9a-fA-F]{3,8})",
+            css,
+        )
+        assert not bad, (
+            f"{name}: фон интерактивного состояния задан литералом, а не var(--…):\n  "
+            + "\n  ".join(b[:90] for b in bad[:5])
+        )
+
 
 class TestScript:
     def test_no_duplicate_function_definitions(self):
