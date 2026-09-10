@@ -1727,10 +1727,26 @@ const DOC={
    и английский язык. Выбор запоминается в браузере: это предпочтения отображения,
    им место на вашем устройстве, в отличие от планов и персонажей.</p>
 
+   <h3>Вход через EVE Online</h3>
+   <p>Кнопка «Войти через EVE SSO» подключает ваших персонажей по официальному
+   протоколу CCP. После входа планировщик берёт настоящие уровни скиллов
+   (Command Center Upgrades и Interplanetary Consolidation) вместо ручных, а на
+   дашборде появляются реальные колонии из игры. Токены хранятся на сервере
+   в зашифрованном виде; приложение не видит ваш пароль. Пока владелец не
+   зарегистрировал приложение у CCP, кнопка отвечает, что вход не настроен.</p>
+
+   <h3>Мои колонии в игре</h3>
+   <p>Отдельный блок на дашборде: что у персонажей действительно построено и
+   сколько осталось до конца программы экстрактора на каждой планете. Это не
+   расчётный план, а снимок из игры — планета с программой на исходе (меньше
+   двух часов) подсвечивается. Тот же таймер виден в панели конкретной колонии,
+   если она совпала со строкой плана по персонажу, системе и номеру планеты.
+   Обратный отсчёт браузер считает сам; данные обновляются в фоне.</p>
+
    <h3>Чего программа пока не знает</h3>
-   <p>Времени до конца цикла и остатков на складах: эти данные приходят из игры через
-   ESI, а подключение к нему — следующий этап. Вместо выдуманных чисел показывается
-   «нет данных»: правдоподобное, но ложное значение хуже честного пробела.</p>
+   <p>Состояния циклов фабрик и остатков на складах: ESI отдаёт таймеры только
+   для экстракторов. Вместо выдуманных чисел показывается «нет данных»:
+   правдоподобное, но ложное значение хуже честного пробела.</p>
    <p>Плотность сырья берётся из статического файла и считается постоянной. В игре
    месторождения истощаются, но живых данных об этом нет ни у кого, кроме самой игры.</p>`},
 
@@ -1850,10 +1866,26 @@ const DOC={
    language. The choice is remembered in your browser: these are display preferences and
    belong on your device, unlike plans and characters.</p>
 
+   <h3>Log in with EVE Online</h3>
+   <p>The “Log in with EVE SSO” button connects your characters through CCP's official
+   protocol. After you log in, the planner uses your real skill levels (Command Center
+   Upgrades and Interplanetary Consolidation) instead of manual ones, and your real
+   in-game colonies appear on the dashboard. Tokens are stored encrypted on the server;
+   the app never sees your password. Until the owner registers the app with CCP, the
+   button replies that login is not configured.</p>
+
+   <h3>My in-game colonies</h3>
+   <p>A separate dashboard panel: what your characters have actually built and how long
+   until the extraction program ends on each planet. This is not the computed plan but a
+   snapshot from the game — a planet whose program is nearly done (under two hours) is
+   highlighted. The same timer shows in a colony's detail panel when it matches a plan
+   row by character, system and planet number. The browser runs the countdown itself;
+   the data refreshes in the background.</p>
+
    <h3>What the program does not know yet</h3>
-   <p>Cycle timers and storage contents: that data comes from the game through ESI, and
-   connecting to it is the next stage. Instead of invented numbers you see “no data” —
-   a plausible but false value is worse than an honest gap.</p>
+   <p>Factory cycle state and storage contents: ESI only exposes timers for extractors.
+   Instead of invented numbers you see “no data” — a plausible but false value is worse
+   than an honest gap.</p>
    <p>Resource density comes from a static file and is treated as constant. Deposits do
    deplete in game, but nobody outside the game has live data on that.</p>`}},
 
@@ -1877,9 +1909,11 @@ const DOC={
    <h3>Обращения к игре</h3>
    <p>Приложение не обращается к ESI по действию пользователя. Всё, что требует сети,
    собирают фоновые скрипты по расписанию, а страницы читают готовые снимки. Это защищает
-   от исчерпания лимитов при большом числе пользователей.</p>
+   от исчерпания лимитов при большом числе пользователей. Исключение — вход через EVE SSO:
+   обмен кода на токен по своей природе синхронный, но это разовое действие.</p>
    <p>Запросы соблюдают правила CCP: приложение представляется в User-Agent, передаёт
-   дату совместимости, следит за лимитом ошибок и уважает просьбу подождать.</p>
+   дату совместимости, следит за лимитом ошибок и уважает просьбу подождать. Авторизация —
+   OAuth 2.0 с PKCE; токены шифруются перед записью в базу.</p>
 
    <h3>Права</h3>
    <p>EVE Online и логотип EVE — зарегистрированные торговые марки CCP hf. Все права на
@@ -1905,9 +1939,12 @@ const DOC={
    <h3>Calls to the game</h3>
    <p>The application never calls ESI in response to a user action. Everything that needs
    the network is collected by scheduled background scripts, and pages read finished
-   snapshots. This keeps rate limits safe as the number of users grows.</p>
+   snapshots. This keeps rate limits safe as the number of users grows. The one exception
+   is the EVE SSO login: exchanging the code for a token is inherently synchronous, but
+   it is a one-off action.</p>
    <p>Requests follow CCP's rules: the app identifies itself in the User-Agent, sends a
-   compatibility date, watches the error limit and respects requests to back off.</p>
+   compatibility date, watches the error limit and respects requests to back off.
+   Authentication is OAuth 2.0 with PKCE; tokens are encrypted before they are stored.</p>
 
    <h3>Rights</h3>
    <p>EVE Online and the EVE logo are registered trademarks of CCP hf. All rights to the
