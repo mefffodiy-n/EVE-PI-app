@@ -23,10 +23,16 @@
 Так был разрешён конфликт по `Industrial Explosives` (Polytextiles, не
 Polyaramids) и удалён несуществующий `Positron Cord`.
 
-**3. Пользователь не инициирует обращения к ESI.** Ни один HTTP-обработчик не
-ходит в сеть. Всё внешнее собирают скрипты по расписанию, страницы читают
-готовые снимки. Проверяется тестом: `urlopen` подменяется на исключение, и
-эндпоинт всё равно обязан ответить.
+**3. Пользователь не инициирует обращения к ESI.** Ни один HTTP-обработчик,
+отдающий ДАННЫЕ, не ходит в сеть. Всё внешнее собирают скрипты по расписанию,
+страницы читают готовые снимки. Проверяется тестом: `urlopen` подменяется на
+исключение, и эндпоинт всё равно обязан ответить.
+
+Единственное исключение — `/api/auth/*` (Фаза 3): обмен OAuth-кода на токен
+по своей природе синхронный вызов к `login.eveonline.com`. Это разовое
+действие пользователя, а не обслуживание данных; идёт не к ESI-API и на его
+лимит ошибок не влияет. Дальше токены обновляет фоновый `refresh_tokens`,
+а не обработчик. Все обращения к SSO — через `scripts/esi_sso.py`.
 
 **4. Flask, не FastAPI. Никакого Docker.** Обычное WSGI-приложение за nginx.
 БД — SQLAlchemy 2.0 + Alembic, адрес в `PI_DATABASE_URL` (`infra/config.py`).
@@ -126,19 +132,21 @@ domain/           расчёты, без Flask и без сети
   features.py     реестр возможностей (см. правило 6)
 
 infra/            конфиг окружения и доступ к БД (общий для domain/api/scripts)
-  config.py       PI_ENV, PI_DATABASE_URL — единственное место чтения env
+  config.py       PI_ENV, PI_DATABASE_URL, настройки EVE SSO — чтение env
   db.py           движок SQLAlchemy, session_scope, декларативная база
-  models.py       ORM-модели: characters, plans
+  models.py       ORM-модели: characters, plans, credentials
+  crypto.py       шифрование токенов ESI перед записью в БД (Fernet)
 
 migrations/       Alembic: миграции схемы (env.py берёт URL из infra.config)
 
 api/              Flask, только чтение готовых данных
   __init__.py     фабрика приложения, отдача web/, обработка ошибок
   cache.py        LRU-кэш, ETag, разбор тела запроса
-  blueprints/     reference, plans, market, export, meta
+  blueprints/     reference, plans, market, export, meta, auth (см. правило 3)
 
 scripts/          всё, что ходит в сеть или готовит данные
-  esi_client.py            единая точка обращений к ESI
+  esi_client.py            единая точка обращений к ESI-API
+  esi_sso.py               единая точка обращений к login.eveonline.com
   refresh_server_status.py статус сервера по расписанию
   refresh_market_prices.py цены по расписанию
   scheduler.py             запуск сборщиков без внешних зависимостей
@@ -217,8 +225,14 @@ python -m scripts.scheduler        # сборщики по расписанию
 ```
 
 Первые три команды — разовая подготовка: без `data/schematics.json` план
-не считается, без миграций нет таблицы `characters`, без seed планировщику
-некого распределять.
+не считается, без миграций нет таблиц, без seed планировщику некого
+распределять.
+
+Вход через EVE SSO (Фаза 3) требует переменных окружения: `PI_ESI_CLIENT_ID`
+(регистрация на developers.eveonline.com), `PI_TOKEN_KEY` (ключ шифрования
+токенов — `python -c "from infra.crypto import generate_key; print(generate_key())"`),
+опционально `PI_ESI_CALLBACK_URL`, `PI_ESI_SCOPES`. Без них `/api/auth/*`
+отдаёт 503, разработка идёт на dev-заглушках.
 
 Для правки вёрстки удобен Live Server; тогда сервер запускается как
 `PI_DEV_CORS=1 python run.py`, фронтенд сам определит другой origin.
@@ -227,10 +241,11 @@ python -m scripts.scheduler        # сборщики по расписанию
 
 ## Что дальше (см. roadmap.md)
 
-**Фаза 3 — подключение к игре.** Заблокирована одним шагом: зарегистрировать
-приложение на developers.eveonline.com и получить `client_id`. Дальше OAuth,
-шифрование токенов, синхронизация скиллов и колоний. Это оживит кольца циклов
-и заменит dev-заглушки настоящими персонажами.
+**Фаза 3 — подключение к игре.** Слой БД, шифрование токенов и OAuth-каркас
+(`api/blueprints/auth.py` + `scripts/esi_sso.py`, PKCE) уже написаны — не
+работают только без `client_id` от developers.eveonline.com. Осталось:
+получить `client_id`, `sync_character_skills` и `sync_colony_status` (оживят
+кольца циклов), `refresh_tokens` в расписании.
 
 **Фаза 6 — развёртывание.** Сейчас приложение живёт, пока открыт терминал.
 Нужны служба (waitress за nginx), автозапуск сборщиков, резервные копии БД.
