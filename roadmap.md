@@ -372,9 +372,14 @@ pi-director/
 - [x] `scripts/refresh_tokens.py` в `scheduler.py` (раз в 15 мин): продлевает
       access-токены по refresh до истечения; отозванные удаляет (нужен
       повторный вход). Общая запись токенов — `infra/credentials.py`.
-- [ ] `sync_character_skills` — реальные уровни CCU/IC вместо нулей после
-      первого входа.
+- [x] `scripts/sync_character_skills.py` в `scheduler.py` (раз в 6 ч, после
+      refresh_tokens): подтягивает Command Center Upgrades (type_id 2505) и
+      Interplanetary Consolidation (2495) из `GET /characters/{id}/skills/`,
+      пишет в `Character`. type_id — в `data/pi_reference.json`. Авторизованные
+      запросы через `esi_client.get(..., token=)`, токен из `credentials`.
+      Работает на мок-ESI; реальные данные — после входа с настоящим client_id.
 - [ ] `sync_colony_status` — реальный статус колоний/экстракторов (по расписанию).
+      Даст настоящие таймеры экстракторов вместо «неизвестно».
 - [x] Плавный переход заложен: `load_characters()` читает из таблицы `characters`
       независимо от источника, `planner.py`/`capacity.py` про источник не знают.
 
