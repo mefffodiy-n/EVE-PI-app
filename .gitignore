@@ -21,6 +21,12 @@ venv/
 .idea/
 data/cache/*.json
 
+# Claude Code — личные настройки и локальный конфиг дев-сервера.
+# Общий .claude/settings.json (хуки/права для всех) можно коммитить —
+# он не под шаблоном ниже.
+.claude/settings.local.json
+.claude/launch.json
+
 # Генерируется локально из data/templates/ скриптом extract_schematics.
 # В репозитории не нужен: собирается одной командой из шаблонов.
 data/schematics.json
