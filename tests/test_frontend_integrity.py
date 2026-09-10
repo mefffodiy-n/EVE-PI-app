@@ -132,6 +132,54 @@ class TestScript:
         duplicates = sorted({n for n in names if names.count(n) > 1})
         assert not duplicates, f"{name}: функции определены дважды: {', '.join(duplicates)}"
 
+    def test_translation_dict_has_no_duplicate_keys(self):
+        """
+        Ключ, объявленный в T дважды, молча затирается вторым значением.
+        Так `load` был и «Загрузка», и «Открыть» — на дашборде вместо
+        подписи «Загрузка» показывалось «Открыть». Ловим до жалобы.
+        """
+        name, text = _frontend()
+        block = text[text.index("const T={") + len("const T={") : text.index("\nconst t=")]
+        # Внутри T две ветки: ru:{...} и en:{...}. Разбираем каждую.
+        for lang in ("ru", "en"):
+            start = block.index(lang + ":{") + len(lang) + 2
+            depth, i = 1, start
+            while depth:
+                if block[i] == "{":
+                    depth += 1
+                elif block[i] == "}":
+                    depth -= 1
+                i += 1
+            body = block[start : i - 1]
+            # Ключи верхнего уровня: имя перед ':' в начале элемента,
+            # не внутри строк и не внутри вложенных [...] массивов.
+            keys, buf_depth, in_str = [], 0, ""
+            token = ""
+            for ch in body:
+                if in_str:
+                    if ch == in_str:
+                        in_str = ""
+                    continue
+                if ch in "'\"":
+                    in_str = ch
+                    token = ""
+                elif ch == "[":
+                    buf_depth += 1
+                elif ch == "]":
+                    buf_depth -= 1
+                elif ch == ":" and buf_depth == 0:
+                    keys.append(token.strip().split(",")[-1].strip())
+                    token = ""
+                elif ch == "," and buf_depth == 0:
+                    token = ""
+                else:
+                    token += ch
+            dupes = sorted({k for k in keys if k and keys.count(k) > 1})
+            assert not dupes, (
+                f"{name}: в T.{lang} ключи объявлены дважды: {', '.join(dupes)}. "
+                f"Второе значение молча затирает первое."
+            )
+
 
     def test_no_script_outside_script_tag(self):
         """

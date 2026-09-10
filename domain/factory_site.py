@@ -54,6 +54,7 @@ from domain.capacity import (
     max_planet_radius_that_fits,
 )
 from domain.planets import PREFERRED_FACTORY_PLANET_TYPES, RADIUS_COLUMN, PlanetBook
+from domain.plan_messages import render as render_message
 
 # Какой шаблон отвечает какому тиру переработки.
 TEMPLATE_BY_TIER = {
@@ -98,13 +99,20 @@ class SiteSelection:
     tier: str
     ccu_level: int
     assignments: list[SiteAssignment] = field(default_factory=list)
-    warnings: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)         # рендер по-русски, для тестов и хранилища
+    warning_data: list[dict] = field(default_factory=list)    # {code, ...параметры} для перевода
     downgraded_to_single: bool = False
     templates_requested: int = 0
     candidates_available: int = 0
 
     # Пришлось ли ставить переработку на непредпочтительные типы планет.
     used_fallback_types: list[str] = field(default_factory=list)
+
+    def warn(self, code: str, **params) -> None:
+        """Записать предупреждение: код+параметры для перевода и русский рендер."""
+        entry = {"code": code, **params}
+        self.warning_data.append(entry)
+        self.warnings.append(render_message(entry, "ru"))
 
     @property
     def templates_placed(self) -> int:
@@ -220,10 +228,7 @@ def select_factory_sites(
 
     candidates = _candidates(planets, system)
     if not candidates:
-        selection.warnings.append(
-            f"В системе {system} вообще нет планет — переработку ставить некуда. "
-            f"Выберите другую домашнюю систему."
-        )
+        selection.warn("site_no_planets", system=system)
         return selection
 
     preferred = [c for c in candidates if c.preferred]
@@ -232,19 +237,9 @@ def select_factory_sites(
         if tier == "P4":
             # Для P4 это не предпочтение, а правило игры: шаблон
             # не ставится на другие типы вовсе.
-            selection.warnings.append(
-                f"В системе {system} нет планет Barren или Temperate. "
-                f"Переработка P4 на них и только на них — это ограничение игры, "
-                f"обойти его нельзя. Доступны только: {types}. "
-                f"Выберите другую домашнюю систему."
-            )
+            selection.warn("site_p4_no_preferred", system=system, types=types)
             return selection
-        selection.warnings.append(
-            f"В системе {system} нет планет Barren или Temperate. Переработка "
-            f"{tier} будет размещена на других типах ({types}) — это допустимо, "
-            f"но такие планеты в среднем крупнее, и линки обойдутся дороже. "
-            f"Если запас по CPU/PG окажется мал, выберите другую домашнюю систему."
-        )
+        selection.warn("site_no_preferred", system=system, tier=tier, types=types)
 
     double_key = TEMPLATE_BY_TIER[tier][2]
     single_key = TEMPLATE_BY_TIER[tier][1]
@@ -253,11 +248,7 @@ def select_factory_sites(
     smallest = candidates[0]
 
     if not double_available:
-        selection.warnings.append(
-            f"Command Center Upgrades {ccu_level}: два шаблона на планету недоступны "
-            f"(нужен уровень 5). Используется один шаблон на планету — планет "
-            f"потребуется вдвое больше."
-        )
+        selection.warn("site_no_ccu5", ccu_level=ccu_level)
 
     # Пытаемся разместить двойные шаблоны на самых мелких планетах.
     remaining = templates_needed
@@ -276,24 +267,14 @@ def select_factory_sites(
         if not double_fits_somewhere:
             threshold = max_planet_radius_that_fits(double_key, ccu_level)
             smallest_km = _km(smallest.radius_km)
-            threshold_km = _km(threshold) if threshold is not None else "неизвестен"
-            selection.warnings.append(
-                f"В системе {system} ни одна планета Barren/Temperate не подходит под "
-                f"два шаблона {tier}: самая мелкая — {smallest.planet_type} радиусом "
-                f"{smallest_km} км, а предел при Command Center Upgrades "
-                f"{ccu_level} — примерно {threshold_km} км. "
-                f"Варианты: выбрать другую домашнюю систему с планетами поменьше "
-                f"либо ставить по одному шаблону на планету (планет и персонажей "
-                f"потребуется вдвое больше)."
+            threshold_km = _km(threshold) if threshold is not None else "?"
+            selection.warn(
+                "site_double_too_big",
+                system=system, tier=tier, planet_type=smallest.planet_type,
+                smallest_km=smallest_km, ccu_level=ccu_level, threshold_km=threshold_km,
             )
             if tier == "P4":
-                selection.warnings.append(
-                    "Замечание: порог для двойного P4-шаблона опирается на "
-                    "неразрешённое расхождение в источнике по стоимости второго "
-                    "причала (7200 против 5200 CPU). Взято консервативное значение; "
-                    "если проверка в игре покажет 5200, предел вырастет примерно "
-                    "с 9 600 до 61 700 км и это предупреждение станет излишним."
-                )
+                selection.warn("site_p4_launchpad_caveat")
             if not allow_single_fallback:
                 return selection
             selection.downgraded_to_single = True
@@ -348,11 +329,10 @@ def select_factory_sites(
     )
 
     if remaining > 0:
-        selection.warnings.append(
-            f"В системе {system} не удалось разместить {remaining} шаблонов "
-            f"{tier} из {templates_needed}: на пригодных планетах "
-            f"({selection.candidates_available} шт. Barren/Temperate) шаблон "
-            f"не помещается по CPU/PG. Планеты слишком крупные."
+        selection.warn(
+            "site_unplaced",
+            system=system, tier=tier, remaining=remaining,
+            requested=templates_needed, available=selection.candidates_available,
         )
 
     return selection

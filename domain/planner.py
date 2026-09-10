@@ -42,6 +42,38 @@ from domain.capacity import (
     min_ccu_level_that_fits,
 )
 from domain.factory_site import TEMPLATE_BY_TIER, SiteSelection, select_factory_sites
+from domain.plan_messages import CRITICAL as _CRITICAL_CODES
+from domain.plan_messages import render as render_message
+
+
+# ── Роль колонии ──────────────────────────────────────────────────────
+# Человекочитаемая строка живёт в поле `role`: её по подстроке проверяют
+# хранилище планов (plan_storage) и часть расчёта. Фронтенду для перевода
+# нужен язык-независимый ключ и, у переработки, суффикс тира («P2/P3»).
+ROLE_PROC = "Переработка"
+
+
+def _parse_factories(text: str) -> dict:
+    """«24 фабрик» → {factories: 24}; «12 фабрик + 8 basic» → {advanced, basic}."""
+    import re
+    m = re.match(r"\s*(\d+)\s+фабрик(?:\s*\+\s*(\d+)\s+basic)?", text or "")
+    if not m:
+        return {}
+    if m.group(2):
+        return {"advanced": int(m.group(1)), "basic": int(m.group(2))}
+    return {"factories": int(m.group(1))}
+
+
+def role_meta(role: str) -> tuple[str, str | None]:
+    """(ключ, суффикс-тир). Ключ ∈ mine | mine_surplus | proc | direct_p2."""
+    if "избыток" in role:
+        return "mine_surplus", None
+    if role.startswith("Добыча"):
+        return "mine", None
+    if role.startswith("Прямое"):
+        return "direct_p2", None
+    tier = role[len(ROLE_PROC):].strip() or None
+    return "proc", tier
 from domain.planets import RADIUS_COLUMN, PlanetBook
 from domain.recipes import RecipeBook, load_recipes
 from domain.throughput import Demand, Schematic, expand_demand, load_schematics
@@ -159,7 +191,7 @@ class PlanRow:
     cc_type: str              # например «1x Barren Command Center»
     res_out: str
     res_in: str | None
-    structures: str           # строка с числом фабрик — фронт достаёт из неё число
+    structures: str           # русская строка для экспорта и хранилища
     type_id: int | None
     template_key: str
     template_count: int
@@ -191,12 +223,28 @@ class PlanRow:
     # делится, и расчётные объёмы завышены.
     shared_extraction_count: int = 1
 
+    # Язык-независимая роль для фронтенда: строка `role` по-русски и её
+    # переводить нельзя (по ней же расчёт и хранилище ищут подстроку).
+    role_key: str = field(init=False, default="proc")
+    role_tier: str | None = field(init=False, default=None)
+
+    # Число фабрик в виде данных, чтобы фронтенд перевёл «N фабрик» сам.
+    # {"factories": N} или {"advanced": A, "basic": B}.
+    factory_summary: dict = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        self.role_key, self.role_tier = role_meta(self.role)
+        if not self.factory_summary:
+            self.factory_summary = _parse_factories(self.structures)
+
     def to_dict(self) -> dict:
         return {
             "id": self.id,
             "char_id": self.char_id,
             "character": self.character,
             "role": self.role,
+            "role_key": self.role_key,
+            "role_tier": self.role_tier,
             "planet": self.planet,
             "system": self.system,
             "constellation": self.constellation,
@@ -204,6 +252,7 @@ class PlanRow:
             "res_out": self.res_out,
             "res_in": self.res_in,
             "structures": self.structures,
+            "factory_summary": self.factory_summary,
             "structures_detail": self.structures_detail,
             "type_id": self.type_id,
             "template_key": self.template_key,
@@ -242,6 +291,10 @@ class StaffingGap:
     planets_placed: int
     min_ccu_level: int
     details: str = ""
+    role_key: str = field(init=False, default="proc")
+
+    def __post_init__(self) -> None:
+        self.role_key, _ = role_meta(self.role)
 
     @property
     def planets_missing(self) -> int:
@@ -251,15 +304,32 @@ class StaffingGap:
 @dataclass
 class PlanResult:
     rows: list[PlanRow] = field(default_factory=list)
-    warnings: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)      # рендер по-русски: тесты, хранилище
     assumptions: list[str] = field(default_factory=list)
     demand: Demand | None = None
     staffing_gaps: list[StaffingGap] = field(default_factory=list)
+
+    # Код+параметры каждого сообщения — чтобы to_dict() перевёл их на язык
+    # интерфейса. Строки выше остаются русскими и неизменными.
+    warning_data: list[dict] = field(default_factory=list)
+    assumption_data: list[dict] = field(default_factory=list)
 
     # Подбор площадок держим отдельно: эти предупреждения требуют
     # РЕШЕНИЯ пользователя (сменить систему или согласиться на один
     # шаблон), а не просто информируют.
     site_selections: list[SiteSelection] = field(default_factory=list)
+
+    def warn(self, code: str, **params) -> None:
+        entry = {"code": code, **params}
+        if code in _CRITICAL_CODES:
+            entry["critical"] = True
+        self.warning_data.append(entry)
+        self.warnings.append(render_message(entry, "ru"))
+
+    def assume(self, code: str, **params) -> None:
+        entry = {"code": code, **params}
+        self.assumption_data.append(entry)
+        self.assumptions.append(render_message(entry, "ru"))
 
     @property
     def needs_user_decision(self) -> bool:
@@ -281,7 +351,12 @@ class PlanResult:
                 continue
             entry = summary.setdefault(
                 gap.role,
-                {"planets_missing": 0, "min_ccu_level": gap.min_ccu_level, "items": []},
+                {
+                    "planets_missing": 0,
+                    "min_ccu_level": gap.min_ccu_level,
+                    "items": [],
+                    "role_key": gap.role_key,
+                },
             )
             entry["planets_missing"] += gap.planets_missing
             entry["min_ccu_level"] = max(entry["min_ccu_level"], gap.min_ccu_level)
@@ -326,15 +401,27 @@ class PlanResult:
             "max_systems_per_character": max(spreads),
         }
 
-    def to_dict(self) -> dict:
+    def to_dict(self, lang: str = "ru") -> dict:
+        """
+        lang: язык предупреждений и допущений в ответе. Строки самого
+        расчёта (роли, структуры) переводит фронтенд по ключам.
+        """
+        def texts(entries: list[dict]) -> list[str]:
+            return [render_message(e, lang) for e in entries]
+
+        critical = [e for e in self.warning_data if e.get("critical")]
+        non_critical = [e for e in self.warning_data if not e.get("critical")]
+        site_entries = [e for s in self.site_selections for e in s.warning_data]
+
         return {
             "data": [r.to_dict() for r in self.rows],
             "logistics": self.logistics(),
             "warning": " ".join(self.warnings) if self.warnings else None,
-            "warnings": self.warnings,
-            "assumptions": self.assumptions,
+            "warnings": texts(non_critical),
+            "critical_warnings": texts(critical),
+            "assumptions": texts(self.assumption_data),
             "needs_user_decision": self.needs_user_decision,
-            "site_warnings": [w for s in self.site_selections for w in s.warnings],
+            "site_warnings": texts(site_entries),
             "staffing": self.characters_required(),
         }
 
@@ -544,11 +631,7 @@ def build_plan(
         raise ValueError("Не передан PlanetBook — планировщик не читает файлы сам")
 
     if not schematics:
-        result.warnings.append(
-            "Нет данных о производительности: файл data/schematics.json отсутствует. "
-            "Сформируйте его командой `python -m scripts.extract_schematics --write` — "
-            "числа будут извлечены из ваших шаблонов, без обращения к ESI."
-        )
+        result.warn("no_schematics_file")
         return result
 
     # 1. Потребность. Одна линия = один полный шаблон целевого продукта.
@@ -556,21 +639,18 @@ def build_plan(
     for product in request.target_products:
         tier = _tier_of(product, recipes)
         if tier is None:
-            result.warnings.append(f"Неизвестный продукт: {product}")
+            result.warn("unknown_product", product=product)
             continue
         schematic = schematics.get(product)
         if schematic is None:
-            result.warnings.append(
-                f"Для продукта {product} нет шаблона в data/templates/ — "
-                f"расчёт по нему невозможен."
-            )
+            result.warn("no_template_for_product", product=product)
             continue
         template_key = TEMPLATE_BY_TIER[_processing_tier_key(tier)][1]
         factories = FACTORIES_PER_TEMPLATE[template_key]
         targets[product] = schematic.output_per_hour * factories * request.lines_per_target
 
     if not targets:
-        result.warnings.append("Не удалось построить план: нет пригодных целевых продуктов.")
+        result.warn("no_usable_products")
         return result
 
     # Прямое производство P2 забирает часть целей на себя: для них
@@ -583,13 +663,11 @@ def build_plan(
 
     demand = expand_demand(targets, schematics=schematics, recipes=recipes) if targets else Demand()
     result.demand = demand
-    result.assumptions = list(demand.assumptions_used)
-    result.assumptions.append(
-        "Число планет на персонажа принято как Interplanetary Consolidation + 1 "
-        "(не подтверждено источником)"
-    )
+    for entry in demand.assumptions_used:
+        result.assume(entry["code"], **{k: v for k, v in entry.items() if k != "code"})
+    result.assume("assume_planets_per_char")
     for missing in demand.missing:
-        result.warnings.append(f"Нет схемы производства для {missing} — цепочка оборвана.")
+        result.warn("chain_broken_no_schematic", product=missing)
 
     pool = _CharacterPool(characters)
     row_counter = 0
@@ -633,6 +711,7 @@ def build_plan(
         )
         result.site_selections.append(selection)
         result.warnings.extend(selection.warnings)
+        result.warning_data.extend(selection.warning_data)
 
         # Раздаём назначенные площадки под конкретные продукты.
         queue: list[str] = []
@@ -659,10 +738,8 @@ def build_plan(
                             details=f"{tier_key.replace('_', '/')}: не хватило персонажей",
                         )
                     )
-                    result.warnings.append(
-                        f"Переработка {tier_key.replace('_', '/')}: не хватило свободных "
-                        f"персонажей. Планеты под колонии есть — нужны исполнители."
-                    )
+                    result.warn("processing_understaffed",
+                                tier=tier_key.replace("_", "/"))
                     break
                 row_counter += 1
                 result.rows.append(
@@ -715,10 +792,7 @@ def build_plan(
 
         candidates = planets.planets_with_resource(raw_name, request.constellations) if raw_name else None
         if candidates is None or candidates.empty:
-            result.warnings.append(
-                f"КРИТИЧЕСКИЙ ДЕФИЦИТ: нет планет с сырьём «{raw_name}» "
-                f"для производства {product} в выбранных констелляциях."
-            )
+            result.warn("extraction_none", resource=raw_name, product=product)
             continue
 
         skill_shortfall = False
@@ -817,15 +891,10 @@ def build_plan(
                     details=f"{product} (сырьё «{raw_name}»)",
                 )
             )
-            reason = (
-                "не хватило свободных персонажей — планет достаточно, "
-                "на одной размещаются колонии нескольких"
-                if skill_shortfall
-                else "добывающий шаблон не помещается на найденные планеты"
-            )
-            result.warnings.append(
-                f"ДЕФИЦИТ ДОБЫЧИ: {product} — нужно {templates_needed} планет, "
-                f"размещено {placed} ({reason})."
+            result.warn(
+                "extraction_deficit",
+                product=product, needed=templates_needed, placed=placed,
+                reason="skill" if skill_shortfall else "fit",
             )
 
     if request.surplus_mining and pool.free_slots:
@@ -833,13 +902,10 @@ def build_plan(
                             row_counter, system_priority)
 
     if pool.free_slots == 0 and pool.total_slots:
-        result.warnings.append("Все слоты планет заняты — резерва под расширение нет.")
+        result.warn("all_slots_full")
 
     if request.extraction_margin > 1.0:
-        result.assumptions.append(
-            f"Число добывающих планет увеличено в {request.extraction_margin:g} раза "
-            f"как запас на истощение месторождений (задано пользователем, не расчёт)"
-        )
+        result.assume("assume_extraction_margin", margin=f"{request.extraction_margin:g}")
 
     _note_extractor_stacking(result)
     return result
@@ -929,16 +995,10 @@ def _place_direct_p2(entry: dict, result: PlanResult, pool, row_counter: int) ->
 
     if placed:
         comparison = compare_with_split(product, layout)
-        result.warnings.append(
-            f"{product} делается прямо на добывающих планетах: {placed} колоний "
-            f"вместо {comparison['split_colonies']} при раздельном пути. "
-            f"{comparison['note']}"
-        )
+        result.warn("direct_p2_used", product=product, placed=placed,
+                    split=comparison["split_colonies"])
     if placed < needed:
-        result.warnings.append(
-            f"{product}: подходящих планет с обоими видами сырья хватило "
-            f"только на {placed} колоний из {needed}."
-        )
+        result.warn("direct_p2_short", product=product, placed=placed, needed=needed)
     return row_counter
 
 
@@ -1032,11 +1092,7 @@ def _add_surplus_mining(request, result, pool, recipes, schematics, planets,
             break
 
     if added:
-        result.warnings.append(
-            f"Свободные персонажи заняты добычей сверх потребности: {added} колоний. "
-            f"Сырьё выбрано из вашей же цепочки, по убыванию дефицитности — "
-            f"копится то, чего не хватает первым."
-        )
+        result.warn("surplus_mining_added", colonies=added)
 
 
 def _note_extractor_stacking(result: PlanResult) -> None:
@@ -1062,10 +1118,8 @@ def _note_extractor_stacking(result: PlanResult) -> None:
             continue
         for row in rows:
             row.shared_extraction_count = len(rows)
-        result.warnings.append(
-            f"{system} {planet}: {len(rows)} наших экстрактора на «{resource}» "
-            f"({', '.join(sorted(r.character for r in rows))}). Месторождение общее, "
-            f"поэтому фактическая выработка каждого будет ниже расчётной. "
-            f"Если это критично — распределите добычу по другим планетам "
-            f"или заложите запас (extraction_margin)."
+        result.warn(
+            "extractor_stacking",
+            system=system, planet=planet, resource=resource, count=len(rows),
+            characters=", ".join(sorted(r.character for r in rows)),
         )
