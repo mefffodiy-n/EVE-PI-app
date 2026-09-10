@@ -75,3 +75,26 @@ class Plan(Base):
     rows: Mapped[list] = mapped_column(JSON, default=list)
     warnings: Mapped[list] = mapped_column(JSON, default=list)
     assumptions: Mapped[list] = mapped_column(JSON, default=list)
+
+
+class Credential(Base):
+    """
+    Токены ESI одного персонажа. Отдельно от `characters` (roadmap):
+    персонаж — это данные для расчёта, токен — секрет с другим жизненным
+    циклом (обновляется фоновым refresh_tokens, шифруется at rest).
+    """
+
+    __tablename__ = "credentials"
+
+    character_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+
+    # Зашифрованы infra.crypto (Fernet). В открытом виде в БД не лежат.
+    access_token: Mapped[str] = mapped_column(String)
+    refresh_token: Mapped[str] = mapped_column(String)
+
+    access_expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    scopes: Mapped[list] = mapped_column(JSON, default=list)
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+    )

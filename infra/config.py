@@ -33,3 +33,38 @@ def _default_database_url() -> str:
 
 
 DATABASE_URL = os.environ.get("PI_DATABASE_URL", _default_database_url())
+
+
+# ── EVE SSO / OAuth2 (Фаза 3) ─────────────────────────────────────────
+# Регистрация приложения: https://developers.eveonline.com/applications
+# До появления client_id весь auth-слой просто отдаёт 503 — это ожидаемо
+# (roadmap, раздел 0, пункт 6) и не мешает разработке на dev-заглушках.
+#
+# Тип приложения — public client + PKCE: у self-hosted инструмента нет
+# безопасного места для секрета (CLAUDE.md, правило 11). Если приложение
+# всё же зарегистрировано как confidential, положите секрет в
+# PI_ESI_CLIENT_SECRET — клиент отправит и его, PKCE остаётся.
+ESI_CLIENT_ID = os.environ.get("PI_ESI_CLIENT_ID") or None
+ESI_CLIENT_SECRET = os.environ.get("PI_ESI_CLIENT_SECRET") or None
+
+# Должен совпадать с Callback URL в настройках приложения на
+# developers.eveonline.com — до знака.
+ESI_CALLBACK_URL = os.environ.get(
+    "PI_ESI_CALLBACK_URL", "http://localhost:8000/api/auth/callback"
+)
+
+# Минимальный набор для Фазы 3: уровни скиллов и список колоний.
+# Пользователь подтверждает каждый scope в окне SSO.
+ESI_SCOPES = os.environ.get(
+    "PI_ESI_SCOPES",
+    "esi-skills.read_skills.v1 esi-planets.manage_planets.v1",
+).split()
+
+# Ключ шифрования refresh/access-токенов в БД (Fernet, base64, 32 байта).
+# Сгенерировать: python -c "from infra.crypto import generate_key; print(generate_key())"
+TOKEN_ENCRYPTION_KEY = os.environ.get("PI_TOKEN_KEY") or None
+
+
+def sso_configured() -> bool:
+    """Готов ли auth-слой к работе (есть client_id и ключ шифрования)."""
+    return bool(ESI_CLIENT_ID and TOKEN_ENCRYPTION_KEY)
