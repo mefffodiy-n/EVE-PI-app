@@ -57,13 +57,17 @@ BASE_URL = "https://esi.evetech.net"
 # автоматически: в этом весь смысл заголовка.
 COMPATIBILITY_DATE = "2025-08-26"
 
-# CCP просит указывать контакт. Замените на свой перед публичным
-# развёртыванием: по нему с вами свяжутся, если приложение создаст
-# нагрузку, вместо того чтобы просто заблокировать.
-USER_AGENT = (
-    "PI-Director/0.6.0 (planetary industry planner; "
-    "+https://github.com/mefffodiy-n/EVE-PI-app)"
-)
+# Собирается из version.py: единственное место, где живёт номер версии
+# и контакт. Раньше строка была вписана здесь и в сборщике цен, и версии
+# в них разошлись.
+def _user_agent() -> str:
+    import sys
+    sys.path.insert(0, str(ROOT))
+    from version import user_agent
+    return user_agent()
+
+
+USER_AGENT = _user_agent()
 
 TIMEOUT_SECONDS = 15
 

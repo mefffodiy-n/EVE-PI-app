@@ -44,7 +44,17 @@ SNAPSHOT = CACHE_DIR / "market_prices.json"
 TYPE_IDS_PATH = ROOT / "data" / "type_ids.json"
 
 FUZZWORK_URL = "https://market.fuzzwork.co.uk/aggregates/"
-USER_AGENT = "PI-Director/0.5.0 (planetary industry planner; contact via repository)"
+
+
+def _user_agent() -> str:
+    """Тот же User-Agent, что у остальных обращений: см. version.py."""
+    import sys
+    sys.path.insert(0, str(ROOT))
+    from version import user_agent
+    return user_agent()
+
+
+USER_AGENT = _user_agent()
 TIMEOUT_SECONDS = 20
 
 # Торговые узлы: id станции или региона, как их принимает Fuzzwork.
