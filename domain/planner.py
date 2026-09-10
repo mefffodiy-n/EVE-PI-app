@@ -135,6 +135,11 @@ class PlanRequest:
     include_direct_p2: bool = False           # Фаза 4: сценарий прямого R0 -> P2
     allow_single_template_fallback: bool = False
 
+    # Занять свободных персонажей добычей сырья ТОЙ ЖЕ цепочки.
+    # Включается, когда пользователь отказался расширять производство:
+    # пусть лучше копится нужное сырьё, чем персонажи простаивают.
+    surplus_mining: bool = False
+
 
 @dataclass
 class PlanRow:
@@ -286,9 +291,41 @@ class PlanResult:
             entry["planet_slots_per_character"] = planet_slots_per_character
         return summary
 
+    def logistics(self) -> dict:
+        """
+        Насколько разбросаны колонии по системам.
+
+        Показатель практический: персонаж с шестью колониями в одной
+        системе собирает продукцию за один заход, а с шестью в разных —
+        за шесть перелётов. Числа тут не для красоты: по ним видно,
+        стоит ли менять набор созвездий.
+        """
+        by_character: dict[int, dict] = {}
+        for row in self.rows:
+            entry = by_character.setdefault(row.char_id, {
+                "character": row.character, "systems": set(), "colonies": 0,
+            })
+            entry["systems"].add(row.system)
+            entry["colonies"] += 1
+
+        people = [
+            {"character": e["character"], "colonies": e["colonies"],
+             "systems": sorted(e["systems"]), "system_count": len(e["systems"])}
+            for e in by_character.values()
+        ]
+        people.sort(key=lambda p: -p["system_count"])
+        spreads = [p["system_count"] for p in people] or [0]
+        return {
+            "characters": people,
+            "systems_total": len({r.system for r in self.rows}),
+            "avg_systems_per_character": round(sum(spreads) / len(spreads), 2),
+            "max_systems_per_character": max(spreads),
+        }
+
     def to_dict(self) -> dict:
         return {
             "data": [r.to_dict() for r in self.rows],
+            "logistics": self.logistics(),
             "warning": " ".join(self.warnings) if self.warnings else None,
             "warnings": self.warnings,
             "assumptions": self.assumptions,
@@ -321,6 +358,10 @@ class _CharacterPool:
         self._planets: dict[int, set[tuple[str, str]]] = {
             c.character_id: set() for c in characters
         }
+        # В каких системах у персонажа уже есть колонии. Нужно для
+        # логистики: собирать урожай в одной системе куда удобнее,
+        # чем облетать шесть разных.
+        self._systems: dict[int, set[str]] = {c.character_id: set() for c in characters}
 
     def take(
         self,
@@ -328,6 +369,7 @@ class _CharacterPool:
         min_ccu: int = 0,
         prefer_least_skilled: bool = False,
         planet: tuple[str, str] | None = None,
+        prefer_system: str | None = None,
     ) -> CharacterSlot | None:
         """
         Выдать слот планеты.
@@ -340,21 +382,44 @@ class _CharacterPool:
         planet=(система, планета): персонаж, уже имеющий колонию на этой
         планете, пропускается. Вторую колонию на той же планете он
         поставить не может — для этого нужен другой персонаж.
+
+        prefer_system: сначала предлагаются те, у кого в этой системе
+        уже есть колонии. Это логистика, а не мелочь: персонаж с шестью
+        колониями в одной системе собирает продукцию за один заход,
+        а с шестью в разных системах — за шесть перелётов.
         """
         order = list(reversed(self._characters)) if prefer_least_skilled else self._characters
-        for character in order:
+
+        def eligible(character: CharacterSlot) -> bool:
             if require_ccu5 and not character.can_place_two_templates:
-                continue
+                return False
             if character.command_center_upgrades_level < min_ccu:
-                continue
+                return False
             if planet is not None and planet in self._planets[character.character_id]:
-                continue
-            if self._used[character.character_id] < character.planet_slots:
+                return False
+            return self._used[character.character_id] < character.planet_slots
+
+        # Два прохода: сначала те, кто уже работает в этой системе.
+        # Если таких нет, берём по обычному правилу.
+        passes = []
+        if prefer_system:
+            passes.append([c for c in order
+                           if prefer_system in self._systems[c.character_id]])
+        passes.append(order)
+
+        for candidates in passes:
+            for character in candidates:
+                if not eligible(character):
+                    continue
                 self._used[character.character_id] += 1
                 if planet is not None:
                     self._planets[character.character_id].add(planet)
+                    self._systems[character.character_id].add(planet[0])
                 return character
         return None
+
+    def systems_of(self, character_id: int) -> set[str]:
+        return set(self._systems.get(character_id, set()))
 
     @property
     def free_slots(self) -> int:
@@ -392,6 +457,38 @@ def _structures_detail(template_key: str, planet_type: str) -> list[dict]:
         for kind in STRUCTURE_ORDER
         if counts.get(kind)
     ]
+
+
+def _group_by_system(candidates, priority: dict[str, int] | None = None) -> list:
+    """
+    Переупорядочить планеты так, чтобы планеты одной системы шли подряд.
+
+    Порядок систем: сначала те, где встречается больше нужных видов сырья
+    (priority), потом — по лучшей планете. Система, дающая сразу четыре
+    ресурса из списка, логистически ценнее четырёх систем с одним каждая:
+    один персонаж соберёт всё за один заход.
+
+    Внутри системы порядок исходный, то есть по убыванию плотности.
+
+    Смысл в логистике. Если перебирать планеты просто по плотности, соседние
+    колонии оказываются в разных системах, и один персонаж получает шесть
+    колоний в шести системах. Сгруппировав, мы даём ему шанс собрать их
+    в одной, а собирать урожай в одной системе — это один заход вместо шести.
+    """
+    order: list[str] = []
+    grouped: dict[str, list] = {}
+    for index, row in candidates.iterrows():
+        system = str(row.get("System", ""))
+        if system not in grouped:
+            grouped[system] = []
+            order.append(system)
+        grouped[system].append((index, row))
+
+    if priority:
+        # Сортировка устойчивая, поэтому при равном покрытии сохраняется
+        # исходный порядок — то есть по плотности лучшей планеты.
+        order.sort(key=lambda name: -priority.get(name, 0))
+    return [item for system in order for item in grouped[system]]
 
 
 def _breakdown(load) -> dict[str, float]:
@@ -484,6 +581,15 @@ def build_plan(
 
     pool = _CharacterPool(characters)
     row_counter = 0
+
+    # Какие системы дают больше всего нужного сырья. Считается один раз
+    # на весь план: список сырья от продукта к продукту не меняется.
+    needed_raw = sorted({
+        recipes.get(name).source
+        for name in demand.factories
+        if recipes.get(name) and recipes.get(name).tier == "P1" and recipes.get(name).source
+    })
+    system_priority = planets.system_coverage(needed_raw, request.constellations)
 
     # 2-3. Переработка: группируем по тиру и размещаем в домашней системе.
     processing: dict[str, list[tuple[str, float]]] = {"P2_P3": [], "P4": []}
@@ -604,9 +710,13 @@ def build_plan(
         # Планеты перебираются по кругу: одна планета несёт колонии
         # нескольких персонажей, поэтому число планет с нужным сырьём
         # не ограничивает добычу — ограничивают только персонажи.
-        # Порядок сохраняется (по убыванию плотности сырья), так что
-        # повторные колонии тоже садятся на самые богатые планеты.
-        planet_rows = list(candidates.iterrows())
+        #
+        # Порядок при этом СГРУППИРОВАН ПО СИСТЕМАМ. Плотность остаётся
+        # главным критерием — она определяет, какая система идёт раньше, —
+        # но внутри системы планеты идут подряд. Иначе колонии одного
+        # персонажа рассыпаются по всему региону, и урожай приходится
+        # собирать за шесть перелётов вместо одного.
+        planet_rows = _group_by_system(candidates, system_priority)
         colony_round = 0
         while placed < templates_needed:
             progressed_this_round = False
@@ -614,6 +724,7 @@ def build_plan(
                 if placed >= templates_needed:
                     break
                 radius = float(row.get(RADIUS_COLUMN) or 0.0)
+                system_name = str(row.get("System", ""))
 
                 # Сначала выясняем, какая прокачка нужна ИМЕННО НА ЭТОЙ планете:
                 # на крупной шаблон может не влезть при CCU IV и влезть при CCU V.
@@ -634,7 +745,8 @@ def build_plan(
                 character = pool.take(
                     min_ccu=required_ccu,
                     prefer_least_skilled=True,
-                    planet=(str(row.get("System", "")), str(row.get("Planet", ""))),
+                    planet=(system_name, str(row.get("Planet", ""))),
+                    prefer_system=system_name,
                 )
                 if character is None:
                     skill_shortfall = True
@@ -701,6 +813,10 @@ def build_plan(
                 f"размещено {placed} ({reason})."
             )
 
+    if request.surplus_mining and pool.free_slots:
+        _add_surplus_mining(request, result, pool, recipes, schematics, planets,
+                            row_counter, system_priority)
+
     if pool.free_slots == 0 and pool.total_slots:
         result.warnings.append("Все слоты планет заняты — резерва под расширение нет.")
 
@@ -712,6 +828,103 @@ def build_plan(
 
     _note_extractor_stacking(result)
     return result
+
+
+def _add_surplus_mining(request, result, pool, recipes, schematics, planets,
+                        row_counter, system_priority=None):
+    """
+    Занять оставшихся персонажей добычей сырья из той же цепочки.
+
+    Сырьё берётся по убыванию дефицитности: первым добывается то, чего
+    в выбранных констелляциях меньше всего, потому что именно оно
+    ограничивает выпуск. Добывать что попало смысла нет — избыток
+    должен питать то же производство.
+
+    Строки помечаются ролью «Добыча (избыток)»: это не часть расчётной
+    потребности, а загрузка простаивающих персонажей, и в плане это
+    должно быть видно.
+    """
+    from domain.advice import surplus_mining_targets
+
+    targets = surplus_mining_targets(
+        request.target_products, planets, request.constellations, recipes, schematics
+    )
+    if not targets:
+        return
+
+    per_miner = FACTORIES_PER_TEMPLATE["miner_00"]
+    added = 0
+    # Идём по кругу: сначала по одной колонии на каждое сырьё, потом
+    # второй круг. Так дефицитное сырьё получает колонию раньше, чем
+    # менее дефицитное — вторую.
+    while pool.free_slots:
+        placed_this_round = False
+        for product in targets:
+            if not pool.free_slots:
+                break
+            recipe = recipes.get(product)
+            raw_name = recipe.source if recipe else None
+            if not raw_name:
+                continue
+
+            candidates = planets.planets_with_resource(raw_name, request.constellations)
+            if candidates is None or candidates.empty:
+                continue
+
+            for _, row in _group_by_system(candidates, system_priority):
+                radius = float(row.get(RADIUS_COLUMN) or 0.0)
+                required = min_ccu_level_that_fits("miner_00", radius)
+                if required is None:
+                    continue
+                system_name = str(row.get("System", ""))
+                character = pool.take(
+                    min_ccu=required, prefer_least_skilled=True,
+                    planet=(system_name, str(row.get("Planet", ""))),
+                    prefer_system=system_name,
+                )
+                if character is None:
+                    continue
+
+                load = calculate_colony_load(
+                    "miner_00", character.command_center_upgrades_level, radius
+                )
+                row_counter += 1
+                added += 1
+                placed_this_round = True
+                result.rows.append(
+                    PlanRow(
+                        id=f"row-{row_counter}",
+                        char_id=character.character_id,
+                        character=character.name,
+                        role="Добыча (избыток)",
+                        planet=str(row.get("Planet", "")),
+                        system=str(row.get("System", "")),
+                        constellation=str(row.get("Constellation", "")),
+                        cc_type=f"1x {row.get('Type')} Command Center",
+                        res_out=product,
+                        res_in=raw_name,
+                        structures=f"{per_miner} фабрик",
+                        type_id=_type_ids().get(product),
+                        template_key="miner_00",
+                        template_count=1,
+                        planet_type=str(row.get("Type", "")),
+                        planet_radius_km=radius,
+                        cpu_percent=load.cpu_percent,
+                        pg_percent=load.pg_percent,
+                        structures_detail=_structures_detail("miner_00", str(row.get("Type", ""))),
+                        **_breakdown(load),
+                    )
+                )
+                break
+        if not placed_this_round:
+            break
+
+    if added:
+        result.warnings.append(
+            f"Свободные персонажи заняты добычей сверх потребности: {added} колоний. "
+            f"Сырьё выбрано из вашей же цепочки, по убыванию дефицитности — "
+            f"копится то, чего не хватает первым."
+        )
 
 
 def _note_extractor_stacking(result: PlanResult) -> None:

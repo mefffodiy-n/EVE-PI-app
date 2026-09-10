@@ -150,5 +150,41 @@ FEATURES = FEATURES + (
 )
 
 
+FEATURES = FEATURES + (
+    Feature(
+        "colour_coding", "Цветовая кодировка тиров и ролей",
+        ("цвет", "плашк"),
+        ("colour", "badge"),
+        "0.6.0", "help",
+    ),
+)
+
+
+FEATURES = FEATURES + (
+    Feature(
+        "capacity_advice", "Подсказки по вместимости пула персонажей",
+        ("не хватает персонажей", "поместится"),
+        ("not enough characters", "fit"),
+        "0.7.0", "help",
+    ),
+    Feature(
+        "surplus_mining", "Избыточная добыча свободными персонажами",
+        ("избыток", "свободные персонажи"),
+        ("surplus", "spare characters"),
+        "0.7.0", "help",
+    ),
+)
+
+
+FEATURES = FEATURES + (
+    Feature(
+        "logistics_clustering", "Кучкование колоний по системам",
+        ("одной системе", "разъезд"),
+        ("same system", "travel"),
+        "0.7.0", "help",
+    ),
+)
+
+
 def by_section(section: str) -> tuple[Feature, ...]:
     return tuple(f for f in FEATURES if f.where == section)
