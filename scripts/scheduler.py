@@ -2,11 +2,12 @@
 Планировщик фоновых сборщиков.
 
 ЗАЧЕМ. Правило проекта: наружу ходят только сборщики по расписанию.
-Их два — статус сервера и рыночные цены. Этот скрипт запускает их
-с нужными интервалами одним процессом.
+Их пять — статус сервера, рыночные цены, обновление ESI-токенов,
+синхронизация скиллов и статуса колоний. Этот скрипт запускает их
+с нужными интервалами одним процессом, с журналом в файл (Фаза 6).
 
-ПОЧЕМУ БЕЗ APScheduler. Задача — вызвать две функции по таймеру. Для
-этого хватает стандартной библиотеки; добавлять зависимость ради
+ПОЧЕМУ БЕЗ APScheduler. Задача — вызвать несколько функций по таймеру.
+Для этого хватает стандартной библиотеки; добавлять зависимость ради
 тридцати строк цикла незачем, а в проекте и так есть правило не тащить
 лишнее. Если расписание усложнится (разные календари, повторы при сбоях,
 несколько процессов), APScheduler или Celery станут оправданы.
@@ -29,9 +30,7 @@ import argparse
 import signal
 import sys
 import time
-import traceback
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
@@ -80,6 +79,11 @@ def _sync_colonies() -> int:
     return run()
 
 
+def _backup() -> int:
+    from scripts.backup import main as run
+    return run()
+
+
 JOBS = [
     Job("Статус сервера", _server_status, 10,
         "число игроков онлайн меняется медленно, чаще опрашивать незачем"),
@@ -93,33 +97,33 @@ JOBS = [
     Job("Статус колоний", _sync_colonies, 30,
         "таймеры экстракторов; фронт считает обратный отсчёт сам, "
         "сбор нужен на случай перезапуска программы"),
+    Job("Резервная копия", _backup, 1440,
+        "раз в сутки: база и снимки кэша, старые чистятся"),
 ]
 
 # Пауза после неудачи растёт, чтобы не долбить недоступный сервис.
 # Потолок нужен, иначе после долгого простоя сборщик замолчит надолго.
 BACKOFF_STEPS = [1, 5, 15, 30, 60]
 
-
-def _stamp() -> str:
-    return datetime.now(timezone.utc).strftime("%H:%M:%S")
+log = None  # логгер; настраивается в main(), чтобы --once/тесты не плодили файл
 
 
 def run_job(job: Job) -> None:
-    print(f"[{_stamp()}] {job.name}: запуск")
+    log.info("%s: запуск", job.name)
     try:
         code = job.run()
     except Exception:
         code = 1
-        traceback.print_exc()
+        log.exception("%s: исключение", job.name)
 
     if code == 0:
         job.failures = 0
-        print(f"[{_stamp()}] {job.name}: готово")
+        log.info("%s: готово", job.name)
     else:
         job.failures += 1
         delay = BACKOFF_STEPS[min(job.failures - 1, len(BACKOFF_STEPS) - 1)]
-        print(f"[{_stamp()}] {job.name}: неудача №{job.failures}, "
-              f"следующая попытка не раньше чем через {delay} мин")
+        log.warning("%s: неудача №%d, следующая попытка не раньше чем через %d мин",
+                    job.name, job.failures, delay)
         # Сдвигаем время последнего запуска вперёд: следующая попытка
         # произойдёт позже обычного, а не сразу на следующем тике.
         job.last_run = time.time() - job.every_minutes * 60 + delay * 60
@@ -129,10 +133,15 @@ def run_job(job: Job) -> None:
 
 
 def main() -> int:
+    global log
+    from infra.logging import configure
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--once", action="store_true",
                         help="прогнать все сборщики один раз и выйти")
     args = parser.parse_args()
+
+    log = configure("scheduler")
 
     if args.once:
         codes = []
@@ -141,17 +150,16 @@ def main() -> int:
             codes.append(job.failures)
         return 1 if any(codes) else 0
 
-    print("Планировщик запущен. Остановка — Ctrl+C.")
+    log.info("Планировщик запущен. Остановка — Ctrl+C.")
     for job in JOBS:
-        print(f"  · {job.name}: раз в {job.every_minutes} мин — {job.reason}")
-    print()
+        log.info("  · %s: раз в %d мин — %s", job.name, job.every_minutes, job.reason)
 
     stopping = False
 
     def stop(_signum, _frame):
         nonlocal stopping
         stopping = True
-        print(f"\n[{_stamp()}] Останавливаюсь…")
+        log.info("Останавливаюсь…")
 
     signal.signal(signal.SIGINT, stop)
     signal.signal(signal.SIGTERM, stop)
@@ -172,7 +180,7 @@ def main() -> int:
         # а частый опрос впустую греет процессор.
         time.sleep(1)
 
-    print("Планировщик остановлен.")
+    log.info("Планировщик остановлен.")
     return 0
 
 

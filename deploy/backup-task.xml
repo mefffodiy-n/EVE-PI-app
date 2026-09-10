@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-16"?>
+<!--
+  Задание планировщика Windows: ежедневная резервная копия PI Director.
+  Импорт: Task Scheduler -> Action -> Import Task...
+  После импорта поправьте:
+    - <Command> и <WorkingDirectory> под свои пути;
+    - <UserId> / учётную запись, от которой запускать;
+    - время в <StartBoundary>.
+
+  Нужно только если scripts.scheduler НЕ крутится постоянно — иначе он
+  делает копию сам (job «Резервная копия», раз в сутки).
+-->
+<Task version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+  <RegistrationInfo>
+    <Description>PI Director: ежедневная резервная копия базы и снимков кэша</Description>
+    <URI>\PI-Director-Backup</URI>
+  </RegistrationInfo>
+  <Triggers>
+    <CalendarTrigger>
+      <StartBoundary>2026-01-01T04:30:00</StartBoundary>
+      <Enabled>true</Enabled>
+      <ScheduleByDay>
+        <DaysInterval>1</DaysInterval>
+      </ScheduleByDay>
+    </CalendarTrigger>
+  </Triggers>
+  <Principals>
+    <Principal id="Author">
+      <LogonType>Password</LogonType>
+      <RunLevel>LeastPrivilege</RunLevel>
+    </Principal>
+  </Principals>
+  <Settings>
+    <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+    <StartWhenAvailable>true</StartWhenAvailable>
+    <ExecutionTimeLimit>PT30M</ExecutionTimeLimit>
+    <Priority>7</Priority>
+  </Settings>
+  <Actions Context="Author">
+    <Exec>
+      <Command>C:\path\to\EVE-PI-app\.venv\Scripts\python.exe</Command>
+      <Arguments>-m scripts.backup</Arguments>
+      <WorkingDirectory>C:\path\to\EVE-PI-app</WorkingDirectory>
+    </Exec>
+  </Actions>
+</Task>
