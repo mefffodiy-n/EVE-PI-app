@@ -34,5 +34,10 @@ data/schematics.json
 # Сохранённые планы — данные пользователя, не часть кода.
 data/plans/
 
+# Журналы и резервные копии — рантайм, не код (пути настраиваются
+# PI_LOG_DIR / PI_BACKUP_DIR, по умолчанию сюда).
+data/logs/
+data/backups/
+
 # Кэш ETag для запросов к ESI — служебный файл, не часть кода.
 data/cache/etags.json

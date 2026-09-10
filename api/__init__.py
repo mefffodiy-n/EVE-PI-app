@@ -50,6 +50,12 @@ def create_app(config: dict | None = None) -> Flask:
     if config:
         app.config.update(config)
 
+    # Журнал в файл — на развёртывании. В тестах не трогаем: там своя
+    # изоляция, а файл лога был бы мусором.
+    if not app.config.get("TESTING"):
+        from infra.logging import configure
+        configure("web")
+
     from api.blueprints.export import bp as export_bp
     from api.blueprints.market import bp as market_bp
     from api.blueprints.auth import bp as auth_bp

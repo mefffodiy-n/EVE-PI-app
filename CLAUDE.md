@@ -137,6 +137,7 @@ infra/            конфиг окружения и доступ к БД (об�
   models.py       ORM-модели: characters, plans, credentials, colonies
   crypto.py       шифрование токенов ESI перед записью в БД (Fernet)
   credentials.py  запись зашифрованных токенов (общее для auth и refresh_tokens)
+  logging.py      журнал в файл + консоль (PI_LOG_DIR), ротация
 
 migrations/       Alembic: миграции схемы (env.py берёт URL из infra.config)
 
@@ -153,12 +154,16 @@ scripts/          всё, что ходит в сеть или готовит д
   refresh_tokens.py        продление access-токенов ESI по расписанию
   sync_character_skills.py уровни CCU/IC персонажей из ESI (после входа)
   sync_colony_status.py    снимок реальных колоний и таймеров экстракторов
-  scheduler.py             запуск сборщиков без внешних зависимостей
+  scheduler.py             запуск всех сборщиков одним процессом (с журналом)
+  serve.py                 production-запуск через waitress (не run.py)
+  backup.py                копия БД и снимков кэша, чистка старых
   extract_schematics.py    количества вход/выход из шаблонов
   seed_dev_characters.py   заглушки персонажей (нет ESI-токенов)
   diagnose.py              самодиагностика
   check_templates.py       разбор набора шаблонов
   cleanup.py               уборка от файлов прошлых этапов
+
+deploy/           службы Windows (NSSM), nginx, задание бэкапа — README + образцы
 
 data/             только чтение
   recipes.json              68 продуктов, сверено с вики: ноль расхождений
@@ -222,11 +227,14 @@ pip install -r requirements.txt
 python -m scripts.extract_schematics --write   # создаёт data/schematics.json
 python -m alembic upgrade head                 # создаёт таблицы БД
 python -m scripts.seed_dev_characters          # dev-персонажи (только PI_ENV=dev)
-python run.py                      # http://127.0.0.1:8000/ — именно корень
+python run.py                      # разработка: http://127.0.0.1:8000/ (debug)
 python -m pytest tests/ -q         # все тесты
 python -m scripts.diagnose         # проверка данных, БД и эндпоинтов
-python -m scripts.scheduler        # сборщики по расписанию
+python -m scripts.scheduler        # сборщики по расписанию (с журналом в файл)
 ```
+
+Production: `python -m scripts.serve` (waitress) вместо `run.py`, всё за
+nginx, оба процесса — службами. Пошагово — `deploy/README.md`.
 
 Первые три команды — разовая подготовка: без `data/schematics.json` план
 не считается, без миграций нет таблиц, без seed планировщику некого
@@ -253,8 +261,10 @@ python -m scripts.scheduler        # сборщики по расписанию
 планеты). **Не работает только без `client_id`** от developers.eveonline.com
 — это единственный оставшийся шаг фазы.
 
-**Фаза 6 — развёртывание.** Сейчас приложение живёт, пока открыт терминал.
-Нужны служба (waitress за nginx), автозапуск сборщиков, резервные копии БД.
+**Фаза 6 — развёртывание.** Готово: `scripts/serve.py` (waitress),
+журналирование в файл (`infra/logging.py`), `scripts/backup.py` (копия БД
+раз в сутки), `deploy/` (службы Windows через NSSM, nginx, задание бэкапа).
+Осталось поставить всё это на конкретный сервер по `deploy/README.md`.
 
 **Осталось от Фазы 1:** проверить в игре расхождение по второму причалу.
 
