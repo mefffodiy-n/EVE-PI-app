@@ -782,9 +782,18 @@ body.light .rolebadge.excess { background:rgba(154,107,18,.12); }
 
 
 <script>
+// По умолчанию API — на том же origin, что и страница: так работает и
+// `python run.py` (Flask отдаёт и страницу, и API с 8000), и прод за nginx
+// (любой домен). Абсолютный адрес Flask нужен только для Live Server —
+// тогда страница открыта с другого локального порта (не 8000), а API
+// всё равно поднят на 127.0.0.1:8000 (`PI_DEV_CORS=1 python run.py`).
+// Раньше проверялось наоборот («не равно ровно 127.0.0.1:8000/localhost:8000
+// — значит Live Server»), и с любого настоящего домена в проде страница
+// пыталась достучаться до localhost:8000 браузера пользователя.
 const FLASK='http://127.0.0.1:8000';
-const SAME=location.origin===FLASK||location.origin==='http://localhost:8000';
-const API=SAME?'/api':`${FLASK}/api`;
+const LIVE_SERVER=/^(127\.0\.0\.1|localhost)$/.test(location.hostname)
+  && location.port && location.port!=='8000';
+const API=LIVE_SERVER?`${FLASK}/api`:'/api';
 const ICON=id=>`https://images.evetech.net/types/${id}/icon?size=64`;
 
 let ids={}, plan=[], staffing={}, view='details', sortBy='load';
