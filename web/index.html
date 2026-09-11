@@ -2098,10 +2098,9 @@ const DOC={
    сколько голов и что именно добывает, базовая/продвинутая/высокотехнологичная
    фабрика — что производит и идёт ли сейчас цикл («В производстве» с
    отсчётом до конца) или простаивает в ожидании сырья («Простаивает» —
-   сколько времени, вплоть до нескольких дней). Строится из полей ESI,
-   которые раньше не читались (`schematic_id`, `last_cycle_start`,
-   состав экстрактора, содержимое пинов); длительность цикла фабрики —
-   с самой ESI (справочник схем производства), не подгонка.</p>
+   сколько времени, вплоть до нескольких дней). Длительность цикла
+   фабрики берётся у самой ESI (справочник схем производства), а не
+   подгоняется под предположение.</p>
 
    <h3>Чего программа пока не знает</h3>
    <p>У ESI нет радиуса планеты, поэтому загрузка CPU/Power командного центра
@@ -2253,10 +2252,9 @@ const DOC={
    what's actually stored (or an honest "empty"), the extractor shows how many heads it
    has and exactly what it's pulling, and basic/advanced/high-tech facilities show what
    they produce and whether a cycle is running ("In production" with a countdown) or idle
-   waiting for input ("Idle" — for however long, up to several days). Built from ESI
-   fields that weren't read before (`schematic_id`, `last_cycle_start`, extractor
-   composition, pin contents); the factory cycle length itself comes straight from ESI's
-   own production-schematic catalogue, not a guess.</p>
+   waiting for input ("Idle" — for however long, up to several days). The factory cycle
+   length itself comes straight from ESI's own production-schematic catalogue, not a
+   guess.</p>
 
    <h3>What the program does not know yet</h3>
    <p>ESI doesn't expose a planet's radius, so CPU/Power load for a colony with no
