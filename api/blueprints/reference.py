@@ -69,9 +69,22 @@ def _initial_payload() -> dict:
     # командных центров в списке закупки, где ключ выглядит как
     # "Barren Command Center". Раньше отдавались только P2-P4, поэтому
     # обе эти группы иконок оставались пустыми.
+    # Имена входов рецепта — фронтенду показать «Вход» у настоящей фабрики
+    # (панель колонии): ESI отдаёт, что фабрика производит, но не что она
+    # потребляет — recipes.json это уже знает и проверено по источникам
+    # (правило 2), выдумывать не приходится. У P1 вход один — R0-сырьё,
+    # лежит в поле source, а не inputs (см. domain/recipes.py).
+    recipe_inputs: dict[str, list[str]] = {}
+    for r in load_recipes():
+        if r.inputs:
+            recipe_inputs[r.name] = sorted(r.inputs.keys())
+        elif r.source:
+            recipe_inputs[r.name] = [r.source]
+
     payload = {
         "products": products,
         "product_ids": ids,
+        "recipe_inputs": recipe_inputs,
         "bases": [],
         "regions": {},
         "system_counts": {},
