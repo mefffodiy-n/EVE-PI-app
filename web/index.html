@@ -901,8 +901,8 @@ const T={
   afterGame:'появится после подключения к игре',producesW:'Производит',inputW:'Вход',
   pHead:['голова','головы','голов'],emptyStorage:'пусто',
   inProduction:'В производстве',cycIdleSince:'Простаивает',
-  cycNeverStarted:'Ещё ни разу не запускалась',cycStale:'Нет свежих данных',
-  cycStaleHint:'ESI обновляет это поле только при заходе в колонию в игре — последний известный цикл начался {t} назад, дальше могла крутиться сама',
+  cycNeverStarted:'Ещё ни разу не запускалась',
+  cycProjectedHint:'проекция: колонию давно не открывали в игре',
   sharedExtract:'На этой планете {n} наших экстрактора на одном сырье — выработка каждого будет ниже расчётной.',
   onPlan:'к плану',onPlanets:'на',
   thColony:'Колония',thColonySub:'кто и где',thProd:'Производство',thProdSub:'что делает и из чего',
@@ -948,8 +948,8 @@ const T={
   afterGame:'appears once connected to the game',producesW:'Produces',inputW:'Input',
   pHead:['head','heads','heads'],emptyStorage:'empty',
   inProduction:'In production',cycIdleSince:'Idle',
-  cycNeverStarted:'Never started yet',cycStale:'No fresh data',
-  cycStaleHint:'ESI only refreshes this field when the colony is opened in-game — the last known cycle started {t} ago; it may have kept auto-cycling since',
+  cycNeverStarted:'Never started yet',
+  cycProjectedHint:'projected: colony not opened in-game recently',
   sharedExtract:'This planet has {n} of our extractors on the same resource — each will yield below the estimate.',
   onPlan:'on the plan',onPlanets:'across',
   thColony:'Colony',thColonySub:'who and where',thProd:'Production',thProdSub:'what it makes and from what',
@@ -1276,38 +1276,44 @@ function expandStructures(p){
 /* Прогресс цикла ОДНОЙ настоящей фабрики — last_cycle_start+cycle_minutes,
    те же поля ESI, что и в панели колонии (structureUnitFields, isFactory).
 
-   ВАЖНО (найдено 11.09.2026 — пользователь заметил, что ни одна фабрика
-   никогда не показывалась работающей, хотя в игре они работали). ESI
-   пересчитывает last_cycle_start НЕ в реальном времени, а только когда
-   игрок открывает эту колонию в игровом клиенте (подтверждено сторонними
-   источниками — esi-issues #654 и форум разработчиков ESI). Фабрика в
-   игре крутит циклы автоматически, пока есть сырьё, но last_cycle_start
-   у ESI остаётся тем же, пока колонию не откроют заново. Раньше отсюда
-   выводилось «цикл кончился → простаивает» для ЛЮБОГО момента после
-   last_cycle_start+cycle_minutes — то самое «правдоподобное, но ложное»
-   число, которое запрещает правило 1: почти все колонии, которые давно
-   не открывали в игре, показывались простаивающими поголовно, хотя
-   скорее всего продолжали крутиться сами.
+   История вопроса (11.09.2026). ESI пересчитывает last_cycle_start НЕ в
+   реальном времени, а только когда игрок открывает колонию в игровом
+   клиенте (esi-issues #654, форум разработчиков ESI) — сам факт
+   подтверждён. Первая версия отсюда делала вывод «после
+   last_cycle_start+cycle_minutes ничего не известно» и показывала честное
+   «нет свежих данных». Но пользователь показал скриншот RIFT (сторонний
+   intel-инструмент) с работающими фабриками БЕЗ захода в игру, и
+   оказалось: так по сообществу и принято — RIFT и Planets in Space
+   (сторонний PI-трекер, открыто описывает это в чейнджлоге: «Between ESI
+   updates the app simulates your colony forward so the storage bars stay
+   current») оба ДОСЧИТЫВАЮТ цикл вперёд локально от последнего
+   подтверждённого снимка, предполагая, что фабрика продолжает крутиться
+   сама, пока есть сырьё (так фабрика PI и ведёт себя в игре). Это не
+   «выдуманное» число в смысле правила 1 — это честная проекция от
+   настоящих данных (last_cycle_start и cycle_minutes реальные, ESI), а
+   не случайное. Planets in Space по своему опыту чинили в этой же
+   симуляции две ошибки — отсчёт от устаревшей точки и экстрактор,
+   «крутящийся» дольше своей настоящей программы; вторая для нас
+   неактуальна (у фабрик нет expiry_time, это только у экстракторов, и их
+   таймер и так честный — отдельная, надёжная ветка).
 
-   Теперь честно три состояния:
-     cycle: 0-100 — идёт цикл, начавшийся не раньше last_cycle_start
-            (это мы знаем наверняка, устареть эта часть не может).
-     idle: true   — last_cycle_start вообще нет: фабрика точно ни разу
-            не запускалась (надёжный факт, не зависит от свежести визита).
-     stale: true  — расчётный момент конца цикла уже прошёл, но раз ESI
-            не обновляет это поле сама, дальше мы просто не знаем: могла
-            крутиться дальше сколько угодно раз. Не «простаивает». */
+   Состояния:
+     cycle: 0-100 — фаза текущего (возможно, уже не первого) цикла,
+            (now - last_cycle_start) по модулю cycle_minutes.
+     idle: true    — last_cycle_start вообще нет: фабрика точно ни разу
+            не запускалась (единственный факт, для которого досчитывать
+            нечего).
+     projected: true — расчётный конец ПЕРВОГО известного цикла уже
+            прошёл, показанный прогресс — проекция вперёд, а не то, что
+            подтверждено последним снимком ESI напрямую. */
 function pinCycleInfo(pin){
-  if(!pin.kind || !pin.kind.endsWith('industry_facility')) return {cycle:null, idle:false, stale:false};
-  if(!pin.cycle_minutes) return {cycle:null, idle:false, stale:false};
-  if(!pin.last_cycle_start) return {cycle:null, idle:true, stale:false};
-  const end=Date.parse(pin.last_cycle_start)+pin.cycle_minutes*60000;
-  const now=Date.now();
-  if(now<end){
-    const total=pin.cycle_minutes*60000;
-    return {cycle:100*(total-(end-now))/total, idle:false, stale:false};
-  }
-  return {cycle:null, idle:false, stale:true};
+  if(!pin.kind || !pin.kind.endsWith('industry_facility')) return {cycle:null, idle:false, projected:false};
+  if(!pin.cycle_minutes) return {cycle:null, idle:false, projected:false};
+  if(!pin.last_cycle_start) return {cycle:null, idle:true, projected:false};
+  const cycleMs=pin.cycle_minutes*60000;
+  const elapsed=Math.max(0, Date.now()-Date.parse(pin.last_cycle_start));
+  const phase=elapsed%cycleMs;
+  return {cycle:100*phase/cycleMs, idle:false, projected:elapsed>=cycleMs};
 }
 
 /* Колония простаивает — общее определение для сводки «N простаивает»
@@ -2054,14 +2060,14 @@ function structureUnitFields(kind, ctx){
   if(isFactory){
     // pin.last_cycle_start + pin.cycle_minutes (продукт и длительность —
     // с самой ESI, GET /universe/schematics/{id}/, см. schematic_info()
-    // в sync_colony_status.py). ВАЖНО: ESI пересчитывает last_cycle_start
-    // только когда колонию открывают в игровом клиенте, не в реальном
-    // времени (esi-issues #654, форум разработчиков ESI) — фабрика в игре
-    // крутит циклы сама, пока есть сырьё, а это поле «зависает» на
-    // последнем известном визите. Поэтому «цикл по расчёту кончился» —
-    // это НЕ «простаивает», а «неизвестно, что там сейчас» (см. cycStale
-    // ниже); «простаивает» надёжно только когда last_cycle_start нет
-    // вовсе — фабрика точно ни разу не запускалась.
+    // в sync_colony_status.py). ESI пересчитывает last_cycle_start только
+    // когда колонию открывают в игровом клиенте (esi-issues #654), а не
+    // в реальном времени — но фабрика в игре крутит циклы сама, пока
+    // есть сырьё, поэтому текущая фаза досчитывается вперёд по модулю от
+    // последнего подтверждённого снимка (pinCycleInfo — см. её докстринг:
+    // так же делают RIFT и Planets in Space, сторонние PI-инструменты).
+    // «Простаивает» — только когда last_cycle_start нет вовсе: фабрика
+    // точно ни разу не запускалась, досчитывать не от чего.
     if(pin){
       const now=Date.now();
       let state;
@@ -2073,17 +2079,13 @@ function structureUnitFields(kind, ctx){
         state=`<div class="state-wait">${t('cycNeverStarted')}</div>
           <div class="meter"><i style="width:0%"></i></div>`;
       } else {
-        const cycleEndMs=Date.parse(pin.last_cycle_start)+pin.cycle_minutes*60000;
-        if(now<cycleEndMs){
-          const total=pin.cycle_minutes*60000, pct=Math.round(100*(total-(cycleEndMs-now))/total);
-          state=`<div class="lbl" style="color:var(--ring-adv)">${t('inProduction')}</div>
-            <div class="meter"><i style="width:${pct}%;background:var(--ring-adv)"></i></div>
-            <div class="meta">${fmtLeft(cycleEndMs-now)}</div>`;
-        } else {
-          state=`<div class="state-wait">${t('cycStale')}</div>
-            <div class="meter"><i style="width:0%"></i></div>
-            <div class="meta">${t('cycStaleHint').replace('{t}', fmtDuration(now-Date.parse(pin.last_cycle_start)))}</div>`;
-        }
+        const cycleMs=pin.cycle_minutes*60000;
+        const elapsed=Math.max(0, now-Date.parse(pin.last_cycle_start));
+        const phase=elapsed%cycleMs, pct=Math.round(100*phase/cycleMs);
+        const projected=elapsed>=cycleMs;
+        state=`<div class="lbl" style="color:var(--ring-adv)">${t('inProduction')}</div>
+          <div class="meter"><i style="width:${pct}%;background:var(--ring-adv)"></i></div>
+          <div class="meta">${fmtLeft(cycleMs-phase)}${projected?` · ${t('cycProjectedHint')}`:''}</div>`;
       }
       return `<div class="cols2">
         <div>${state}</div>
@@ -2432,18 +2434,21 @@ const DOC={
    что именно добывает, базовая/продвинутая/высокотехнологичная фабрика —
    что производит и идёт ли сейчас цикл («В производстве» с отсчётом до
    конца). Длительность цикла — у самой ESI (справочник схем
-   производства). «Простаивает» пишется только когда фабрика точно ни
-   разу не запускалась — это единственное надёжно известное «простаивает»
-   для фабрики. Если по расчёту прошлый цикл уже должен был кончиться,
-   а новых данных нет, панель честно пишет «Нет свежих данных»: ESI
-   обновляет состояние фабрики только когда колонию открывают в игровом
-   клиенте, а не в реальном времени, поэтому фабрика вполне могла крутить
-   циклы сама сколько угодно раз с последнего визита — писать «простаивает»
-   в этом случае было бы тем самым «правдоподобным, но ложным» числом.
-   Компактная полоса иконок под карточкой колонии показывает то же самое
-   по кругу: белое кольцо фабрики крутится дугой во время известного цикла
-   и мигает целиком только у той, что не запускалась ни разу; кольцо
-   командного центра — та же настоящая загрузка CPU/Power. В сетке
+   производства). ESI обновляет состояние фабрики только когда колонию
+   открывают в игровом клиенте, а не в реальном времени; в игре фабрика
+   при этом продолжает крутить циклы сама, пока есть сырьё. Поэтому,
+   если с последнего подтверждённого цикла прошло больше его длительности,
+   прогресс досчитывается вперёд по модулю от последнего известного
+   старта (так же поступают сторонние PI-инструменты — RIFT, Planets in
+   Space) и подписывается «проекция: колонию давно не открывали в игре» —
+   это честная оценка от настоящих данных, а не гарантированный факт.
+   «Простаивает» пишется только когда фабрика точно ни разу не
+   запускалась — единственное состояние, для которого проецировать
+   нечего. Компактная полоса иконок под карточкой колонии показывает то
+   же самое по кругу: белое кольцо фабрики крутится дугой и во время
+   подтверждённого, и во время спроецированного цикла, и мигает целиком
+   только у той, что не запускалась ни разу; кольцо командного центра —
+   та же настоящая загрузка CPU/Power. В сетке
    и списке «Моих колоний» — иконка добываемого сырья или конечного
    продукта переработки поверх текстуры планеты, голубое кольцо —
    заполненность причала, плашка — время до конца программы экстрактора
@@ -2613,15 +2618,18 @@ const DOC={
    from ESI itself), the extractor shows how many heads it has and exactly what it's
    pulling, and basic/advanced/high-tech facilities show what they produce and whether a
    cycle is running ("In production" with a countdown). The cycle length itself comes
-   straight from ESI's own production-schematic catalogue. "Idle" is only shown when a
-   factory has genuinely never been started — the one idle state we can actually be sure
-   of. If the last known cycle should have ended by now but there's no newer data, the
-   panel honestly says "No fresh data": ESI only updates a factory's state when the colony
-   is opened in the game client, not in real time, so it may well have kept auto-cycling
-   many times since your last visit — calling that "idle" would be exactly the kind of
-   plausible-but-false number the project avoids. The compact strip under a
+   straight from ESI's own production-schematic catalogue. ESI only updates a factory's
+   state when the colony is opened in the game client, not in real time — but in the game
+   the factory keeps auto-cycling on its own as long as it has input. So once more time
+   has passed than one cycle length since the last confirmed start, the progress shown is
+   projected forward by taking the elapsed time modulo the cycle length from that last
+   known start (the same approach third-party PI tools use — RIFT, Planets in Space) and
+   labelled "projected: colony not opened in-game recently" — an honest estimate from real
+   data, not a guaranteed fact. "Idle" is only shown when a factory has genuinely never
+   been started — the one state with nothing to project from. The compact strip under a
    colony card shows the same thing as circles: a factory's white ring sweeps an arc
-   during a known cycle and blinks whole only for one that's never run, and the command
+   during both a confirmed and a projected cycle, and blinks whole only for one that's
+   never run, and the command
    centre's ring is the same real CPU/Power load. The grid and list views of
    "My colonies in the game" show the same data: the icon over the planet texture is the
    raw resource being extracted or the processing chain's final product, the ring is
