@@ -1798,6 +1798,8 @@ function realRows(){
       planet_type:ptype, role_key, role_tier:null,
       structures_detail:c.structures||[], pins:c.pins||[],
       cpu_percent:c.cpu_percent, pg_percent:c.pg_percent,
+      cpu_used:c.cpu_used, cpu_capacity:c.cpu_capacity,
+      pg_used:c.pg_used, pg_capacity:c.pg_capacity,
       nearest_expiry:c.nearest_expiry,
       upgrade_level:c.upgrade_level, num_pins:c.num_pins,
     };
@@ -1988,6 +1990,23 @@ function contentsHTML(list){
    ctx.hasLoad=false — у факта из игры без совпавшего плана нет CPU/PG
    (ESI не отдаёт радиус планеты, без него линки не посчитать — оценка
    без них была бы «правдоподобным, но ложным» числом, правило 1). */
+/* Причал/склад/собственное хранилище командного центра — тот же вид:
+   used_m3/capacity_m3 (реальный объём содержимого против игровой
+   константы ёмкости, оба с сервера, см. scripts/sync_colony_status.py
+   ::pin_detail) и список содержимого. used_m3 бывает null, если пины
+   ещё не пересинхронизированы новым кодом или объём хоть одного
+   предмета не узнать у ESI — тогда честно «нет данных», а не 0%. */
+function storageBlockHTML(pin){
+  const known=pin&&pin.used_m3!=null&&pin.capacity_m3!=null;
+  const pct=known?Math.min(100,100*pin.used_m3/pin.capacity_m3):0;
+  return `<div class="cols2">
+    <div><div class="lbl">${t('capCap')}${known?`: ${pct.toFixed(0)}%`:''}</div>
+      <div class="meter"><i class="ok" style="width:${pct}%;background:var(--ring-infra)"></i></div>
+      <div class="val">${known?`${nloc(Math.round(pin.used_m3))} / ${nloc(pin.capacity_m3)} m³`:t('noData')}</div></div>
+    <div><div class="lbl">${t('capContent')}</div>${contentsHTML(pin?pin.contents:null)}</div>
+  </div>`;
+}
+
 function structureUnitFields(kind, ctx){
   const isStore=kind==='launchpad'||kind==='storage_facility';
   const isECU=kind==='extractor_control_unit';
@@ -1995,6 +2014,11 @@ function structureUnitFields(kind, ctx){
   const pin=ctx.pin;
 
   if(kind==='command_center'){
+    // Собственное хранилище командного центра (500 м³ — верифицировано
+    // скриншотом игрового клиента, ESI ёмкость структур не отдаёт) —
+    // независимо от того, посчиталась ли загрузка CPU/Power: contents
+    // приходит с тем же пином, что и всегда.
+    const storage=`<div style="margin-top:10px">${storageBlockHTML(pin)}</div>`;
     if(!ctx.hasLoad){
       return `<div class="cols2">
         <div><div class="lbl">CPU</div>
@@ -2003,7 +2027,7 @@ function structureUnitFields(kind, ctx){
         <div><div class="lbl">Power</div>
           <div class="meter"><i class="pg" style="width:0%"></i></div>
           <div class="meta">${t('noData')}</div></div>
-      </div>`;
+      </div>${storage}`;
     }
     // pgb — разбивка «из чего сложилась загрузка» (структуры/головы/линки
     // в процентах) есть только у расчётного плана (planner.py считает её
@@ -2011,30 +2035,23 @@ function structureUnitFields(kind, ctx){
     // (planet_industry.csv, а не шаблон) и разбивки не считает — сама
     // загрузка от этого не менее настоящая, просто без деталей «из чего».
     const pgb=ctx.pgb;
+    // Абсолютные числа (tf/MW) рядом с процентом — как в игровом клиенте
+    // (скриншот пользователя 11.09.2026); есть только у настоящей колонии
+    // (ctx.cpuUsed и т.п.), план отдаёт только проценты.
+    const cpuAbs=ctx.cpuUsed!=null?`<div class="val">${nloc(Math.round(ctx.cpuUsed))}/${nloc(Math.round(ctx.cpuCap))} tf</div>`:'';
+    const pgAbs=ctx.pgUsed!=null?`<div class="val">${nloc(Math.round(ctx.pgUsed))}/${nloc(Math.round(ctx.pgCap))} MW</div>`:'';
     return `<div class="cols2">
       <div><div class="lbl">CPU: ${ctx.cpu.toFixed(1)}%</div>
-        <div class="meter"><i class="cpu" style="width:${Math.min(ctx.cpu,100)}%"></i></div></div>
+        <div class="meter"><i class="cpu" style="width:${Math.min(ctx.cpu,100)}%"></i></div>${cpuAbs}</div>
       <div><div class="lbl">Power: ${ctx.pg.toFixed(1)}%</div>
-        <div class="meter"><i class="pg${ctx.pg<90?' ok':''}" style="width:${Math.min(ctx.pg,100)}%"></i></div></div>
+        <div class="meter"><i class="pg${ctx.pg<90?' ok':''}" style="width:${Math.min(ctx.pg,100)}%"></i></div>${pgAbs}</div>
     </div>
     ${pgb?`<div class="meta" style="margin-top:6px">
-      ${t('pgFrom')}: ${t('sStruct')} ${pgb.structures||0}% · ${t('sHeads')} ${pgb.heads||0}% · ${t('sLinks')} ${pgb.links||0}%</div>`:''}`;
+      ${t('pgFrom')}: ${t('sStruct')} ${pgb.structures||0}% · ${t('sHeads')} ${pgb.heads||0}% · ${t('sLinks')} ${pgb.links||0}%</div>`:''}${storage}`;
   }
 
   if(isStore){
-    // used_m3/capacity_m3 — реальный объём содержимого (contents) против
-    // игровой константы ёмкости, оба с сервера (см. scripts/sync_colony_status.py
-    // ::pin_detail). used_m3 бывает null, если пины ещё не пересинхронизированы
-    // новым кодом или объём хоть одного предмета не узнать у ESI — тогда
-    // честно «нет данных», а не 0%.
-    const known=pin&&pin.used_m3!=null&&pin.capacity_m3!=null;
-    const pct=known?Math.min(100,100*pin.used_m3/pin.capacity_m3):0;
-    return `<div class="cols2">
-      <div><div class="lbl">${t('capCap')}${known?`: ${pct.toFixed(0)}%`:''}</div>
-        <div class="meter"><i class="ok" style="width:${pct}%;background:var(--ring-infra)"></i></div>
-        <div class="val">${known?`${nloc(Math.round(pin.used_m3))} / ${nloc(pin.capacity_m3)} m³`:t('noData')}</div></div>
-      <div><div class="lbl">${t('capContent')}</div>${contentsHTML(pin?pin.contents:null)}</div>
-    </div>`;
+    return storageBlockHTML(pin);
   }
 
   if(isECU){
@@ -2178,7 +2195,8 @@ function pinUnitsHTML(pins, planetType, planetLabel, load){
       ${structOrb(pin.kind,1,planetType,opts)}
       <div class="panel">
         <div class="title">${sname(pin.kind)} <span class="code">${code}</span></div>
-        ${structureUnitFields(pin.kind,{hasLoad:!!load, cpu:load&&load.cpu, pg:load&&load.pg, pin})}
+        ${structureUnitFields(pin.kind,{hasLoad:!!load, cpu:load&&load.cpu, pg:load&&load.pg,
+          cpuUsed:load&&load.cpuUsed, cpuCap:load&&load.cpuCap, pgUsed:load&&load.pgUsed, pgCap:load&&load.pgCap, pin})}
       </div>
     </div>`;
   }).join('');
@@ -2247,7 +2265,8 @@ function openRealColonyDetail(id){
     role_key:(c.structures||[]).some(s=>s.kind==='extractor_control_unit')?'mine':
       (c.structures||[]).some(s=>s.kind.endsWith('industry_facility'))?'proc':null};
   const char=crew.find(x=>x.name===c.character);
-  const load=c.cpu_percent!=null?{cpu:c.cpu_percent, pg:c.pg_percent}:null;
+  const load=c.cpu_percent!=null?{cpu:c.cpu_percent, pg:c.pg_percent,
+    cpuUsed:c.cpu_used, cpuCap:c.cpu_capacity, pgUsed:c.pg_used, pgCap:c.pg_capacity}:null;
 
   const body=(c.pins&&c.pins.length)
     ? pinUnitsHTML(c.pins, ptype, c.planet_index, load)
@@ -2448,10 +2467,16 @@ const DOC={
    той же самой ESI, честный расчёт, а не оценка). Планета вне
    загруженного региона — как и раньше, «нет данных», а не выдуманный
    процент. Обратный отсчёт браузер считает сам; данные обновляются в фоне.</p>
-   <p>В панели каждая структура показывает настоящее состояние: причал и
-   склад — что реально лежит внутри (или честное «пусто») и сколько это
-   в процентах от вместимости (10 000 м³ у причала, 12 000 м³ у склада —
-   объём каждого предмета берёт сама ESI), экстрактор — сколько голов и
+   <p>В панели каждая структура показывает настоящее состояние: причал,
+   склад и собственное небольшое хранилище командного центра — что
+   реально лежит внутри (или честное «пусто») и сколько это в процентах
+   от вместимости (10 000 м³ у причала, 12 000 м³ у склада, 500 м³ у
+   командного центра — объём каждого предмета берёт сама ESI, а саму
+   ёмкость 500 м³ ни она, ни какой-либо другой источник не публикует, это
+   значение подтверждено скриншотом игрового клиента). Загрузка CPU/Power
+   командного центра показана и в процентах, и в абсолютных числах —
+   «7514/21315 tf», «16124/17000 MW», как в игре. Экстрактор — сколько
+   голов и
    что именно добывает, базовая/продвинутая/высокотехнологичная фабрика —
    что производит и идёт ли сейчас цикл («В производстве» с отсчётом до
    конца). Длительность цикла — у самой ESI (справочник схем
@@ -2633,10 +2658,14 @@ const DOC={
    calculation, not a guess. A planet outside the loaded region still honestly says
    "no data" instead of an invented percentage. The browser runs the
    countdown itself; the data refreshes in the background.</p>
-   <p>Inside the panel every structure shows its real state: launchpad and storage show
-   what's actually stored (or an honest "empty") and how full that is as a percentage of
-   capacity (10,000 m³ for a launchpad, 12,000 m³ for storage — per-item volume comes
-   from ESI itself), the extractor shows how many heads it has and exactly what it's
+   <p>Inside the panel every structure shows its real state: launchpad, storage, and the
+   command centre's own small hold all show what's actually stored (or an honest "empty")
+   and how full that is as a percentage of capacity (10,000 m³ for a launchpad, 12,000 m³
+   for storage, 500 m³ for the command centre — per-item volume comes from ESI itself,
+   while the 500 m³ capacity figure isn't published by ESI or any other source and comes
+   from a screenshot of the live game client instead). Command centre CPU/Power load is
+   shown both as a percentage and as absolute numbers — "7514/21315 tf", "16124/17000 MW",
+   same as in the game. The extractor shows how many heads it has and exactly what it's
    pulling, and basic/advanced/high-tech facilities show what they produce and whether a
    cycle is running ("In production" with a countdown). The cycle length itself comes
    straight from ESI's own production-schematic catalogue. ESI only updates a factory's

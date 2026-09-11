@@ -151,6 +151,10 @@ def colonies():
                     "pins": row.pins or [],
                     "cpu_percent": row.cpu_percent,
                     "pg_percent": row.pg_percent,
+                    "cpu_used": row.cpu_used,
+                    "cpu_capacity": row.cpu_capacity,
+                    "pg_used": row.pg_used,
+                    "pg_capacity": row.pg_capacity,
                     "nearest_expiry": row.nearest_expiry.isoformat() if row.nearest_expiry else None,
                     "synced_at": row.synced_at.isoformat() if row.synced_at else None,
                 }
