@@ -1287,6 +1287,23 @@ function pinCycleInfo(pin){
   return {cycle:null, idle:true};
 }
 
+/* Колония простаивает — общее определение для сводки «N простаивает»
+   (см. renderColonies()), одно на все три вида (детали/список/сетка),
+   а не свой счёт в каждом: у добычи это «нет запущенной программы
+   экстрактора» (nearest_expiry), у переработки — «ни одна фабрика не
+   крутит цикл прямо сейчас» (pinCycleInfo по каждому пину-фабрике, те же
+   реальные ESI-данные, что и у прогресса на круге). Без данных о пинах
+   переработку честно не считаем ни простаивающей, ни работающей —
+   выдумывать нечем. */
+function isColonyIdle(p){
+  if(p.role_key==='mine') return !p.nearest_expiry;
+  if(p.role_key==='proc'){
+    const factories=(p.pins||[]).filter(pin=>pin.kind&&pin.kind.endsWith('industry_facility'));
+    return factories.length>0 && factories.every(pin=>pinCycleInfo(pin).idle);
+  }
+  return false;
+}
+
 /* Полоса иконок структур под карточкой колонии (colonyCardHTML). У
    настоящей колонии с пересинхронизированными пинами (p.pins) — каждый
    пин своим кругом с настоящим циклом (см. pinCycleInfo) и настоящей
@@ -1782,15 +1799,7 @@ function renderColonies(){
   } else if(view==='grid'){
     body=`<div class="grid">${rows.map(p=>orb(p,58)).join('')}</div>`;
   }
-  // Простаивает — добывающая колония без запущенной программы (роль
-  // «переработка» тут не считается: фабрика может идти циклом, которого
-  // мы для сводки не проверяли построчно). Требует внимания — программа
-  // экстрактора кончилась или кончается меньше чем через 2 ч, ЛИБО причал
-  // заполнен под завязку (см. launchpadFillPct/isLaunchpadFull — та же
-  // добыча дальше складывать некуда, экстрактор фактически простаивает,
-  // даже если таймер программы ещё идёт). Оба честно из тех же полей,
-  // что и остальной блок, не выдумка.
-  const idleN=rows.filter(p=>p.role_key==='mine'&&!p.nearest_expiry).length;
+  const idleN=rows.filter(isColonyIdle).length;
   const attnN=rows.filter(p=>{
     const soon=p.role_key==='mine'&&p.nearest_expiry
       &&Date.parse(p.nearest_expiry)-Date.now()<7200000;
