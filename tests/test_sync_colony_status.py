@@ -36,6 +36,9 @@ SYSTEM_NAME = "Jita"
 def _opener(planets: dict):
     """
     planets: {planet_id: {"type": str, "level": int, "pins": [expiry_iso|None], "name": str}}
+
+    Элемент "pins" может быть строкой/None (только expiry, как раньше) или
+    словарём {"expiry": ..., "type_id": ...} — для проверки structures_detail.
     """
     listing = [
         {"planet_id": pid, "planet_type": p["type"],
@@ -52,7 +55,17 @@ def _opener(planets: dict):
         elif "/universe/planets/" in url:
             body = {"name": planets[int(m.group(1))]["name"], "system_id": SYSTEM_ID}
         elif m:
-            pins = [{"pin_id": i, "expiry_time": e} for i, e in enumerate(planets[int(m.group(1))]["pins"]) if e]
+            pins = []
+            for i, entry in enumerate(planets[int(m.group(1))]["pins"]):
+                if isinstance(entry, dict):
+                    pin = {"pin_id": i}
+                    if entry.get("expiry"):
+                        pin["expiry_time"] = entry["expiry"]
+                    if entry.get("type_id"):
+                        pin["type_id"] = entry["type_id"]
+                    pins.append(pin)
+                elif entry:
+                    pins.append({"pin_id": i, "expiry_time": entry})
             body = {"pins": pins, "links": [], "routes": []}
         else:
             body = {}
@@ -93,6 +106,30 @@ class TestPlanetIndex:
         assert sync.planet_index("Weird Moon 3", "Weird") == 0
 
 
+class TestStructuresDetail:
+    def test_maps_known_type_ids_and_orders_like_a_plan(self):
+        # 2481 = structure:basic_industry_facility, 3068 = structure:extractor_control_unit,
+        # 2524 = Barren Command Center — те же id, что отдаёт data/type_ids.json
+        # фронтенду для иконок (см. docstring _kind_by_type_id).
+        pins = [
+            {"type_id": 2481}, {"type_id": 2481},
+            {"type_id": 3068},
+            {"type_id": 2524},
+            {"type_id": 999999},  # неизвестный — молча пропускается
+        ]
+        assert sync.structures_detail(pins) == [
+            {"kind": "command_center", "count": 1},
+            {"kind": "extractor_control_unit", "count": 1},
+            {"kind": "basic_industry_facility", "count": 2},
+        ]
+
+    def test_empty_without_pins(self):
+        assert sync.structures_detail([]) == []
+
+    def test_pin_without_type_id_skipped(self):
+        assert sync.structures_detail([{"pin_id": 1}]) == []
+
+
 class TestSync:
     def test_writes_colonies_with_name_and_expiry(self):
         _add_esi_character()
@@ -111,6 +148,24 @@ class TestSync:
             assert abs((rows[40009077].nearest_expiry - datetime.fromisoformat(soon)).total_seconds()) < 2
             assert rows[40009078].nearest_expiry is None
             assert rows[40009078].planet_index == 5
+
+    def test_writes_structures_from_real_pin_type_ids(self):
+        _add_esi_character()
+        client = EsiClient(opener=_opener({
+            40009077: {"type": "barren", "level": 4, "name": "Jita IV", "pins": [
+                {"type_id": 2524},                 # Barren Command Center
+                {"type_id": 3068, "expiry": _iso(90)},  # extractor control unit
+                {"type_id": 2481}, {"type_id": 2481},   # 2 basic factories
+            ]},
+        }))
+        assert sync.main(client=client) == 0
+        with session_scope() as s:
+            row = s.get(Colony, (95538921, 40009077))
+            assert row.structures == [
+                {"kind": "command_center", "count": 1},
+                {"kind": "extractor_control_unit", "count": 1},
+                {"kind": "basic_industry_facility", "count": 2},
+            ]
 
     def test_removes_colonies_no_longer_in_game(self):
         _add_esi_character()

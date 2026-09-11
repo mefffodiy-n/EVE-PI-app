@@ -121,6 +121,13 @@ class Colony(Base):
     upgrade_level: Mapped[int] = mapped_column(Integer)     # уровень командного центра
     num_pins: Mapped[int] = mapped_column(Integer)
 
+    # Поимённый состав колонии — [{"kind": "extractor_control_unit", "count": 2}, ...],
+    # тот же формат, что и structures_detail расчётного плана (domain/planner.py),
+    # чтобы фронтенд рисовал одни и те же иконки structOrb() для обоих случаев.
+    # Строится из реального type_id каждого пина (scripts/sync_colony_status.py),
+    # а не берётся из шаблона — колония в игре не обязана совпадать с шаблоном.
+    structures: Mapped[list] = mapped_column(JSON, default=list)
+
     # Ближайшее время окончания программы экстрактора на этой планете
     # (soonest expiry_time среди extractor-пинов). None — экстракторов нет
     # или программы не запущены.

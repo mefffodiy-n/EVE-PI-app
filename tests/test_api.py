@@ -224,8 +224,9 @@ class TestColonies:
             s.add(Character(character_id=1, name="Pilot", command_center_upgrades_level=5,
                             interplanetary_consolidation_level=5, source="esi"))
             s.add(Colony(character_id=1, planet_id=10, planet_name="B II", system_name="B",
-                         planet_index=2, planet_type="barren",
-                         upgrade_level=4, num_pins=8, nearest_expiry=now + timedelta(hours=9)))
+                         planet_index=2, planet_type="barren", upgrade_level=4, num_pins=8,
+                         nearest_expiry=now + timedelta(hours=9),
+                         structures=[{"kind": "command_center", "count": 1}]))
             s.add(Colony(character_id=1, planet_id=11, planet_name="B III", system_name="B",
                          planet_index=3, planet_type="temperate",
                          upgrade_level=3, num_pins=5, nearest_expiry=now + timedelta(hours=2)))
@@ -238,6 +239,9 @@ class TestColonies:
         assert rows[0]["character"] == "Pilot"
         assert (rows[0]["system_name"], rows[0]["planet_index"]) == ("B", 3)
         assert rows[2]["nearest_expiry"] is None
+        # B II — вторая по сортировке (soonest first), structures задан у неё.
+        assert rows[1]["structures"] == [{"kind": "command_center", "count": 1}]
+        assert rows[2]["structures"] == []
 
 
 class TestMarket:
