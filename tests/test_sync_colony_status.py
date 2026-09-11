@@ -248,8 +248,14 @@ class TestPinDetail:
         detail = sync.pin_detail({"contents": []}, "launchpad", client=None)
         assert detail["used_m3"] == 0.0
 
-    def test_command_center_has_no_extra_fields(self):
-        assert sync.pin_detail({}, "command_center", client=None) == {"kind": "command_center"}
+    def test_command_center_has_own_storage(self):
+        """
+        У командного центра тоже есть небольшое собственное хранилище
+        (500 м³, верифицировано скриншотом игрового клиента 11.09.2026,
+        не из ESI — она ёмкость структур не отдаёт).
+        """
+        detail = sync.pin_detail({"contents": []}, "command_center", client=None)
+        assert detail == {"kind": "command_center", "contents": [], "used_m3": 0.0, "capacity_m3": 500}
 
 
 class TestRealColonyLoad:
@@ -269,16 +275,20 @@ class TestRealColonyLoad:
         raw_pins = [
             {"extractor_details": {"heads": [{"head_id": i} for i in range(2)]}},
         ]
-        cpu, pg = sync.real_colony_load(structures, raw_pins, link_count=7, system="57-KJB",
-                                         planet_index_=1, ccu_level=5)
-        assert cpu is not None and pg is not None
-        assert cpu > 0 and pg > 0
+        load = sync.real_colony_load(structures, raw_pins, link_count=7, system="57-KJB",
+                                      planet_index_=1, ccu_level=5)
+        assert load["cpu_percent"] is not None and load["pg_percent"] is not None
+        assert load["cpu_percent"] > 0 and load["pg_percent"] > 0
+        assert load["cpu_used"] is not None and load["cpu_capacity"] is not None
+        assert load["pg_used"] is not None and load["pg_capacity"] is not None
+        assert 0 < load["cpu_used"] < load["cpu_capacity"]
+        assert 0 < load["pg_used"] < load["pg_capacity"]
 
     def test_none_when_planet_not_in_region_csv(self):
         """Jita — не входит в загруженный регион planet_industry.csv."""
-        cpu, pg = sync.real_colony_load([], [], link_count=0, system="Jita",
-                                         planet_index_=4, ccu_level=5)
-        assert (cpu, pg) == (None, None)
+        load = sync.real_colony_load([], [], link_count=0, system="Jita",
+                                      planet_index_=4, ccu_level=5)
+        assert all(v is None for v in load.values())
 
     def test_command_center_excluded_before_calling_domain(self):
         """
@@ -288,9 +298,9 @@ class TestRealColonyLoad:
         отфильтровывает его сам, а не полагается на пустой список извне.
         """
         structures = [{"kind": "command_center", "count": 1}]
-        cpu, pg = sync.real_colony_load(structures, [], link_count=0, system="57-KJB",
-                                         planet_index_=1, ccu_level=5)
-        assert cpu is not None and pg is not None
+        load = sync.real_colony_load(structures, [], link_count=0, system="57-KJB",
+                                      planet_index_=1, ccu_level=5)
+        assert load["cpu_percent"] is not None and load["pg_percent"] is not None
 
 
 class TestSync:
