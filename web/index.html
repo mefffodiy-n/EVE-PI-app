@@ -2322,13 +2322,17 @@ function renderCrew(){
     box.innerHTML=`<div style="color:var(--dim);font-size:12px">${t('noData')}</div>`;
     return;
   }
+  // Ключ — имя персонажа: строка плана несёт character (имя), не id
+  // (domain/planner.py PlanRow.to_dict его не отдаёт), а у crew — только
+  // character_id (id нет вовсе). Раньше оба ключа были undefined, и все
+  // персонажи делили один и тот же общий счётчик.
   const busy={};
   plan.forEach(r=>{
-    const c=busy[r.char_id]=busy[r.char_id]||{mine:0,proc:0};
+    const c=busy[r.character]=busy[r.character]||{mine:0,proc:0};
     isMining(r)?c.mine++:c.proc++;
   });
   box.innerHTML=crew.map(c=>{
-    const b=busy[c.id]||{mine:0,proc:0}, used=b.mine+b.proc;
+    const b=busy[c.name]||{mine:0,proc:0}, used=b.mine+b.proc;
     const spread=(lastLogistics&&lastLogistics.characters||[]).find(x=>x.character===c.name);
     const sys=spread?` · ${plural(spread.system_count,t('sysOne'),t('sysFew'),t('sysMany'))}`:'';
     return `<div title="CCU ${c.ccu} · IC ${c.ic} · ${c.planet_slots} ${t('planetSlots')}${
