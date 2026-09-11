@@ -171,9 +171,10 @@ button { font-family:inherit; }
 .orb { position:relative; width:var(--orb,58px); height:var(--orb,58px); flex:0 0 auto; cursor:pointer; }
 .orb .disc { position:absolute; inset:5px; border-radius:50%; overflow:hidden;
              background:var(--inset); display:grid; place-items:center; }
-/* У факта из игры («Мои колонии в игре») нет кольца загрузки (см. orb()) —
-   текстура планеты занимает почти весь круг, как в игровом обзоре. */
-.orb.real .disc { inset:1px; }
+/* У факта из игры («Мои колонии в игре», см. orb()) кольцо — не CPU/PG
+   (тех честно нет), а заполненность причала; отступ чуть меньше, чем у
+   плана, — тоньше кольцо, крупнее текстура планеты, как в игровом обзоре. */
+.orb.real .disc { inset:3px; }
 .orb .disc img { width:100%; height:100%; object-fit:cover; }
 .orb .cargo { position:absolute; inset:0; margin:auto; width:52%; height:52%;
               filter:drop-shadow(0 1px 2px rgba(0,0,0,.8)); }
@@ -1017,6 +1018,42 @@ function dominantStructureIconId(row){
   return kind?ids['structure:'+kind]:null;
 }
 
+/* Иконка того, ЧТО колония производит (а не иконка постройки) — по
+   реальным данным пинов (row.pins, см. scripts/sync_colony_status.py::
+   pin_detail): у добычи — сырьё активного/ближайшего экстрактора, у
+   переработки — продукт самой старшей по тиру фабрики (high-tech, иначе
+   advanced, иначе basic) — она и даёт конечный продукт цепочки на этой
+   колонии. Если пины ещё не пересинхронизированы новым кодом (row.pins
+   пуст) — честный откат на иконку постройки, как раньше. */
+function producedIconId(row){
+  const pins=row.pins||[];
+  if(row.role_key==='mine'){
+    const extractors=pins.filter(p=>p.kind==='extractor_control_unit'&&p.product);
+    const match=extractors.find(p=>p.expiry_time===row.nearest_expiry)||extractors[0];
+    if(match) return ids[match.product];
+  } else if(row.role_key==='proc'){
+    const priority=['high_tech_industry_facility','advanced_industry_facility','basic_industry_facility'];
+    for(const kind of priority){
+      const pin=pins.find(p=>p.kind===kind&&p.product);
+      if(pin) return ids[pin.product];
+    }
+  }
+  return dominantStructureIconId(row);
+}
+
+/* Заполненность причала (в крайнем случае — склада) в процентах от
+   ёмкости — реальный объём содержимого (used_m3) против игровой
+   константы (capacity_m3), обе с сервера (scripts/sync_colony_status.py).
+   null, если пины ещё не пересинхронизированы или объём хоть одного
+   предмета не удалось узнать у ESI — тогда кольцо не рисуется вовсе,
+   а не рисуется пустым/полным наугад (правило 1). */
+function launchpadFillPct(row){
+  const pins=row.pins||[];
+  const pin=pins.find(p=>p.kind==='launchpad'&&p.used_m3!=null)
+    || pins.find(p=>p.kind==='storage_facility'&&p.used_m3!=null);
+  return pin?Math.min(100,100*pin.used_m3/pin.capacity_m3):null;
+}
+
 /* ── Круг колонии ───────────────────────────────────────────────
    Кольцо показывает загрузку по узкому ресурсу, а не таймер цикла:
    таймеров у нас пока нет, и рисовать вымышленное число нельзя.
@@ -1024,10 +1061,10 @@ function dominantStructureIconId(row){
    row.isReal — та же функция для факта из игры («Мои колонии в игре»,
    см. realRows()) — вид как в самой игре (обзорная сетка): текстура
    планеты крупным планом, плашка с обратным отсчётом сверху-слева,
-   иконка занятости колонии по центру, портрет персонажа справа-снизу.
-   Кольца загрузки нет — загрузки CPU/PG у факта из игры не бывает
-   (ESI не отдаёт радиус планеты), рисовать вымышленный процент нельзя
-   (правило 1). */
+   иконка добываемого/производимого ресурса по центру, портрет персонажа
+   справа-снизу. Кольцо здесь — не CPU/PG (тех честно нет, ESI не отдаёт
+   радиус планеты, правило 1), а заполненность причала — те же данные,
+   что в самой игре. */
 function orb(row,size){
   const r=(size/2)-2, c=2*Math.PI*r;
   const planetId=ids['planet:'+row.planet_type];
@@ -1041,12 +1078,18 @@ function orb(row,size){
     // вовсе — как на референсном скрине, там чип не рисуется совсем, а не
     // подставляется «нет данных».
     const showBadge=exp!=null||row.role_key!=='proc';
-    const badgeTxt=exp!=null?fmtLeft(left):t('cycIdle');
-    const activityId=dominantStructureIconId(row);
+    const badgeTxt=exp!=null?fmtBadgeLeft(left):t('cycIdle');
+    const activityId=producedIconId(row);
+    const fillPct=launchpadFillPct(row);
     return `<div class="orb real" style="--orb:${size}px"
               onclick="openColony('${row.matchId}')"
               title="${row.character} · ${row.system} ${row.planet}">
       <div class="disc">${planetId?`<img src="${ICON(planetId,128)}" alt="">`:''}</div>
+      ${fillPct!=null?`<svg class="ring" viewBox="0 0 ${size} ${size}">
+        <circle class="track" cx="${size/2}" cy="${size/2}" r="${r}"/>
+        <circle cx="${size/2}" cy="${size/2}" r="${r}" stroke="var(--ring-infra)"
+          stroke-dasharray="${c*fillPct/100} ${c}" stroke-linecap="round"/>
+      </svg>`:''}
       ${activityId?`<img class="cargo" src="${ICON(activityId)}" alt="">`:''}
       ${showBadge?`<div class="badge${over?' hot':''}"${exp!=null?` data-exp="${exp}"`:''}>${badgeTxt}</div>`:''}
       <div class="pilot" title="${row.character}">${initials(row.character)}${avatarImg(charIdOf(row.character))}</div>
@@ -1474,6 +1517,19 @@ function fmtLeft(ms){
   return fmtDuration(ms);
 }
 
+/* Формат плашки-таймера на круге колонии — как в игре: одна единица
+   (минуты, пока меньше часа; иначе часы; иначе дни), без склеивания
+   «23 ч 18 мин». Плашка маленькая, секунды точности здесь не нужны —
+   в отличие от fmtLeft() в панели колонии, где время читают отдельно. */
+function fmtBadgeLeft(ms){
+  if(ms<=0) return t('cycOver');
+  const totalMin=Math.floor(ms/60000);
+  if(totalMin<60) return `${totalMin}${t('minUnit')}`;
+  const totalH=Math.floor(ms/3600000);
+  if(totalH<24) return `${totalH}${t('hUnit')}`;
+  return `${Math.floor(ms/86400000)}${t('dUnit')}`;
+}
+
 /* Длительность без семантики «осталось»/«кончилось» — для простоя фабрики
    (считает вверх с момента, когда кончился последний цикл) настолько же,
    насколько и для обратного отсчёта. Дни нужны: простой реально бывает
@@ -1527,7 +1583,7 @@ function realRows(){
       isReal:true, matchId:match?match.id:`real:${c.character_id}:${c.planet_id}`,
       character:c.character, system:c.system_name, planet:String(c.planet_index),
       planet_type:ptype, role_key, role_tier:null,
-      structures_detail:c.structures||[],
+      structures_detail:c.structures||[], pins:c.pins||[],
       nearest_expiry:c.nearest_expiry,
       upgrade_level:c.upgrade_level, num_pins:c.num_pins,
     };
@@ -1738,11 +1794,17 @@ function structureUnitFields(kind, ctx){
   }
 
   if(isStore){
-    const cap=kind==='launchpad'?'10 000':'12 000';
+    // used_m3/capacity_m3 — реальный объём содержимого (contents) против
+    // игровой константы ёмкости, оба с сервера (см. scripts/sync_colony_status.py
+    // ::pin_detail). used_m3 бывает null, если пины ещё не пересинхронизированы
+    // новым кодом или объём хоть одного предмета не узнать у ESI — тогда
+    // честно «нет данных», а не 0%.
+    const known=pin&&pin.used_m3!=null&&pin.capacity_m3!=null;
+    const pct=known?Math.min(100,100*pin.used_m3/pin.capacity_m3):0;
     return `<div class="cols2">
-      <div><div class="lbl">${t('capCap')}</div>
-        <div class="meter"><i class="ok" style="width:0%;background:var(--ring-infra)"></i></div>
-        <div class="val">${pin?'—':'0'} / ${cap} m³</div></div>
+      <div><div class="lbl">${t('capCap')}${known?`: ${pct.toFixed(0)}%`:''}</div>
+        <div class="meter"><i class="ok" style="width:${pct}%;background:var(--ring-infra)"></i></div>
+        <div class="val">${known?`${nloc(Math.round(pin.used_m3))} / ${nloc(pin.capacity_m3)} m³`:t('noData')}</div></div>
       <div><div class="lbl">${t('capContent')}</div>${contentsHTML(pin?pin.contents:null)}</div>
     </div>`;
   }
@@ -2125,13 +2187,18 @@ const DOC={
    между постройками не посчитать, а оценка без них была бы обманчивым
    числом. Обратный отсчёт браузер считает сам; данные обновляются в фоне.</p>
    <p>В панели каждая структура показывает настоящее состояние: причал и
-   склад — что реально лежит внутри (или честное «пусто»), экстрактор —
-   сколько голов и что именно добывает, базовая/продвинутая/высокотехнологичная
-   фабрика — что производит и идёт ли сейчас цикл («В производстве» с
-   отсчётом до конца) или простаивает в ожидании сырья («Простаивает» —
-   сколько времени, вплоть до нескольких дней). Длительность цикла
-   фабрики берётся у самой ESI (справочник схем производства), а не
-   подгоняется под предположение.</p>
+   склад — что реально лежит внутри (или честное «пусто») и сколько это
+   в процентах от вместимости (10 000 м³ у причала, 12 000 м³ у склада —
+   объём каждого предмета берёт сама ESI), экстрактор — сколько голов и
+   что именно добывает, базовая/продвинутая/высокотехнологичная фабрика —
+   что производит и идёт ли сейчас цикл («В производстве» с отсчётом до
+   конца) или простаивает в ожидании сырья («Простаивает» — сколько
+   времени, вплоть до нескольких дней). Длительность цикла фабрики
+   берётся у самой ESI (справочник схем производства), а не подгоняется
+   под предположение. В сетке и списке «Моих колоний» те же данные —
+   иконка добываемого сырья или конечного продукта переработки поверх
+   текстуры планеты, голубое кольцо — заполненность причала, плашка —
+   время до конца программы экстрактора (часы или минуты, как в игре).</p>
 
    <h3>Чего программа пока не знает</h3>
    <p>У ESI нет радиуса планеты, поэтому загрузка CPU/Power командного центра
@@ -2280,12 +2347,17 @@ const DOC={
    and an estimate without them would be a misleading number. The browser runs the
    countdown itself; the data refreshes in the background.</p>
    <p>Inside the panel every structure shows its real state: launchpad and storage show
-   what's actually stored (or an honest "empty"), the extractor shows how many heads it
-   has and exactly what it's pulling, and basic/advanced/high-tech facilities show what
-   they produce and whether a cycle is running ("In production" with a countdown) or idle
-   waiting for input ("Idle" — for however long, up to several days). The factory cycle
-   length itself comes straight from ESI's own production-schematic catalogue, not a
-   guess.</p>
+   what's actually stored (or an honest "empty") and how full that is as a percentage of
+   capacity (10,000 m³ for a launchpad, 12,000 m³ for storage — per-item volume comes
+   from ESI itself), the extractor shows how many heads it has and exactly what it's
+   pulling, and basic/advanced/high-tech facilities show what they produce and whether a
+   cycle is running ("In production" with a countdown) or idle waiting for input ("Idle" —
+   for however long, up to several days). The factory cycle length itself comes straight
+   from ESI's own production-schematic catalogue, not a guess. The grid and list views of
+   "My colonies in the game" show the same data: the icon over the planet texture is the
+   raw resource being extracted or the processing chain's final product, the blue ring is
+   launchpad fullness, and the chip is time left on the extractor program (hours or
+   minutes, same as in the game).</p>
 
    <h3>What the program does not know yet</h3>
    <p>ESI doesn't expose a planet's radius, so CPU/Power load for a colony with no
