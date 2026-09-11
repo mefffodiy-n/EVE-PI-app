@@ -102,6 +102,17 @@ class TestReference:
             pytest.skip("data/type_ids.json отсутствует")
         assert "Biofuels" in ids
 
+    def test_recipe_inputs_exposed_for_factory_panel(self, client):
+        """
+        Панель колонии показывает «Вход» у настоящей фабрики (ESI отдаёт
+        только что она производит, не что потребляет) — имена входов
+        recipes.json, проверенные по источникам (правило 2).
+        """
+        body = client.get("/api/initial-data").get_json()
+        assert "recipe_inputs" in body
+        # P1 — вход один, сырьё R0 из поля source (не inputs).
+        assert body["recipe_inputs"]["Biofuels"] == ["Carbon Compounds"]
+
     def test_thresholds_exposed_for_ui(self, client):
         body = client.get("/api/thresholds/5").get_json()
         assert body["thresholds"]["p2p3_2factory"] is not None
@@ -243,6 +254,35 @@ class TestColonies:
         # B II — вторая по сортировке (soonest first), structures задан у неё.
         assert rows[1]["structures"] == [{"kind": "command_center", "count": 1}]
         assert rows[2]["structures"] == []
+
+    def test_extractor_pins_carry_extraction_history(self, client):
+        """
+        История добычи (ExtractionSample) приклеивается к своему пину по
+        (character_id, planet_id, pin_id) — не выдумывается заново на
+        каждый запрос, а копится sync_colony_status.py.
+        """
+        from datetime import datetime, timezone
+
+        from infra.db import session_scope
+        from infra.models import Character, Colony, ExtractionSample
+
+        with session_scope() as s:
+            s.add(Character(character_id=1, name="Pilot", command_center_upgrades_level=5,
+                            interplanetary_consolidation_level=5, source="esi"))
+            s.add(Colony(character_id=1, planet_id=10, planet_name="B II", system_name="B",
+                         planet_index=2, planet_type="barren", upgrade_level=4, num_pins=1,
+                         pins=[{"kind": "extractor_control_unit", "pin_id": 555,
+                                "product": "Suspended Plasma", "qty_per_cycle": 5000,
+                                "cycle_seconds": 900}]))
+            s.add(ExtractionSample(character_id=1, planet_id=10, pin_id=555,
+                                    product_type_id=2308, qty_per_cycle=5000, cycle_seconds=900,
+                                    sampled_at=datetime.now(timezone.utc)))
+
+        rows = client.get("/api/colonies").get_json()["colonies"]
+        history = rows[0]["pins"][0]["extraction_history"]
+        assert len(history) == 1
+        assert history[0]["qty_per_cycle"] == 5000
+        assert history[0]["cycle_seconds"] == 900
 
 
 class TestMarket:
