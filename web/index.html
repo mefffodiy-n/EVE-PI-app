@@ -1534,6 +1534,13 @@ function structOrbsForRow(p){
       if(!p.isReal) return structOrb(kind,1,p.planet_type,{cpu:p.cpu_percent,pg:p.pg_percent});
       if(p.cpu_percent!=null) return structOrb(kind,1,p.planet_type,{cpu:p.cpu_percent,pg:p.pg_percent});
     }
+    // Расчётный план: колония гонит один продукт (p.res_out) через ВСЕ
+    // свои фабрики разом — в отличие от настоящей колонии, где у каждого
+    // пина может быть свой (см. structOrb/opts.product), здесь один и тот
+    // же res_out ставится на каждую фабричную иконку строки.
+    if(kind.endsWith('industry_facility') && !p.isReal && p.res_out){
+      return structOrb(kind,1,p.planet_type,{product:p.res_out});
+    }
     return structOrb(kind,1,p.planet_type,{});
   }).join('');
 }
@@ -2339,8 +2346,13 @@ function structureUnitsHTML(structuresDetail, planetType, ctx){
     // непонятно, какая из них какая: ctx.ecuPin заполняется, только
     // когда экстрактор ровно один — см. openColony()).
     const unitCtx=(kind==='extractor_control_unit'&&ctx.ecuPin)?{...ctx,pin:ctx.ecuPin}:ctx;
+    // Тот же res_out на всех фабричных иконках строки — см. структурную
+    // полосу карточки (structOrbsForRow) с тем же обоснованием.
+    const isFactoryKind=kind.endsWith('industry_facility');
+    const orbOpts=isCC&&ctx.hasLoad?{cpu:ctx.cpu,pg:ctx.pg,size:52}
+      :isFactoryKind&&ctx.resOut?{product:ctx.resOut,size:52}:{size:52};
     return `<div class="unit">
-      ${structOrb(kind,1,planetType,isCC&&ctx.hasLoad?{cpu:ctx.cpu,pg:ctx.pg,size:52}:{size:52})}
+      ${structOrb(kind,1,planetType,orbOpts)}
       <div class="panel">
         <div class="title">${sname(kind)} <span class="code">${code}</span></div>
         ${structureUnitFields(kind,unitCtx)}
