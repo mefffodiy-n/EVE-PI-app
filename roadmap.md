@@ -319,7 +319,8 @@ pi-director/
       командные центры.
 - [ ] **Остаётся за вами:** проверить в игре расхождение по CPU второго
       причала (см. раздел 2) — поставить два P4-шаблона на планету ~20 000 км
-      при CCU V. Это единственный незакрытый пункт Фазы 1.
+      при CCU V. Отложено пользователем на последнюю очередь (11.09.2026):
+      подходящая Barren/Temperate планета такого радиуса пока не найдена.
 - [x] Полный набор шаблонов загружен и разобран (68 файлов).
 - [x] `pin_type_ids` выверен по реальному набору: подтверждён
       `high_tech_industry_facility = 2475`, исправлена ошибка
@@ -384,8 +385,9 @@ pi-director/
       `login.eveonline.com` (PKCE-пара, обмен кода, refresh, проверка JWT по
       JWKS: подпись, issuer, audience `client_id` + «EVE Online», срок).
       Callback пишет персонажа `source="esi"` и зашифрованные токены. Без
-      `PI_ESI_CLIENT_ID` и `PI_TOKEN_KEY` эндпоинты отдают 503 — ожидаемо,
-      разработка идёт на dev-заглушках. **Осталось получить `client_id`.**
+      `PI_ESI_CLIENT_ID` и `PI_TOKEN_KEY` эндпоинты отдают 503 (локальная
+      разработка без них идёт на dev-заглушках). `client_id` получен и
+      настроен в `.env` на проде — реальные пользователи входят через SSO.
 - [x] Первая синхронизация скиллов и колоний сразу после входа
       (`_sync_first_login_async` в `api/blueprints/auth.py`, фоновый
       поток) — не ждать ближайшего расписания `scheduler.py` (скиллы —
@@ -413,7 +415,7 @@ pi-director/
       Interplanetary Consolidation (2495) из `GET /characters/{id}/skills/`,
       пишет в `Character`. type_id — в `data/pi_reference.json`. Авторизованные
       запросы через `esi_client.get(..., token=)`, токен из `credentials`.
-      Работает на мок-ESI; реальные данные — после входа с настоящим client_id.
+      Работает на настоящих данных реальных персонажей.
 - [x] `scripts/sync_colony_status.py` в `scheduler.py` (раз в 30 мин): снимает
       `GET /characters/{id}/planets/` + деталь по каждой планете, находит
       ближайшее `expiry_time` среди пинов; имена планет — `GET /universe/planets/`
