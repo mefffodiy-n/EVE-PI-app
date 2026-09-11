@@ -23,6 +23,7 @@ def _env(monkeypatch, tmp_path):
     monkeypatch.setattr(config, "TOKEN_ENCRYPTION_KEY", crypto.generate_key())
     import scripts.esi_client as ec
     monkeypatch.setattr(ec, "ETAG_STORE", tmp_path / "etags.json")
+    monkeypatch.setattr(sync, "SCHEMATIC_CACHE_PATH", tmp_path / "schematics.json")
 
 
 def _iso(minutes):
@@ -33,13 +34,17 @@ SYSTEM_ID = 30000142
 SYSTEM_NAME = "Jita"
 
 
-def _opener(planets: dict):
+def _opener(planets: dict, schematics: dict | None = None):
     """
     planets: {planet_id: {"type": str, "level": int, "pins": [expiry_iso|None], "name": str}}
 
     Элемент "pins" может быть строкой/None (только expiry, как раньше) или
-    словарём {"expiry": ..., "type_id": ...} — для проверки structures_detail.
+    словарём {"expiry", "type_id", "schematic_id", "last_cycle_start",
+    "contents", "extractor_details", "install_time"} — для structures_detail
+    и pins_detail. schematics — {schematic_id: {"schematic_name", "cycle_time"}}
+    для мока GET /universe/schematics/{id}/.
     """
+    schematics = schematics or {}
     listing = [
         {"planet_id": pid, "planet_type": p["type"],
          "upgrade_level": p["level"], "num_pins": len(p["pins"]), "solar_system_id": SYSTEM_ID}
@@ -54,15 +59,22 @@ def _opener(planets: dict):
             body = {"name": SYSTEM_NAME, "system_id": SYSTEM_ID}
         elif "/universe/planets/" in url:
             body = {"name": planets[int(m.group(1))]["name"], "system_id": SYSTEM_ID}
+        elif "/universe/schematics/" in url:
+            sid = int(m.group(1))
+            if sid not in schematics:
+                return 404, "{}", {}
+            body = schematics[sid]
         elif m:
             pins = []
             for i, entry in enumerate(planets[int(m.group(1))]["pins"]):
                 if isinstance(entry, dict):
                     pin = {"pin_id": i}
+                    for key in ("type_id", "schematic_id", "last_cycle_start",
+                                "contents", "extractor_details", "install_time"):
+                        if key in entry:
+                            pin[key] = entry[key]
                     if entry.get("expiry"):
                         pin["expiry_time"] = entry["expiry"]
-                    if entry.get("type_id"):
-                        pin["type_id"] = entry["type_id"]
                     pins.append(pin)
                 elif entry:
                     pins.append({"pin_id": i, "expiry_time": entry})
@@ -152,6 +164,66 @@ class TestStructuresDetail:
             {"kind": "extractor_control_unit", "count": 1},
             {"kind": "basic_industry_facility", "count": 2},
         ]
+
+
+class TestSchematicInfo:
+    def test_resolves_and_caches(self, tmp_path):
+        client = EsiClient(opener=_opener({}, schematics={
+            122: {"schematic_name": "Plasmoids", "cycle_time": 1800},
+        }))
+        info = sync.schematic_info(client, 122)
+        assert info == {"product": "Plasmoids", "cycle_minutes": 30.0}
+
+        # Второй вызов — из кэша на диске, без нового запроса к ESI.
+        calls = []
+        counting_client = EsiClient(opener=lambda u, h: calls.append(u) or (200, "{}", {}))
+        assert sync.schematic_info(counting_client, 122) == info
+        assert calls == []
+
+    def test_unknown_schematic_is_none(self):
+        client = EsiClient(opener=_opener({}, schematics={}))
+        assert sync.schematic_info(client, 999999) is None
+
+
+class TestPinDetail:
+    def test_extractor_control_unit(self):
+        with_names = sync._name_by_type_id  # прогреть кэш реальными данными
+        with_names.cache_clear()
+        pin = {
+            "expiry_time": "2026-09-11T14:45:01Z",
+            "install_time": "2026-09-10T14:45:01Z",
+            "extractor_details": {
+                "cycle_time": 900, "product_type_id": 2308, "qty_per_cycle": 5770,
+                "heads": [{"head_id": i} for i in range(10)],
+            },
+        }
+        detail = sync.pin_detail(pin, "extractor_control_unit", client=None)
+        assert detail["heads"] == 10
+        assert detail["product"] == "Suspended Plasma"
+        assert detail["qty_per_cycle"] == 5770
+        assert detail["cycle_seconds"] == 900
+        assert detail["expiry_time"] == "2026-09-11T14:45:01Z"
+
+    def test_industry_facility_resolves_via_schematic_info(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(sync, "SCHEMATIC_CACHE_PATH", tmp_path / "schematics.json")
+        client = EsiClient(opener=_opener({}, schematics={
+            122: {"schematic_name": "Plasmoids", "cycle_time": 1800},
+        }))
+        pin = {"schematic_id": 122, "last_cycle_start": "2026-09-10T10:04:34Z",
+               "contents": [{"type_id": 2308, "amount": 2604}]}
+        detail = sync.pin_detail(pin, "basic_industry_facility", client)
+        assert detail["product"] == "Plasmoids"
+        assert detail["cycle_minutes"] == 30.0
+        assert detail["last_cycle_start"] == "2026-09-10T10:04:34Z"
+        assert detail["contents"] == [{"type_id": 2308, "name": "Suspended Plasma", "amount": 2604}]
+
+    def test_storage_contents(self):
+        pin = {"contents": [{"type_id": 2308, "amount": 25320}]}
+        detail = sync.pin_detail(pin, "storage_facility", client=None)
+        assert detail["contents"] == [{"type_id": 2308, "name": "Suspended Plasma", "amount": 25320}]
+
+    def test_command_center_has_no_extra_fields(self):
+        assert sync.pin_detail({}, "command_center", client=None) == {"kind": "command_center"}
 
 
 class TestSync:

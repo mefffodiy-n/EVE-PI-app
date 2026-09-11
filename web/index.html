@@ -846,6 +846,8 @@ const T={
   capCap:'Вместимость',capContent:'Содержимое',cycNow:'Текущий цикл',cycNone:'данных о цикле нет',
   extractsW:'Добывает',heads10:'10 голов',cycUnknown:'Состояние цикла неизвестно',
   afterGame:'появится после подключения к игре',producesW:'Производит',inputW:'Вход',
+  pHead:['голова','головы','голов'],emptyStorage:'пусто',
+  inProduction:'В производстве',cycIdleSince:'Простаивает',
   sharedExtract:'На этой планете {n} наших экстрактора на одном сырье — выработка каждого будет ниже расчётной.',
   onPlan:'к плану',onPlanets:'на',
   thColony:'Колония',thColonySub:'кто и где',thProd:'Производство',thProdSub:'что делает и из чего',
@@ -858,7 +860,7 @@ const T={
   notJson:'{api} вернул не JSON. Запустите «python run.py» и откройте {flask}/',
   themeTitle:'Тема',viewList:'Список по персонажам',viewGrid:'Сетка',sortTitle:'Сортировка',loadLbl:'Загрузка',
   inGameColonies:'Мои колонии в игре',cycOver:'программа завершена',cycIdle:'программа не запущена',
-  hUnit:'ч',minUnit:'мин',pPin:['пин','пина','пинов'],
+  hUnit:'ч',minUnit:'мин',dUnit:'д',pPin:['пин','пина','пинов'],
   progEnds:'до конца программы экстрактора',syncedColony:'колония в игре',
   procCycleLbl:'до конца цикла переработки',
   cycNoFactory:'ESI не отдаёт состояние фабрик — только экстракторы',
@@ -887,6 +889,8 @@ const T={
   capCap:'Capacity',capContent:'Contents',cycNow:'Current cycle',cycNone:'no cycle data',
   extractsW:'Extracts',heads10:'10 heads',cycUnknown:'Cycle state unknown',
   afterGame:'appears once connected to the game',producesW:'Produces',inputW:'Input',
+  pHead:['head','heads','heads'],emptyStorage:'empty',
+  inProduction:'In production',cycIdleSince:'Idle',
   sharedExtract:'This planet has {n} of our extractors on the same resource — each will yield below the estimate.',
   onPlan:'on the plan',onPlanets:'across',
   thColony:'Colony',thColonySub:'who and where',thProd:'Production',thProdSub:'what it makes and from what',
@@ -899,7 +903,7 @@ const T={
   notJson:'{api} returned non-JSON. Run “python run.py” and open {flask}/',
   themeTitle:'Theme',viewList:'By character',viewGrid:'Grid',sortTitle:'Sort',loadLbl:'Load',
   inGameColonies:'My in-game colonies',cycOver:'program ended',cycIdle:'no program running',
-  hUnit:'h',minUnit:'min',pPin:['pin','pins','pins'],
+  hUnit:'h',minUnit:'min',dUnit:'d',pPin:['pin','pins','pins'],
   progEnds:'until the extraction program ends',syncedColony:'built in game',
   procCycleLbl:'until the processing cycle ends',
   cycNoFactory:'ESI does not expose factory state — extractors only',
@@ -1447,7 +1451,16 @@ async function loadColonies(){
 
 function fmtLeft(ms){
   if(ms<=0) return t('cycOver');
-  const h=Math.floor(ms/3600000), m=Math.floor(ms%3600000/60000);
+  return fmtDuration(ms);
+}
+
+/* Длительность без семантики «осталось»/«кончилось» — для простоя фабрики
+   (считает вверх с момента, когда кончился последний цикл) настолько же,
+   насколько и для обратного отсчёта. Дни нужны: простой реально бывает
+   многодневным (см. «Idle for 7d 6h 15m» у игры), часов без них — абсурд. */
+function fmtDuration(ms){
+  const d=Math.floor(ms/86400000), h=Math.floor(ms%86400000/3600000), m=Math.floor(ms%3600000/60000);
+  if(d>=1) return `${d} ${t('dUnit')} ${h} ${t('hUnit')}`;
   return h>=1 ? `${h} ${t('hUnit')} ${m} ${t('minUnit')}` : `${m} ${t('minUnit')}`;
 }
 
@@ -1556,6 +1569,11 @@ setInterval(()=>{
     el.classList.toggle('over', left<=0);
     el.classList.toggle('hot', left<=0);
   });
+  // Прогресс-бар и «простаивает N» у фабрик (см. structureUnitFields)
+  // считаются по last_cycle_start на каждой перерисовке панели — проще
+  // и надёжнее точечных DOM-патчей: юнитов в открытой колонии немного.
+  if(currentColony && document.getElementById('colonyPage').classList.contains('on'))
+    openColony(currentColony);
 }, 60000);
 
 function isk(v){
@@ -1640,17 +1658,31 @@ async function exportPlan(){
 /* ── Панель колонии: разбор по структурам, как в игре ─────────── */
 let currentColony=null;
 
-/* Поля правой панели одной структуры. ctx.hasLoad=false — у факта из
-   игры без совпавшего плана нет CPU/PG (ESI не отдаёт радиус планеты,
-   без него линки не посчитать — оценка без них была бы «правдоподобным,
-   но ложным» числом, правило 1) и нет данных о том, что производит
-   фабрика/что извлекает экстрактор без совпадения с планом. Честное
-   noData вместо этого — не хуже, чем цикл фабрик, которого ESI вообще
-   не отдаёт ни для плана, ни для факта. */
+/* Содержимое склада/причала/буфера фабрики — настоящие contents ESI
+   (амаунт + type_id, имя резолвит sync_colony_status.py). Пустой список —
+   это тоже ответ («на складе пусто»), отдельно от «нет данных». */
+function contentsHTML(list){
+  if(!list) return `<div class="meta">${t('noData')}</div>`;
+  if(!list.length) return `<div class="meta">${t('emptyStorage')}</div>`;
+  return list.map(c=>`<div class="meta">
+    ${ids[c.name]?`<img src="${ICON(ids[c.name])}" alt="" style="width:14px;height:14px;vertical-align:-3px;margin-right:3px">`:''}
+    ${nloc(Math.round(c.amount))} × ${c.name||('#'+c.type_id)}</div>`).join('');
+}
+
+/* Поля правой панели одной структуры.
+   ctx.pin — настоящие поштучные данные ESI этого пина (см.
+   scripts/sync_colony_status.py::pin_detail) — есть только у факта из
+   игры, когда колония пересинхронизирована новым кодом. Без него (план,
+   ещё не пересинхронизированный факт) — прежнее поведение.
+
+   ctx.hasLoad=false — у факта из игры без совпавшего плана нет CPU/PG
+   (ESI не отдаёт радиус планеты, без него линки не посчитать — оценка
+   без них была бы «правдоподобным, но ложным» числом, правило 1). */
 function structureUnitFields(kind, ctx){
   const isStore=kind==='launchpad'||kind==='storage_facility';
   const isECU=kind==='extractor_control_unit';
   const isFactory=kind.includes('industry_facility');
+  const pin=ctx.pin;
 
   if(kind==='command_center'){
     if(!ctx.hasLoad){
@@ -1673,15 +1705,42 @@ function structureUnitFields(kind, ctx){
     <div class="meta" style="margin-top:6px">
       ${t('pgFrom')}: ${t('sStruct')} ${pgb.structures||0}% · ${t('sHeads')} ${pgb.heads||0}% · ${t('sLinks')} ${pgb.links||0}%</div>`;
   }
+
   if(isStore){
+    const cap=kind==='launchpad'?'10 000':'12 000';
     return `<div class="cols2">
       <div><div class="lbl">${t('capCap')}</div>
         <div class="meter"><i class="ok" style="width:0%;background:var(--ring-infra)"></i></div>
-        <div class="val">0 / ${kind==='launchpad'?'10 000':'12 000'} m³</div></div>
-      <div><div class="lbl">${t('capContent')}</div><div class="meta">${t('noData')}</div></div>
+        <div class="val">${pin?'—':'0'} / ${cap} m³</div></div>
+      <div><div class="lbl">${t('capContent')}</div>${contentsHTML(pin?pin.contents:null)}</div>
     </div>`;
   }
+
   if(isECU){
+    // pin — реальные данные конкретного экстрактора (heads/product из
+    // extractor_details, раньше не читались вовсе).
+    if(pin){
+      if(!pin.expiry_time){
+        return `<div class="cols2">
+          <div><div class="lbl">${t('cycNow')}</div>
+            <div class="meter"><i style="width:0%;background:var(--ring-extract)"></i></div>
+            <div class="meta" style="color:var(--alarm)">${t('cycIdle')}</div></div>
+          <div><div class="lbl">${t('extractsW')}</div>
+            <div class="val">${pin.product||'—'}</div>
+            <div class="meta">${pin.heads?pl(pin.heads,'pHead'):t('heads10')}</div></div>
+        </div>`;
+      }
+      const expMs=Date.parse(pin.expiry_time);
+      return `<div class="cols2">
+        <div><div class="lbl">${t('cycNow')}</div>
+          <div class="meter"><i style="width:0%;background:var(--ring-extract)"></i></div>
+          <div class="val extractor-left" data-exp="${expMs}">${fmtLeft(expMs-Date.now())}</div>
+          <div class="meta">${t('progEnds')}</div></div>
+        <div><div class="lbl">${t('extractsW')}</div>
+          <div class="val">${ids[pin.product]?`<img src="${ICON(ids[pin.product])}" alt="" style="width:14px;height:14px;vertical-align:-3px;margin-right:3px">`:''}${pin.product||'—'}</div>
+          <div class="meta">${pin.heads?pl(pin.heads,'pHead'):t('heads10')}</div></div>
+      </div>`;
+    }
     const cyc = ctx.expMs!=null
       ? `<div class="val extractor-left" data-exp="${ctx.expMs}">${fmtLeft(ctx.expMs-Date.now())}</div>
          <div class="meta">${t('progEnds')}</div>`
@@ -1697,7 +1756,40 @@ function structureUnitFields(kind, ctx){
         <div class="meta">${t('heads10')}</div></div>
     </div>`;
   }
+
   if(isFactory){
+    // pin.last_cycle_start + pin.cycle_minutes (продукт и длительность —
+    // с самой ESI, GET /universe/schematics/{id}/, см. schematic_info()
+    // в sync_colony_status.py) — реальный прогресс/простой, не выдумка.
+    if(pin){
+      const cycleEndMs=(pin.last_cycle_start && pin.cycle_minutes)
+        ? Date.parse(pin.last_cycle_start)+pin.cycle_minutes*60000 : null;
+      const now=Date.now();
+      let state;
+      if(cycleEndMs==null){
+        state=`<div class="state-wait">${t('cycUnknown')}</div>
+          <div class="meter"><i style="width:0%"></i></div>
+          <div class="meta">${t('cycNoFactory')}</div>`;
+      } else if(now<cycleEndMs){
+        const total=pin.cycle_minutes*60000, pct=Math.round(100*(total-(cycleEndMs-now))/total);
+        state=`<div class="lbl" style="color:var(--ring-adv)">${t('inProduction')}</div>
+          <div class="meter"><i style="width:${pct}%;background:var(--ring-adv)"></i></div>
+          <div class="meta">${fmtLeft(cycleEndMs-now)}</div>`;
+      } else {
+        state=`<div class="state-wait">${t('cycIdleSince')}</div>
+          <div class="meter"><i style="width:100%"></i></div>
+          <div class="meta">${fmtDuration(now-cycleEndMs)}</div>`;
+      }
+      return `<div class="cols2">
+        <div>${state}</div>
+        <div><div class="lbl">${t('producesW')}</div>
+          <div class="val">${pin.product
+            ?`${ids[pin.product]?`<img src="${ICON(ids[pin.product])}" alt="" style="width:14px;height:14px;vertical-align:-3px;margin-right:3px">`:''}${pin.product}`
+            :'—'}</div>
+          <div class="lbl" style="margin-top:5px">${t('capContent')}</div>
+          ${contentsHTML(pin.contents)}</div>
+      </div>`;
+    }
     const inputs=(ctx.resIn||'').split(',').map(x=>x.trim()).filter(Boolean);
     return `<div class="cols2">
       <div><div class="state-wait">${t('cycUnknown')}</div>
@@ -1714,18 +1806,42 @@ function structureUnitFields(kind, ctx){
   return '';
 }
 
-/* Полоса структур панели — общая для плана и факта из игры. */
+/* Полоса структур панели — общая для плана и факта из игры, когда
+   известен только агрегированный состав (structures_detail: kind+count,
+   без поштучных данных ESI). Для факта из игры с пересинхронизированными
+   пинами используется pinUnitsHTML() — там каждая строка настоящая. */
 function structureUnitsHTML(structuresDetail, planetType, ctx){
   const units=[];
   (structuresDetail||[]).forEach(sd=>{ for(let i=0;i<sd.count;i++) units.push(sd.kind); });
   return units.map((kind,i)=>{
     const isCC=kind==='command_center';
     const code=`${String.fromCharCode(65+(i%26))}${i}-${ctx.planetLabel}`;
+    // Единственный экстрактор колонии — однозначное сопоставление с
+    // абстрактной строкой плана (в отличие от N одинаковых фабрик, где
+    // непонятно, какая из них какая: ctx.ecuPin заполняется, только
+    // когда экстрактор ровно один — см. openColony()).
+    const unitCtx=(kind==='extractor_control_unit'&&ctx.ecuPin)?{...ctx,pin:ctx.ecuPin}:ctx;
     return `<div class="unit">
       ${structOrb(kind,1,planetType,isCC&&ctx.hasLoad?{cpu:ctx.cpu,pg:ctx.pg,size:52}:{size:52})}
       <div class="panel">
         <div class="title">${sname(kind)} <span class="code">${code}</span></div>
-        ${structureUnitFields(kind,ctx)}
+        ${structureUnitFields(kind,unitCtx)}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* Одна строка — один настоящий пин (в отличие от structureUnitsHTML,
+   где пины одного вида схлопнуты в count). Только для факта из игры,
+   когда колония пересинхронизирована с pins (см. Colony.pins). */
+function pinUnitsHTML(pins, planetType, planetLabel){
+  return pins.map((pin,i)=>{
+    const code=`${String.fromCharCode(65+(i%26))}${i}-${planetLabel}`;
+    return `<div class="unit">
+      ${structOrb(pin.kind,1,planetType,{size:52})}
+      <div class="panel">
+        <div class="title">${sname(pin.kind)} <span class="code">${code}</span></div>
+        ${structureUnitFields(pin.kind,{hasLoad:false, pin})}
       </div>
     </div>`;
   }).join('');
@@ -1739,10 +1855,12 @@ function openColony(id){
   const real=matchColony(p);                        // реальная колония из ESI или null
   const char=crew.find(c=>c.name===p.character);    // синхронизированные скиллы персонажа
   const expMs=real&&real.nearest_expiry?Date.parse(real.nearest_expiry):null;
+  const ecuPins=((real&&real.pins)||[]).filter(x=>x.kind==='extractor_control_unit');
 
   const body=structureUnitsHTML(p.structures_detail, p.planet_type, {
     hasLoad:true, cpu:p.cpu_percent, pg:p.pg_percent, pgb:p.pg_breakdown||{},
     resIn:p.res_in, resOut:p.res_out, real, expMs, planetLabel:p.planet,
+    ecuPin:ecuPins.length===1?ecuPins[0]:null,
   });
 
   document.getElementById('colonyPage').innerHTML=`
@@ -1773,8 +1891,10 @@ function openColony(id){
 
 /* Та же панель для реальной колонии без пары в плане — id вида
    «real:character_id:planet_id» (см. realRows()). Честно без CPU/PG
-   (см. structureUnitFields) и без «производит/извлекает» — этого без
-   совпадения с планом взять неоткуда, а не выдумываем. */
+   (см. structureUnitFields) — этого без радиуса планеты (ESI его не
+   отдаёт) не посчитать. Остальное — реальные поштучные данные каждого
+   пина (pinUnitsHTML), когда колония пересинхронизирована новым кодом
+   (Colony.pins); до первой такой синхронизации — прежний агрегат. */
 function openRealColonyDetail(id){
   const [, charId, planetId]=id.split(':');
   const c=coloniesData.find(x=>String(x.character_id)===charId && String(x.planet_id)===planetId);
@@ -1788,9 +1908,9 @@ function openRealColonyDetail(id){
       (c.structures||[]).some(s=>s.kind.endsWith('industry_facility'))?'proc':null};
   const char=crew.find(x=>x.name===c.character);
 
-  const body=structureUnitsHTML(c.structures, ptype, {
-    hasLoad:false, real:c, expMs, planetLabel:c.planet_index,
-  });
+  const body=(c.pins&&c.pins.length)
+    ? pinUnitsHTML(c.pins, ptype, c.planet_index)
+    : structureUnitsHTML(c.structures, ptype, {hasLoad:false, real:c, expMs, planetLabel:c.planet_index});
 
   document.getElementById('colonyPage').innerHTML=`
     <div class="cp-head">
@@ -1973,11 +2093,21 @@ const DOC={
    честно без загрузки: ESI не отдаёт радиус планеты, без него линки
    между постройками не посчитать, а оценка без них была бы обманчивым
    числом. Обратный отсчёт браузер считает сам; данные обновляются в фоне.</p>
+   <p>В панели каждая структура показывает настоящее состояние: причал и
+   склад — что реально лежит внутри (или честное «пусто»), экстрактор —
+   сколько голов и что именно добывает, базовая/продвинутая/высокотехнологичная
+   фабрика — что производит и идёт ли сейчас цикл («В производстве» с
+   отсчётом до конца) или простаивает в ожидании сырья («Простаивает» —
+   сколько времени, вплоть до нескольких дней). Строится из полей ESI,
+   которые раньше не читались (`schematic_id`, `last_cycle_start`,
+   состав экстрактора, содержимое пинов); длительность цикла фабрики —
+   с самой ESI (справочник схем производства), не подгонка.</p>
 
    <h3>Чего программа пока не знает</h3>
-   <p>Состояния циклов фабрик и остатков на складах: ESI отдаёт таймеры только
-   для экстракторов. Вместо выдуманных чисел показывается «нет данных»:
-   правдоподобное, но ложное значение хуже честного пробела.</p>
+   <p>У ESI нет радиуса планеты, поэтому загрузка CPU/Power командного центра
+   для колонии без пары в расчётном плане не считается: без радиуса не
+   восстановить длину линков между постройками, а оценка без них была бы
+   обманчивым числом. Вместо выдуманного процента — «нет данных».</p>
    <p>Плотность сырья берётся из статического файла и считается постоянной. В игре
    месторождения истощаются, но живых данных об этом нет ни у кого, кроме самой игры.</p>`},
 
@@ -2119,11 +2249,20 @@ const DOC={
    ESI does not expose planet radius, so the links between buildings can't be computed,
    and an estimate without them would be a misleading number. The browser runs the
    countdown itself; the data refreshes in the background.</p>
+   <p>Inside the panel every structure shows its real state: launchpad and storage show
+   what's actually stored (or an honest "empty"), the extractor shows how many heads it
+   has and exactly what it's pulling, and basic/advanced/high-tech facilities show what
+   they produce and whether a cycle is running ("In production" with a countdown) or idle
+   waiting for input ("Idle" — for however long, up to several days). Built from ESI
+   fields that weren't read before (`schematic_id`, `last_cycle_start`, extractor
+   composition, pin contents); the factory cycle length itself comes straight from ESI's
+   own production-schematic catalogue, not a guess.</p>
 
    <h3>What the program does not know yet</h3>
-   <p>Factory cycle state and storage contents: ESI only exposes timers for extractors.
-   Instead of invented numbers you see “no data” — a plausible but false value is worse
-   than an honest gap.</p>
+   <p>ESI doesn't expose a planet's radius, so CPU/Power load for a colony with no
+   matching plan row isn't computed at all: without the radius there's no way to recover
+   the length of the links between buildings, and an estimate without them would be a
+   misleading number. Instead of an invented percentage you see "no data".</p>
    <p>Resource density comes from a static file and is treated as constant. Deposits do
    deplete in game, but nobody outside the game has live data on that.</p>`}},
 
