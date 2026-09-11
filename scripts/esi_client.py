@@ -238,6 +238,64 @@ class EsiClient:
 
         return EsiResponse(status, data, response_headers)
 
+    # ── POST ─────────────────────────────────────────────────────
+    def post(self, path: str, payload: object) -> EsiResponse:
+        """
+        POST к ESI. Сейчас только для `/universe/ids/` — резолвинг имя
+        предмета -> type_id. Разовая задача проверки данных (см.
+        scripts/resolve_pi_structure_type_ids.py), не рантайм-путь
+        сборщиков, поэтому без ETag (эндпоинт его не отдаёт) и без
+        opener-инъекции для тестов get(). Лимит ошибок и правила 420/429
+        те же, что и у get() — тело дублирует его обработку намеренно,
+        чтобы не усложнять общий путь ради разового вызова.
+        """
+        if self.blocked_for:
+            raise EsiRateLimited(
+                f"Лимит ошибок ESI почти исчерпан, пауза ещё {self.blocked_for} с",
+                self.blocked_for,
+            )
+
+        url = f"{BASE_URL}{path}"
+        headers = {
+            "User-Agent": self.user_agent,
+            "X-Compatibility-Date": self.compatibility_date,
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        }
+        body = json.dumps(payload).encode("utf-8")
+
+        try:
+            request = urllib.request.Request(url, data=body, headers=headers, method="POST")
+            with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
+                status = response.status
+                resp_body = response.read().decode("utf-8")
+                response_headers = dict(response.headers)
+        except urllib.error.HTTPError as exc:
+            response_headers = dict(exc.headers or {})
+            self._note_limits(response_headers)
+            if exc.code in (420, 429):
+                retry = int(response_headers.get("Retry-After")
+                            or response_headers.get("X-ESI-Error-Limit-Reset") or 60)
+                self._blocked_until = time.time() + retry
+                raise EsiRateLimited(
+                    f"ESI ограничил обращения (HTTP {exc.code}), повтор через {retry} с",
+                    retry,
+                ) from exc
+            raise EsiError(f"HTTP {exc.code} на {path}") from exc
+        except (urllib.error.URLError, TimeoutError) as exc:
+            raise EsiError(f"Сеть недоступна: {exc}") from exc
+
+        self._note_limits(response_headers)
+        if status >= 400:
+            raise EsiError(f"HTTP {status} на {path}")
+
+        try:
+            data = json.loads(resp_body)
+        except ValueError as exc:
+            raise EsiError(f"Ответ не является JSON: {exc}") from exc
+
+        return EsiResponse(status, data, response_headers)
+
 
 def suggested_compatibility_date() -> str:
     """
