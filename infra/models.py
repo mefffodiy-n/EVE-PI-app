@@ -151,6 +151,12 @@ class Colony(Base):
     # неизвестным type_id (см. scripts/sync_colony_status.py::real_colony_load()).
     cpu_percent: Mapped[float | None] = mapped_column(nullable=True)
     pg_percent: Mapped[float | None] = mapped_column(nullable=True)
+    # Абсолютные числа (tf/MW) рядом с процентами — панель колонии в игре
+    # показывает оба (см. скриншот пользователя 11.09.2026), не только %.
+    cpu_used: Mapped[float | None] = mapped_column(nullable=True)
+    cpu_capacity: Mapped[float | None] = mapped_column(nullable=True)
+    pg_used: Mapped[float | None] = mapped_column(nullable=True)
+    pg_capacity: Mapped[float | None] = mapped_column(nullable=True)
 
     synced_at: Mapped[datetime] = mapped_column(
         UtcDateTime, default=_utcnow, onupdate=_utcnow
