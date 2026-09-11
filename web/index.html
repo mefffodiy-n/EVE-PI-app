@@ -171,6 +171,9 @@ button { font-family:inherit; }
 .orb { position:relative; width:var(--orb,58px); height:var(--orb,58px); flex:0 0 auto; cursor:pointer; }
 .orb .disc { position:absolute; inset:5px; border-radius:50%; overflow:hidden;
              background:var(--inset); display:grid; place-items:center; }
+/* У факта из игры («Мои колонии в игре») нет кольца загрузки (см. orb()) —
+   текстура планеты занимает почти весь круг, как в игровом обзоре. */
+.orb.real .disc { inset:1px; }
 .orb .disc img { width:100%; height:100%; object-fit:cover; }
 .orb .cargo { position:absolute; inset:0; margin:auto; width:52%; height:52%;
               filter:drop-shadow(0 1px 2px rgba(0,0,0,.8)); }
@@ -196,13 +199,17 @@ button { font-family:inherit; }
               padding:0 4px; font-size:10px; line-height:14px;
               font-family:'IBM Plex Mono',monospace; color:var(--amber); }
 .orb .badge.hot { color:var(--alarm); border-color:var(--alarm); }
-/* Портрет персонажа придёт из игры в Фазе 3. Пока — инициалы:
-   пустой серый круг выглядит как незагрузившаяся картинка. */
+/* Портрет персонажа — images.evetech.net, публичный CDN CCP, без токена
+   (тот же принцип, что ICON() для иконок типов). Инициалы лежат под
+   картинкой всегда: у dev-заглушек портрета в игре не существует,
+   картинка получает 404 и снимает себя через onerror, снизу остаются
+   инициалы — тот самый пустой серый круг, который раньше был
+   единственным видом (Фаза 3 подключила реальных персонажей). */
 .orb .pilot { position:absolute; right:-2px; bottom:-2px; width:40%; height:40%;
               border-radius:50%; border:1px solid var(--seam); background:var(--seam);
               display:grid; place-items:center; font-size:9px; font-weight:600;
-              color:var(--dim); letter-spacing:-.02em; }
-.orb .pilot img { width:100%; height:100%; object-fit:cover; }
+              color:var(--dim); letter-spacing:-.02em; overflow:hidden; }
+.orb .pilot img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
 
 /* ═══ Вид «Детали»: строка на колонию ═══════════════════════════ */
 .colony { border-bottom:1px solid var(--seam); padding:12px 14px;
@@ -210,8 +217,9 @@ button { font-family:inherit; }
 .colony:hover { background:var(--hover); }
 .colony-head { display:flex; align-items:center; gap:10px; }
 .pilot-lg { width:30px; height:30px; border-radius:50%; background:var(--seam); flex:0 0 auto;
-            display:grid; place-items:center; font-size:11px; font-weight:600; color:var(--dim); }
-.pilot-lg img { width:100%; height:100%; object-fit:cover; }
+            display:grid; place-items:center; font-size:11px; font-weight:600; color:var(--dim);
+            position:relative; overflow:hidden; }
+.pilot-lg img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
 .pilot-name { color:var(--bright); font-weight:500; }
 .pilot-name .skills { color:var(--dim); font-weight:400; font-size:11px;
   font-family:'IBM Plex Mono',monospace; margin-left:8px; }
@@ -499,7 +507,8 @@ details.msgs[open] > summary::before { content:'▾ '; }
    выглядеть как план, а не отдельным списком строк. */
 .colonies { border-top:1px solid var(--seam); }
 .colonies h3 { font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--dim);
-  margin:0; padding:14px 14px 4px; }
+  margin:0; padding:14px 14px 4px; display:flex; justify-content:space-between; align-items:baseline; }
+.colonies h3 .colsum { text-transform:none; letter-spacing:normal; font-weight:400; }
 .colonies .colony:last-child { border-bottom:none; }
 .tail .val.soon { color:var(--amber); }
 .tail .val.over { color:var(--alarm); font-weight:600; }
@@ -789,7 +798,15 @@ const FLASK='http://127.0.0.1:8000';
 const LIVE_SERVER=/^(127\.0\.0\.1|localhost)$/.test(location.hostname)
   && location.port && location.port!=='8000';
 const API=LIVE_SERVER?`${FLASK}/api`:'/api';
-const ICON=id=>`https://images.evetech.net/types/${id}/icon?size=64`;
+const ICON=(id,size)=>`https://images.evetech.net/types/${id}/icon?size=${size||64}`;
+// Портрет персонажа — тот же публичный CDN CCP, без токена. Только для
+// реальных ESI-персонажей: у dev-заглушек этого character_id не
+// существует в игре, картинка получает 404 и удаляет себя (onerror),
+// снизу остаются инициалы — как было единственным видом до Фазы 3.
+const PORTRAIT=id=>`https://images.evetech.net/characters/${id}/portrait?size=64`;
+const charIdOf=name=>{ const c=crew.find(x=>x.name===name); return c?c.character_id:null; };
+const avatarImg=characterId=>characterId
+  ? `<img src="${PORTRAIT(characterId)}" alt="" onerror="this.remove()">` : '';
 
 let ids={}, plan=[], staffing={}, view='details', sortBy='load';
 let lang='ru', crew=[], meta={};
@@ -833,6 +850,8 @@ const T={
   capCap:'Вместимость',capContent:'Содержимое',cycNow:'Текущий цикл',cycNone:'данных о цикле нет',
   extractsW:'Добывает',heads10:'10 голов',cycUnknown:'Состояние цикла неизвестно',
   afterGame:'появится после подключения к игре',producesW:'Производит',inputW:'Вход',
+  pHead:['голова','головы','голов'],emptyStorage:'пусто',
+  inProduction:'В производстве',cycIdleSince:'Простаивает',
   sharedExtract:'На этой планете {n} наших экстрактора на одном сырье — выработка каждого будет ниже расчётной.',
   onPlan:'к плану',onPlanets:'на',
   thColony:'Колония',thColonySub:'кто и где',thProd:'Производство',thProdSub:'что делает и из чего',
@@ -843,9 +862,10 @@ const T={
   pProd:['продукт','продукта','продуктов'],
   ssoUnavailable:'Вход недоступен',
   notJson:'{api} вернул не JSON. Запустите «python run.py» и откройте {flask}/',
+  pPlanetN:['планета','планеты','планет'],coloniesIdle:'простаивает',coloniesAttention:'требуют внимания',
   themeTitle:'Тема',viewList:'Список по персонажам',viewGrid:'Сетка',sortTitle:'Сортировка',loadLbl:'Загрузка',
   inGameColonies:'Мои колонии в игре',cycOver:'программа завершена',cycIdle:'программа не запущена',
-  hUnit:'ч',minUnit:'мин',pPin:['пин','пина','пинов'],
+  hUnit:'ч',minUnit:'мин',dUnit:'д',pPin:['пин','пина','пинов'],
   progEnds:'до конца программы экстрактора',syncedColony:'колония в игре',
   procCycleLbl:'до конца цикла переработки',
   cycNoFactory:'ESI не отдаёт состояние фабрик — только экстракторы',
@@ -874,6 +894,8 @@ const T={
   capCap:'Capacity',capContent:'Contents',cycNow:'Current cycle',cycNone:'no cycle data',
   extractsW:'Extracts',heads10:'10 heads',cycUnknown:'Cycle state unknown',
   afterGame:'appears once connected to the game',producesW:'Produces',inputW:'Input',
+  pHead:['head','heads','heads'],emptyStorage:'empty',
+  inProduction:'In production',cycIdleSince:'Idle',
   sharedExtract:'This planet has {n} of our extractors on the same resource — each will yield below the estimate.',
   onPlan:'on the plan',onPlanets:'across',
   thColony:'Colony',thColonySub:'who and where',thProd:'Production',thProdSub:'what it makes and from what',
@@ -884,9 +906,10 @@ const T={
   pProd:['product','products','products'],
   ssoUnavailable:'Login unavailable',
   notJson:'{api} returned non-JSON. Run “python run.py” and open {flask}/',
+  pPlanetN:['planet','planets','planets'],coloniesIdle:'idle',coloniesAttention:'need attention',
   themeTitle:'Theme',viewList:'By character',viewGrid:'Grid',sortTitle:'Sort',loadLbl:'Load',
   inGameColonies:'My in-game colonies',cycOver:'program ended',cycIdle:'no program running',
-  hUnit:'h',minUnit:'min',pPin:['pin','pins','pins'],
+  hUnit:'h',minUnit:'min',dUnit:'d',pPin:['pin','pins','pins'],
   progEnds:'until the extraction program ends',syncedColony:'built in game',
   procCycleLbl:'until the processing cycle ends',
   cycNoFactory:'ESI does not expose factory state — extractors only',
@@ -982,37 +1005,51 @@ function plural(n,one,few,many){
   if(a>10&&a<20)return `${n} ${many}`; if(b>1&&b<5)return `${n} ${few}`;
   if(b===1)return `${n} ${one}`; return `${n} ${many}`;}
 
+/* Иконка «чем занята колония» для сетки/списка «Моих колоний в игре» —
+   по реальному составу пинов (row.structures_detail), не по роли:
+   есть экстрактор — его иконка, иначе самая старшая по тиру фабрика,
+   иначе склад/причал. Ничего не выдумывается — то, что реально стоит. */
+function dominantStructureIconId(row){
+  const kinds=(row.structures_detail||[]).map(s=>s.kind);
+  const priority=['extractor_control_unit','high_tech_industry_facility',
+    'advanced_industry_facility','basic_industry_facility','launchpad','storage_facility'];
+  const kind=priority.find(k=>kinds.includes(k));
+  return kind?ids['structure:'+kind]:null;
+}
+
 /* ── Круг колонии ───────────────────────────────────────────────
    Кольцо показывает загрузку по узкому ресурсу, а не таймер цикла:
    таймеров у нас пока нет, и рисовать вымышленное число нельзя.
 
    row.isReal — та же функция для факта из игры («Мои колонии в игре»,
-   см. realRows()): загрузки CPU/PG там нет (её ESI не отдаёт), поэтому
-   кольцо красится по срочности (осталось < 2 ч — янтарь, кончилось —
-   алярм, иначе по роли) и в бейдже настоящий обратный отсчёт вместо
-   процента — придумывать число там, где его нет, нельзя (правило 1). */
+   см. realRows()) — вид как в самой игре (обзорная сетка): текстура
+   планеты крупным планом, плашка с обратным отсчётом сверху-слева,
+   иконка занятости колонии по центру, портрет персонажа справа-снизу.
+   Кольца загрузки нет — загрузки CPU/PG у факта из игры не бывает
+   (ESI не отдаёт радиус планеты), рисовать вымышленный процент нельзя
+   (правило 1). */
 function orb(row,size){
   const r=(size/2)-2, c=2*Math.PI*r;
   const planetId=ids['planet:'+row.planet_type];
   if(row.isReal){
     const exp=row.nearest_expiry?Date.parse(row.nearest_expiry):null;
     const left=exp!=null?exp-Date.now():null;
-    const over=left!=null&&left<=0, soon=left!=null&&left>0&&left<7200000;
-    const color=over?'var(--alarm)':soon?'var(--amber)':
-                row.role_key==='mine'?'var(--ring-extract)':
-                row.role_key==='proc'?'var(--ring-adv)':'var(--seam)';
-    const badgeTxt=exp!=null?fmtLeft(left):(row.role_key==='proc'?t('noData'):t('cycIdle'));
-    return `<div class="orb" style="--orb:${size}px"
-              ${row.matchId?`onclick="openColony('${row.matchId}')"`:''}
+    const over=left!=null&&left<=0;
+    // Таймер показывается только там, где он есть по-настоящему (активный
+    // экстрактор) или где его отсутствие само по себе сигнал (простаивающий
+    // экстрактор). У колоний переработки без экстрактора таймера в игре нет
+    // вовсе — как на референсном скрине, там чип не рисуется совсем, а не
+    // подставляется «нет данных».
+    const showBadge=exp!=null||row.role_key!=='proc';
+    const badgeTxt=exp!=null?fmtLeft(left):t('cycIdle');
+    const activityId=dominantStructureIconId(row);
+    return `<div class="orb real" style="--orb:${size}px"
+              onclick="openColony('${row.matchId}')"
               title="${row.character} · ${row.system} ${row.planet}">
-      <div class="disc">${planetId?`<img src="${ICON(planetId)}" alt="">`:''}</div>
-      <svg class="ring" viewBox="0 0 ${size} ${size}">
-        <circle class="track" cx="${size/2}" cy="${size/2}" r="${r}"/>
-        <circle cx="${size/2}" cy="${size/2}" r="${r}" stroke="${color}"
-          stroke-dasharray="${c} ${c}" stroke-linecap="round"/>
-      </svg>
-      <div class="badge${over?' hot':''}"${exp!=null?` data-exp="${exp}"`:''}>${badgeTxt}</div>
-      <div class="pilot" title="${row.character}">${initials(row.character)}</div>
+      <div class="disc">${planetId?`<img src="${ICON(planetId,128)}" alt="">`:''}</div>
+      ${activityId?`<img class="cargo" src="${ICON(activityId)}" alt="">`:''}
+      ${showBadge?`<div class="badge${over?' hot':''}"${exp!=null?` data-exp="${exp}"`:''}>${badgeTxt}</div>`:''}
+      <div class="pilot" title="${row.character}">${initials(row.character)}${avatarImg(charIdOf(row.character))}</div>
     </div>`;
   }
   const peak=Math.max(row.cpu_percent,row.pg_percent);
@@ -1132,13 +1169,11 @@ function colonyCardHTML(p){
   const subExtra=p.isReal
     ? `<span class="synced">${t('syncedColony')}${p.upgrade_level?` · CC${p.upgrade_level}`:''} · ${pl(p.num_pins,'pPin')}</span>`
     : `<span class="num">${nloc(Math.round(p.planet_radius_km))} ${t('km')}</span>`;
-  const detailsBtn = p.isReal
-    ? (p.matchId?`<button class="details-btn" onclick="openColony('${p.matchId}')">${t('details')}</button>`:'')
-    : `<button class="details-btn" onclick="openColony('${p.id}')">${t('details')}</button>`;
+  const detailsBtn = `<button class="details-btn" onclick="openColony('${p.isReal?p.matchId:p.id}')">${t('details')}</button>`;
   return `<div class="colony">
     <div class="colony-head">
       ${orb(p,54)}
-      <div class="pilot-lg" title="${p.character}">${initials(p.character)}</div>
+      <div class="pilot-lg" title="${p.character}">${initials(p.character)}${avatarImg(charIdOf(p.character))}</div>
       <div>
         <div class="pilot-name">${p.character}</div>
         <div class="sub">
@@ -1174,7 +1209,7 @@ function renderDash(){
     box.innerHTML=Object.entries(byPilot).map(([name,items])=>`
       <div class="pilot-row">
         <div class="who">
-          <div class="pilot-lg" style="margin-bottom:4px">${initials(name)}</div>
+          <div class="pilot-lg" style="margin-bottom:4px">${initials(name)}${avatarImg(charIdOf(name))}</div>
           <div class="pilot-name" style="font-size:12px">${name}</div>
           <div class="sub" style="font-size:11px">${pl(items.length,'pColony')}</div>
         </div>
@@ -1436,7 +1471,16 @@ async function loadColonies(){
 
 function fmtLeft(ms){
   if(ms<=0) return t('cycOver');
-  const h=Math.floor(ms/3600000), m=Math.floor(ms%3600000/60000);
+  return fmtDuration(ms);
+}
+
+/* Длительность без семантики «осталось»/«кончилось» — для простоя фабрики
+   (считает вверх с момента, когда кончился последний цикл) настолько же,
+   насколько и для обратного отсчёта. Дни нужны: простой реально бывает
+   многодневным (см. «Idle for 7d 6h 15m» у игры), часов без них — абсурд. */
+function fmtDuration(ms){
+  const d=Math.floor(ms/86400000), h=Math.floor(ms%86400000/3600000), m=Math.floor(ms%3600000/60000);
+  if(d>=1) return `${d} ${t('dUnit')} ${h} ${t('hUnit')}`;
   return h>=1 ? `${h} ${t('hUnit')} ${m} ${t('minUnit')}` : `${m} ${t('minUnit')}`;
 }
 
@@ -1472,8 +1516,15 @@ function realRows(){
     const kinds=(c.structures||[]).map(sd=>sd.kind);
     const role_key=kinds.includes('extractor_control_unit') ? 'mine'
       : kinds.some(k=>k.endsWith('industry_facility')) ? 'proc' : null;
+    const match=matchPlanRow(c);
+    // «Детали» должна открываться у ЛЮБОЙ реальной колонии, не только у
+    // совпавшей со строкой плана: matchId ведёт в панель плана (там есть
+    // CPU/PG), синтетический real:char:planet — в openRealColonyDetail()
+    // (там их честно нет — ESI не отдаёт радиус планеты, без него линки
+    // не посчитать, а показывать оценку без них — как раз то самое
+    // «правдоподобное, но ложное число», которое правило 1 запрещает).
     return {
-      isReal:true, matchId:(matchPlanRow(c)||{}).id||null,
+      isReal:true, matchId:match?match.id:`real:${c.character_id}:${c.planet_id}`,
       character:c.character, system:c.system_name, planet:String(c.planet_index),
       planet_type:ptype, role_key, role_tier:null,
       structures_detail:c.structures||[],
@@ -1513,7 +1564,7 @@ function renderColonies(){
     body=Object.entries(byPilot).map(([name,items])=>`
       <div class="pilot-row">
         <div class="who">
-          <div class="pilot-lg" style="margin-bottom:4px">${initials(name)}</div>
+          <div class="pilot-lg" style="margin-bottom:4px">${initials(name)}${avatarImg(charIdOf(name))}</div>
           <div class="pilot-name" style="font-size:12px">${name}</div>
           <div class="sub" style="font-size:11px">${pl(items.length,'pColony')}</div>
         </div>
@@ -1522,7 +1573,18 @@ function renderColonies(){
   } else if(view==='grid'){
     body=`<div class="grid">${rows.map(p=>orb(p,58)).join('')}</div>`;
   }
-  box.innerHTML=`<div class="colonies"><h3>${t('inGameColonies')}</h3>${body}</div>`;
+  // Простаивает — добывающая колония без запущенной программы (роль
+  // «переработка» тут не считается: фабрика может идти циклом, которого
+  // мы для сводки не проверяли построчно). Требует внимания — программа
+  // экстрактора кончилась или кончается меньше чем через 2 ч. Оба честно
+  // из тех же полей, что и остальной блок, не выдумка.
+  const idleN=rows.filter(p=>p.role_key==='mine'&&!p.nearest_expiry).length;
+  const attnN=rows.filter(p=>{
+    if(p.role_key!=='mine'||!p.nearest_expiry) return false;
+    return Date.parse(p.nearest_expiry)-Date.now()<7200000;
+  }).length;
+  const summary=`${pl(rows.length,'pPlanetN')} · ${idleN} ${t('coloniesIdle')} · ${attnN} ${t('coloniesAttention')}`;
+  box.innerHTML=`<div class="colonies"><h3>${t('inGameColonies')} <span class="colsum">${summary}</span></h3>${body}</div>`;
 }
 
 /* Живой отсчёт: перерисовываем только числа, не весь блок. Работает
@@ -1538,6 +1600,11 @@ setInterval(()=>{
     el.classList.toggle('over', left<=0);
     el.classList.toggle('hot', left<=0);
   });
+  // Прогресс-бар и «простаивает N» у фабрик (см. structureUnitFields)
+  // считаются по last_cycle_start на каждой перерисовке панели — проще
+  // и надёжнее точечных DOM-патчей: юнитов в открытой колонии немного.
+  if(currentColony && document.getElementById('colonyPage').classList.contains('on'))
+    openColony(currentColony);
 }, 60000);
 
 function isk(v){
@@ -1621,84 +1688,211 @@ async function exportPlan(){
 
 /* ── Панель колонии: разбор по структурам, как в игре ─────────── */
 let currentColony=null;
+
+/* Содержимое склада/причала/буфера фабрики — настоящие contents ESI
+   (амаунт + type_id, имя резолвит sync_colony_status.py). Пустой список —
+   это тоже ответ («на складе пусто»), отдельно от «нет данных». */
+function contentsHTML(list){
+  if(!list) return `<div class="meta">${t('noData')}</div>`;
+  if(!list.length) return `<div class="meta">${t('emptyStorage')}</div>`;
+  return list.map(c=>`<div class="meta">
+    ${ids[c.name]?`<img src="${ICON(ids[c.name])}" alt="" style="width:14px;height:14px;vertical-align:-3px;margin-right:3px">`:''}
+    ${nloc(Math.round(c.amount))} × ${c.name||('#'+c.type_id)}</div>`).join('');
+}
+
+/* Поля правой панели одной структуры.
+   ctx.pin — настоящие поштучные данные ESI этого пина (см.
+   scripts/sync_colony_status.py::pin_detail) — есть только у факта из
+   игры, когда колония пересинхронизирована новым кодом. Без него (план,
+   ещё не пересинхронизированный факт) — прежнее поведение.
+
+   ctx.hasLoad=false — у факта из игры без совпавшего плана нет CPU/PG
+   (ESI не отдаёт радиус планеты, без него линки не посчитать — оценка
+   без них была бы «правдоподобным, но ложным» числом, правило 1). */
+function structureUnitFields(kind, ctx){
+  const isStore=kind==='launchpad'||kind==='storage_facility';
+  const isECU=kind==='extractor_control_unit';
+  const isFactory=kind.includes('industry_facility');
+  const pin=ctx.pin;
+
+  if(kind==='command_center'){
+    if(!ctx.hasLoad){
+      return `<div class="cols2">
+        <div><div class="lbl">CPU</div>
+          <div class="meter"><i class="cpu" style="width:0%"></i></div>
+          <div class="meta">${t('noData')}</div></div>
+        <div><div class="lbl">Power</div>
+          <div class="meter"><i class="pg" style="width:0%"></i></div>
+          <div class="meta">${t('noData')}</div></div>
+      </div>`;
+    }
+    const pgb=ctx.pgb||{};
+    return `<div class="cols2">
+      <div><div class="lbl">CPU: ${ctx.cpu.toFixed(1)}%</div>
+        <div class="meter"><i class="cpu" style="width:${Math.min(ctx.cpu,100)}%"></i></div></div>
+      <div><div class="lbl">Power: ${ctx.pg.toFixed(1)}%</div>
+        <div class="meter"><i class="pg${ctx.pg<90?' ok':''}" style="width:${Math.min(ctx.pg,100)}%"></i></div></div>
+    </div>
+    <div class="meta" style="margin-top:6px">
+      ${t('pgFrom')}: ${t('sStruct')} ${pgb.structures||0}% · ${t('sHeads')} ${pgb.heads||0}% · ${t('sLinks')} ${pgb.links||0}%</div>`;
+  }
+
+  if(isStore){
+    const cap=kind==='launchpad'?'10 000':'12 000';
+    return `<div class="cols2">
+      <div><div class="lbl">${t('capCap')}</div>
+        <div class="meter"><i class="ok" style="width:0%;background:var(--ring-infra)"></i></div>
+        <div class="val">${pin?'—':'0'} / ${cap} m³</div></div>
+      <div><div class="lbl">${t('capContent')}</div>${contentsHTML(pin?pin.contents:null)}</div>
+    </div>`;
+  }
+
+  if(isECU){
+    // pin — реальные данные конкретного экстрактора (heads/product из
+    // extractor_details, раньше не читались вовсе).
+    if(pin){
+      if(!pin.expiry_time){
+        return `<div class="cols2">
+          <div><div class="lbl">${t('cycNow')}</div>
+            <div class="meter"><i style="width:0%;background:var(--ring-extract)"></i></div>
+            <div class="meta" style="color:var(--alarm)">${t('cycIdle')}</div></div>
+          <div><div class="lbl">${t('extractsW')}</div>
+            <div class="val">${pin.product||'—'}</div>
+            <div class="meta">${pin.heads?pl(pin.heads,'pHead'):t('heads10')}</div></div>
+        </div>`;
+      }
+      const expMs=Date.parse(pin.expiry_time);
+      return `<div class="cols2">
+        <div><div class="lbl">${t('cycNow')}</div>
+          <div class="meter"><i style="width:0%;background:var(--ring-extract)"></i></div>
+          <div class="val extractor-left" data-exp="${expMs}">${fmtLeft(expMs-Date.now())}</div>
+          <div class="meta">${t('progEnds')}</div></div>
+        <div><div class="lbl">${t('extractsW')}</div>
+          <div class="val">${ids[pin.product]?`<img src="${ICON(ids[pin.product])}" alt="" style="width:14px;height:14px;vertical-align:-3px;margin-right:3px">`:''}${pin.product||'—'}</div>
+          <div class="meta">${pin.heads?pl(pin.heads,'pHead'):t('heads10')}</div></div>
+      </div>`;
+    }
+    const cyc = ctx.expMs!=null
+      ? `<div class="val extractor-left" data-exp="${ctx.expMs}">${fmtLeft(ctx.expMs-Date.now())}</div>
+         <div class="meta">${t('progEnds')}</div>`
+      : ctx.real
+        ? `<div class="meta">${t('cycIdle')}</div>`
+        : `<div class="meta">${t('cycNone')}</div>`;
+    return `<div class="cols2">
+      <div><div class="lbl">${t('cycNow')}</div>
+        <div class="meter"><i style="width:0%;background:var(--ring-extract)"></i></div>
+        ${cyc}</div>
+      <div><div class="lbl">${t('extractsW')}</div>
+        <div class="val">${ctx.resIn||'—'}</div>
+        <div class="meta">${t('heads10')}</div></div>
+    </div>`;
+  }
+
+  if(isFactory){
+    // pin.last_cycle_start + pin.cycle_minutes (продукт и длительность —
+    // с самой ESI, GET /universe/schematics/{id}/, см. schematic_info()
+    // в sync_colony_status.py) — реальный прогресс/простой, не выдумка.
+    if(pin){
+      const cycleEndMs=(pin.last_cycle_start && pin.cycle_minutes)
+        ? Date.parse(pin.last_cycle_start)+pin.cycle_minutes*60000 : null;
+      const now=Date.now();
+      let state;
+      if(cycleEndMs==null){
+        state=`<div class="state-wait">${t('cycUnknown')}</div>
+          <div class="meter"><i style="width:0%"></i></div>
+          <div class="meta">${t('cycNoFactory')}</div>`;
+      } else if(now<cycleEndMs){
+        const total=pin.cycle_minutes*60000, pct=Math.round(100*(total-(cycleEndMs-now))/total);
+        state=`<div class="lbl" style="color:var(--ring-adv)">${t('inProduction')}</div>
+          <div class="meter"><i style="width:${pct}%;background:var(--ring-adv)"></i></div>
+          <div class="meta">${fmtLeft(cycleEndMs-now)}</div>`;
+      } else {
+        state=`<div class="state-wait">${t('cycIdleSince')}</div>
+          <div class="meter"><i style="width:100%"></i></div>
+          <div class="meta">${fmtDuration(now-cycleEndMs)}</div>`;
+      }
+      return `<div class="cols2">
+        <div>${state}</div>
+        <div><div class="lbl">${t('producesW')}</div>
+          <div class="val">${pin.product
+            ?`${ids[pin.product]?`<img src="${ICON(ids[pin.product])}" alt="" style="width:14px;height:14px;vertical-align:-3px;margin-right:3px">`:''}${pin.product}`
+            :'—'}</div>
+          <div class="lbl" style="margin-top:5px">${t('capContent')}</div>
+          ${contentsHTML(pin.contents)}</div>
+      </div>`;
+    }
+    const inputs=(ctx.resIn||'').split(',').map(x=>x.trim()).filter(Boolean);
+    return `<div class="cols2">
+      <div><div class="state-wait">${t('cycUnknown')}</div>
+        <div class="meter"><i style="width:0%"></i></div>
+        <div class="meta">${ctx.real||!ctx.hasLoad?t('cycNoFactory'):t('afterGame')}</div></div>
+      <div><div class="lbl">${t('producesW')}</div>
+        <div class="val">${ctx.resOut||'—'}</div>
+        ${inputs.length?`<div class="lbl" style="margin-top:5px">${t('inputW')}</div>
+        <div class="inputs">${inputs.map(n=>ids[n]
+          ?`<span class="have" title="${n}"><img src="${ICON(ids[n])}" alt=""></span>`
+          :`<span title="${n}">·</span>`).join('')}</div>`:''}</div>
+    </div>`;
+  }
+  return '';
+}
+
+/* Полоса структур панели — общая для плана и факта из игры, когда
+   известен только агрегированный состав (structures_detail: kind+count,
+   без поштучных данных ESI). Для факта из игры с пересинхронизированными
+   пинами используется pinUnitsHTML() — там каждая строка настоящая. */
+function structureUnitsHTML(structuresDetail, planetType, ctx){
+  const units=[];
+  (structuresDetail||[]).forEach(sd=>{ for(let i=0;i<sd.count;i++) units.push(sd.kind); });
+  return units.map((kind,i)=>{
+    const isCC=kind==='command_center';
+    const code=`${String.fromCharCode(65+(i%26))}${i}-${ctx.planetLabel}`;
+    // Единственный экстрактор колонии — однозначное сопоставление с
+    // абстрактной строкой плана (в отличие от N одинаковых фабрик, где
+    // непонятно, какая из них какая: ctx.ecuPin заполняется, только
+    // когда экстрактор ровно один — см. openColony()).
+    const unitCtx=(kind==='extractor_control_unit'&&ctx.ecuPin)?{...ctx,pin:ctx.ecuPin}:ctx;
+    return `<div class="unit">
+      ${structOrb(kind,1,planetType,isCC&&ctx.hasLoad?{cpu:ctx.cpu,pg:ctx.pg,size:52}:{size:52})}
+      <div class="panel">
+        <div class="title">${sname(kind)} <span class="code">${code}</span></div>
+        ${structureUnitFields(kind,unitCtx)}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* Одна строка — один настоящий пин (в отличие от structureUnitsHTML,
+   где пины одного вида схлопнуты в count). Только для факта из игры,
+   когда колония пересинхронизирована с pins (см. Colony.pins). */
+function pinUnitsHTML(pins, planetType, planetLabel){
+  return pins.map((pin,i)=>{
+    const code=`${String.fromCharCode(65+(i%26))}${i}-${planetLabel}`;
+    return `<div class="unit">
+      ${structOrb(pin.kind,1,planetType,{size:52})}
+      <div class="panel">
+        <div class="title">${sname(pin.kind)} <span class="code">${code}</span></div>
+        ${structureUnitFields(pin.kind,{hasLoad:false, pin})}
+      </div>
+    </div>`;
+  }).join('');
+}
+
 function openColony(id){
+  if(String(id).startsWith('real:')) return openRealColonyDetail(id);
   const p=plan.find(x=>x.id===id); if(!p)return;
   currentColony=id;
-  const pgb=p.pg_breakdown||{};
   const planetId=ids['planet:'+p.planet_type];
   const real=matchColony(p);                        // реальная колония из ESI или null
   const char=crew.find(c=>c.name===p.character);    // синхронизированные скиллы персонажа
   const expMs=real&&real.nearest_expiry?Date.parse(real.nearest_expiry):null;
+  const ecuPins=((real&&real.pins)||[]).filter(x=>x.kind==='extractor_control_unit');
 
-  // Разворачиваем состав в отдельные строки: в игре каждая структура —
-  // своя строка со своими показателями, а не одна плашка с числом.
-  const units=[];
-  (p.structures_detail||[]).forEach(sd=>{
-    for(let i=0;i<sd.count;i++) units.push(sd.kind);
+  const body=structureUnitsHTML(p.structures_detail, p.planet_type, {
+    hasLoad:true, cpu:p.cpu_percent, pg:p.pg_percent, pgb:p.pg_breakdown||{},
+    resIn:p.res_in, resOut:p.res_out, real, expMs, planetLabel:p.planet,
+    ecuPin:ecuPins.length===1?ecuPins[0]:null,
   });
-
-  const body=units.map((kind,i)=>{
-    const isFactory=kind.includes('industry_facility');
-    const isCC=kind==='command_center';
-    const isECU=kind==='extractor_control_unit';
-    const isStore=kind==='launchpad'||kind==='storage_facility';
-    const code=`${String.fromCharCode(65+(i%26))}${i}-${p.planet}`;
-
-    let fields='';
-    if(isCC){
-      fields=`<div class="cols2">
-        <div><div class="lbl">CPU: ${p.cpu_percent.toFixed(1)}%</div>
-          <div class="meter"><i class="cpu" style="width:${Math.min(p.cpu_percent,100)}%"></i></div></div>
-        <div><div class="lbl">Power: ${p.pg_percent.toFixed(1)}%</div>
-          <div class="meter"><i class="pg${p.pg_percent<90?' ok':''}" style="width:${Math.min(p.pg_percent,100)}%"></i></div></div>
-      </div>
-      <div class="meta" style="margin-top:6px">
-        ${t('pgFrom')}: ${t('sStruct')} ${pgb.structures||0}% · ${t('sHeads')} ${pgb.heads||0}% · ${t('sLinks')} ${pgb.links||0}%</div>`;
-    } else if(isStore){
-      fields=`<div class="cols2">
-        <div><div class="lbl">${t('capCap')}</div>
-          <div class="meter"><i class="ok" style="width:0%;background:var(--ring-infra)"></i></div>
-          <div class="val">0 / ${kind==='launchpad'?'10 000':'12 000'} m³</div></div>
-        <div><div class="lbl">${t('capContent')}</div><div class="meta">${t('noData')}</div></div>
-      </div>`;
-    } else if(isECU){
-      const cyc = expMs!=null
-        ? `<div class="val extractor-left" data-exp="${expMs}">${fmtLeft(expMs-Date.now())}</div>
-           <div class="meta">${t('progEnds')}</div>`
-        : real
-          ? `<div class="meta">${t('cycIdle')}</div>`
-          : `<div class="meta">${t('cycNone')}</div>`;
-      fields=`<div class="cols2">
-        <div><div class="lbl">${t('cycNow')}</div>
-          <div class="meter"><i style="width:0%;background:var(--ring-extract)"></i></div>
-          ${cyc}</div>
-        <div><div class="lbl">${t('extractsW')}</div>
-          <div class="val">${p.res_in||'—'}</div>
-          <div class="meta">${t('heads10')}</div></div>
-      </div>`;
-    } else if(isFactory){
-      const inputs=(p.res_in||'').split(',').map(x=>x.trim()).filter(Boolean);
-      fields=`<div class="cols2">
-        <div><div class="state-wait">${t('cycUnknown')}</div>
-          <div class="meter"><i style="width:0%"></i></div>
-          <div class="meta">${real?t('cycNoFactory'):t('afterGame')}</div></div>
-        <div><div class="lbl">${t('producesW')}</div>
-          <div class="val">${p.res_out}</div>
-          <div class="lbl" style="margin-top:5px">${t('inputW')}</div>
-          <div class="inputs">${inputs.map(n=>ids[n]
-            ?`<span class="have" title="${n}"><img src="${ICON(ids[n])}" alt=""></span>`
-            :`<span title="${n}">·</span>`).join('')}</div></div>
-      </div>`;
-    }
-
-    return `<div class="unit">
-      ${structOrb(kind,1,p.planet_type,isCC?{cpu:p.cpu_percent,pg:p.pg_percent,size:52}:{size:52})}
-      <div class="panel">
-        <div class="title">${sname(kind)} <span class="code">${code}</span></div>
-        ${fields}
-      </div>
-    </div>`;
-  }).join('');
 
   document.getElementById('colonyPage').innerHTML=`
     <div class="cp-head">
@@ -1721,6 +1915,52 @@ function openColony(id){
 
   document.getElementById('dashBody').style.display='none';
   document.getElementById('shopping').style.display='none';
+  document.getElementById('colonies').style.display='none';
+  document.querySelector('#page-dash .tools').style.display='none';
+  document.getElementById('colonyPage').classList.add('on');
+}
+
+/* Та же панель для реальной колонии без пары в плане — id вида
+   «real:character_id:planet_id» (см. realRows()). Честно без CPU/PG
+   (см. structureUnitFields) — этого без радиуса планеты (ESI его не
+   отдаёт) не посчитать. Остальное — реальные поштучные данные каждого
+   пина (pinUnitsHTML), когда колония пересинхронизирована новым кодом
+   (Colony.pins); до первой такой синхронизации — прежний агрегат. */
+function openRealColonyDetail(id){
+  const [, charId, planetId]=id.split(':');
+  const c=coloniesData.find(x=>String(x.character_id)===charId && String(x.planet_id)===planetId);
+  if(!c) return;
+  currentColony=id;
+  const ptype=c.planet_type?c.planet_type[0].toUpperCase()+c.planet_type.slice(1):'';
+  const expMs=c.nearest_expiry?Date.parse(c.nearest_expiry):null;
+  const row={isReal:true, character:c.character, system:c.system_name,
+    planet:String(c.planet_index), planet_type:ptype, nearest_expiry:c.nearest_expiry,
+    role_key:(c.structures||[]).some(s=>s.kind==='extractor_control_unit')?'mine':
+      (c.structures||[]).some(s=>s.kind.endsWith('industry_facility'))?'proc':null};
+  const char=crew.find(x=>x.name===c.character);
+
+  const body=(c.pins&&c.pins.length)
+    ? pinUnitsHTML(c.pins, ptype, c.planet_index)
+    : structureUnitsHTML(c.structures, ptype, {hasLoad:false, real:c, expMs, planetLabel:c.planet_index});
+
+  document.getElementById('colonyPage').innerHTML=`
+    <div class="cp-head">
+      ${orb(row,58)}
+      <div>
+        <div class="pilot-name">${c.character}${char?` <span class="skills">CCU ${char.ccu} · IC ${char.ic}</span>`:''}</div>
+        <div class="sub">
+          <span class="sysbadge">${c.system_name} ${c.planet_index}</span>
+          <span class="sec" style="color:${secColor(ptype)}">${ptype}</span>
+          <span class="synced">${t('syncedColony')}${c.upgrade_level?` · CC${c.upgrade_level}`:''} · ${pl(c.num_pins,'pPin')}</span>
+        </div>
+      </div>
+      <button class="back" onclick="closeColony()">${t('back')}</button>
+    </div>
+    ${body}`;
+
+  document.getElementById('dashBody').style.display='none';
+  document.getElementById('shopping').style.display='none';
+  document.getElementById('colonies').style.display='none';
   document.querySelector('#page-dash .tools').style.display='none';
   document.getElementById('colonyPage').classList.add('on');
 }
@@ -1730,6 +1970,7 @@ function closeColony(){
   document.getElementById('colonyPage').classList.remove('on');
   document.getElementById('dashBody').style.display='';
   document.getElementById('shopping').style.display='';
+  document.getElementById('colonies').style.display='';
   document.querySelector('#page-dash .tools').style.display='';
 }
 document.addEventListener('keydown',e=>{ if(e.key==='Escape')closeColony(); });
@@ -1874,15 +2115,29 @@ const DOC={
    двух часов) подсвечивается. Карточка колонии выглядит так же, как у
    расчётного плана: та же полоса иконок структур, только состав берётся не
    из шаблона застройки, а из настоящих пинов на планете — колония в игре не
-   обязана совпадать ни с одним из игровых шаблонов. Тот же таймер виден в
-   панели конкретной колонии, если она совпала со строкой плана по персонажу,
-   системе и номеру планеты — тогда у карточки есть кнопка «Детали».
-   Обратный отсчёт браузер считает сам; данные обновляются в фоне.</p>
+   обязана совпадать ни с одним из игровых шаблонов. Портрет персонажа —
+   настоящий, с серверов CCP; пока он не загрузился или персонаж
+   тестовый — показываются инициалы. У каждой карточки есть кнопка
+   «Детали»: если колония совпала со строкой плана по персонажу, системе
+   и номеру планеты — открывается полная панель плана с настоящей
+   загрузкой CPU/Power; если нет — панель с тем же составом структур, но
+   честно без загрузки: ESI не отдаёт радиус планеты, без него линки
+   между постройками не посчитать, а оценка без них была бы обманчивым
+   числом. Обратный отсчёт браузер считает сам; данные обновляются в фоне.</p>
+   <p>В панели каждая структура показывает настоящее состояние: причал и
+   склад — что реально лежит внутри (или честное «пусто»), экстрактор —
+   сколько голов и что именно добывает, базовая/продвинутая/высокотехнологичная
+   фабрика — что производит и идёт ли сейчас цикл («В производстве» с
+   отсчётом до конца) или простаивает в ожидании сырья («Простаивает» —
+   сколько времени, вплоть до нескольких дней). Длительность цикла
+   фабрики берётся у самой ESI (справочник схем производства), а не
+   подгоняется под предположение.</p>
 
    <h3>Чего программа пока не знает</h3>
-   <p>Состояния циклов фабрик и остатков на складах: ESI отдаёт таймеры только
-   для экстракторов. Вместо выдуманных чисел показывается «нет данных»:
-   правдоподобное, но ложное значение хуже честного пробела.</p>
+   <p>У ESI нет радиуса планеты, поэтому загрузка CPU/Power командного центра
+   для колонии без пары в расчётном плане не считается: без радиуса не
+   восстановить длину линков между постройками, а оценка без них была бы
+   обманчивым числом. Вместо выдуманного процента — «нет данных».</p>
    <p>Плотность сырья берётся из статического файла и считается постоянной. В игре
    месторождения истощаются, но живых данных об этом нет ни у кого, кроме самой игры.</p>`},
 
@@ -2016,15 +2271,27 @@ const DOC={
    snapshot from the game — a planet whose program is nearly done (under two hours) is
    highlighted. A colony card looks the same as a plan colony — the same strip of structure
    icons — except the composition comes from the real pins on the planet, not a building
-   template: an in-game colony need not match any of the game templates. The same timer
-   shows in a colony's detail panel when it matches a plan row by character, system and
-   planet number — that card also gets a Details button. The browser runs the countdown
-   itself; the data refreshes in the background.</p>
+   template: an in-game colony need not match any of the game templates. The portrait is
+   real, served from CCP's own servers; until it loads, or for a test character, initials
+   show instead. Every card has a Details button: if the colony matches a plan row by
+   character, system and planet number, it opens the full plan panel with real CPU/Power
+   load; otherwise it opens a panel with the same structures but honestly without load —
+   ESI does not expose planet radius, so the links between buildings can't be computed,
+   and an estimate without them would be a misleading number. The browser runs the
+   countdown itself; the data refreshes in the background.</p>
+   <p>Inside the panel every structure shows its real state: launchpad and storage show
+   what's actually stored (or an honest "empty"), the extractor shows how many heads it
+   has and exactly what it's pulling, and basic/advanced/high-tech facilities show what
+   they produce and whether a cycle is running ("In production" with a countdown) or idle
+   waiting for input ("Idle" — for however long, up to several days). The factory cycle
+   length itself comes straight from ESI's own production-schematic catalogue, not a
+   guess.</p>
 
    <h3>What the program does not know yet</h3>
-   <p>Factory cycle state and storage contents: ESI only exposes timers for extractors.
-   Instead of invented numbers you see “no data” — a plausible but false value is worse
-   than an honest gap.</p>
+   <p>ESI doesn't expose a planet's radius, so CPU/Power load for a colony with no
+   matching plan row isn't computed at all: without the radius there's no way to recover
+   the length of the links between buildings, and an estimate without them would be a
+   misleading number. Instead of an invented percentage you see "no data".</p>
    <p>Resource density comes from a static file and is treated as constant. Deposits do
    deplete in game, but nobody outside the game has live data on that.</p>`}},
 
@@ -2137,6 +2404,10 @@ async function loadCrew(){
     crew=d.characters||[];
   }catch(e){ crew=[]; }
   renderCrew(); loadThresholds();
+  // loadColonies() бежит независимо и может успеть раньше — тогда
+  // аватары (charIdOf смотрит в crew) отрисовались бы без портретов.
+  // Перерисовать план и факт, раз crew уже есть.
+  renderDash(); renderColonies();
 }
 
 async function startLogin(){
@@ -2337,7 +2608,7 @@ function renderCrew(){
     const sys=spread?` · ${plural(spread.system_count,t('sysOne'),t('sysFew'),t('sysMany'))}`:'';
     return `<div title="CCU ${c.ccu} · IC ${c.ic} · ${c.planet_slots} ${t('planetSlots')}${
       spread?' · '+spread.systems.join(', '):''}">
-      <div class="pilot-lg" style="width:22px;height:22px;font-size:9px">${initials(c.name)}</div>
+      <div class="pilot-lg" style="width:22px;height:22px;font-size:9px">${initials(c.name)}${avatarImg(c.character_id)}</div>
       <span>${c.name}</span>
       <span class="lv">${used}/${c.planet_slots}${sys}</span></div>`;
   }).join('')

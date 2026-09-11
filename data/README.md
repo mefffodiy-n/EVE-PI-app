@@ -77,7 +77,10 @@ upgrade head`, наполняется `python -m scripts.seed_dev_characters`
 
 ## cache/, logs/, backups/
 Рантайм, не код, в git нет:
-- `cache/` — снимки цен и статуса сервера (сборщики), `etags.json`;
+- `cache/` — снимки цен и статуса сервера (сборщики), `etags.json`,
+  `schematics.json` (имя продукта и длительность цикла по `schematic_id`
+  ESI, `GET /universe/schematics/{id}/` — статические данные игры,
+  кэшируются, чтобы не запрашивать одно и то же на каждой синхронизации);
 - `logs/` — журналы (`PI_LOG_DIR`), ротация;
 - `backups/` — копии БД (`PI_BACKUP_DIR`, `scripts/backup.py`).
 
