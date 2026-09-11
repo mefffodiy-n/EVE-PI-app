@@ -232,6 +232,59 @@ def schematic_info(client, schematic_id: int) -> dict | None:
     return info
 
 
+VOLUME_CACHE_PATH = ROOT / "data" / "cache" / "type_volumes.json"
+
+# Ёмкость причала/склада — стандартная игровая константа (одинакова у всех
+# построек своего вида, от типа планеты не зависит), не из ESI. Тот же
+# фронтенд уже полагался на эти числа для подписи «X / 10 000 m³» и т.п.
+STORAGE_CAPACITY_M3 = {"launchpad": 10_000, "storage_facility": 12_000}
+
+
+def _load_volume_cache() -> dict[str, float]:
+    if not VOLUME_CACHE_PATH.is_file():
+        return {}
+    try:
+        return json.loads(VOLUME_CACHE_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def _save_volume_cache(cache: dict) -> None:
+    VOLUME_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    VOLUME_CACHE_PATH.write_text(
+        json.dumps(cache, ensure_ascii=False, indent=1), encoding="utf-8"
+    )
+
+
+def type_volume(client, type_id: int) -> float | None:
+    """
+    Объём одной единицы предмета (м³) — `GET /universe/types/{id}/`, поле
+    "volume". Публичные статические данные игры, не меняются — кэшируется
+    на диске, как schematic_info().
+
+    ЗАЧЕМ. Заполненность причала/склада в интерфейсе всегда показывала
+    «нет данных»: реальное содержимое (contents — состав и количество)
+    ESI отдаёт пином, но объём одной единицы предмета — нет, а без него
+    «штук» не перевести в «м³ из ёмкости». Раньше это просто не запрашивалось.
+    """
+    from scripts.esi_client import EsiError
+
+    cache = _load_volume_cache()
+    key = str(type_id)
+    if key in cache:
+        return cache[key]
+    try:
+        response = client.get(f"/universe/types/{type_id}/")
+    except EsiError:
+        return None
+    if not isinstance(response.data, dict):
+        return None
+    volume = response.data.get("volume")
+    cache[key] = volume
+    _save_volume_cache(cache)
+    return volume
+
+
 def _content_list(pin: dict) -> list[dict]:
     """Содержимое пина (склад/причал/буфер фабрики) — реальные contents ESI."""
     names = _name_by_type_id()
@@ -244,6 +297,22 @@ def _content_list(pin: dict) -> list[dict]:
             "amount": item.get("amount"),
         })
     return out
+
+
+def _used_volume_m3(contents: list[dict], client) -> float | None:
+    """
+    Занятый объём склада/причала по реальному содержимому.
+
+    Честно: None, если хоть для одного предмета объём не удалось узнать —
+    частичная сумма выглядела бы как полная (правило 1), а лучше пробел.
+    """
+    total = 0.0
+    for item in contents:
+        volume = type_volume(client, item["type_id"])
+        if volume is None or item.get("amount") is None:
+            return None
+        total += volume * item["amount"]
+    return round(total, 2)
 
 
 def pin_detail(pin: dict, kind: str, client) -> dict:
@@ -277,7 +346,12 @@ def pin_detail(pin: dict, kind: str, client) -> dict:
             "contents": _content_list(pin),
         })
     elif kind in ("launchpad", "storage_facility"):
-        detail["contents"] = _content_list(pin)
+        contents = _content_list(pin)
+        detail.update({
+            "contents": contents,
+            "used_m3": _used_volume_m3(contents, client),
+            "capacity_m3": STORAGE_CAPACITY_M3[kind],
+        })
 
     return detail
 
