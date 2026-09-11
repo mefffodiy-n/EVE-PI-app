@@ -61,13 +61,22 @@ def calculate():
             f"Максимум {MAX_TARGET_PRODUCTS} за один расчёт."
         )
 
-    key = cache_key(sorted(constellations), factory_sys, sorted(targets),
+    from api.session import current_account_id
+
+    account_id = current_account_id()
+    # account_id — первый в ключе кэша не для порядка, а по необходимости:
+    # без него один и тот же набор параметров у двух разных пользователей
+    # (разные персонажи!) вернул бы план ОДНОГО из них другому из кэша
+    # (найдено 11.09.2026, тот же класс ошибки, что и в load_characters()).
+    key = cache_key(account_id, sorted(constellations), factory_sys, sorted(targets),
                     allow_single, surplus_mining, direct_p2)
 
     def compute() -> PlanResult:
-        # Персонажи: на Фазе 1 — dev-заглушки, в Фазе 3 те же поля придут
-        # из sync_character_skills. Планировщик об источнике не знает.
-        characters = load_characters()
+        # Персонажи — только этого визита (api/session.py). На Фазе 1
+        # были dev-заглушки, с Фазы 3 те же поля приходят из
+        # sync_character_skills для реальных — планировщик об источнике
+        # не знает, знает только про счёт «свои/чужие».
+        characters = load_characters(account_id)
         if not characters:
             empty = PlanResult()
             empty.warn("no_characters")
@@ -113,9 +122,10 @@ def advice():
     if not targets:
         return json_error("Не выбрано ни одного целевого продукта")
 
+    from api.session import current_account_id
     from scripts.seed_dev_characters import load_characters
 
-    characters = load_characters()
+    characters = load_characters(current_account_id())
     if not characters:
         return json_error("Нет персонажей — вместимость считать не от чего", 503)
 
@@ -143,13 +153,16 @@ def advice():
 
 @bp.get("/plans")
 def list_saved():
+    """Планы только этого визита (api/session.py) — не все сохранённые кем угодно."""
+    from api.session import current_account_id
     from domain.plan_storage import list_plans
 
-    return json_ok(plans=[p.summary() for p in list_plans()])
+    return json_ok(plans=[p.summary() for p in list_plans(current_account_id())])
 
 
 @bp.post("/plans")
 def save_plan():
+    from api.session import current_account_id
     from domain.plan_storage import PlanStorageError, save
 
     payload, error = parse_json_body({"rows": list})
@@ -163,6 +176,7 @@ def save_plan():
             rows=payload["rows"],
             warnings=payload.get("warnings") or [],
             assumptions=payload.get("assumptions") or [],
+            account_id=current_account_id(),
         )
     except PlanStorageError as exc:
         return json_error(str(exc))
@@ -172,10 +186,15 @@ def save_plan():
 
 @bp.get("/plans/<plan_id>")
 def get_plan(plan_id: str):
+    """
+    Чужой план (или несуществующий) — одна и та же ошибка «не найден»,
+    не различить снаружи: не палить сам факт существования plan_id.
+    """
+    from api.session import current_account_id
     from domain.plan_storage import PlanStorageError, load
 
     try:
-        plan = load(plan_id)
+        plan = load(plan_id, current_account_id())
     except PlanStorageError as exc:
         return json_error(str(exc), 404)
     return json_ok(plan=plan.to_dict())
@@ -183,10 +202,11 @@ def get_plan(plan_id: str):
 
 @bp.delete("/plans/<plan_id>")
 def remove_plan(plan_id: str):
+    from api.session import current_account_id
     from domain.plan_storage import PlanStorageError, delete
 
     try:
-        removed = delete(plan_id)
+        removed = delete(plan_id, current_account_id())
     except PlanStorageError as exc:
         return json_error(str(exc))
     if not removed:
@@ -201,10 +221,12 @@ def compare_plans():
 
     Отдаёт не только разницу в числах, но и перечень колоний, которые
     появились или исчезли: «на три планеты меньше» не отвечает на
-    вопрос, каких именно.
+    вопрос, каких именно. Оба плана обязаны принадлежать этому визиту —
+    иначе та же честная ошибка «не найден», что и у /plans/<id>.
     """
     from flask import request as flask_request
 
+    from api.session import current_account_id
     from domain.plan_storage import PlanStorageError, compare
 
     left = flask_request.args.get("left")
@@ -213,7 +235,7 @@ def compare_plans():
         return json_error("Нужны оба идентификатора: left и right")
 
     try:
-        return json_ok(**compare(left, right))
+        return json_ok(**compare(left, right, current_account_id()))
     except PlanStorageError as exc:
         return json_error(str(exc), 404)
 

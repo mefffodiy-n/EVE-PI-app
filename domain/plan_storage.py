@@ -10,9 +10,11 @@
 напарнику было бы нельзя.
 
 Раньше это были json-файлы в data/plans/. Замена на БД (Фаза 3): к плану
-привяжется владелец (`account_id`, пока NULL). Публичный интерфейс —
-save/list/load/delete/compare — не изменился, поэтому api/ и тесты
-править не пришлось.
+привязан владелец (`account_id`, `infra/models.py::Plan`). В dev —
+однопользовательская среда, account_id игнорируется. В проде save()
+требует account_id (иначе план некому будет потом показать — см. save()),
+а list/load/delete/compare без account_id или с чужим отдают то же, что
+и для несуществующего плана: не палим сам факт существования plan_id.
 """
 
 from __future__ import annotations
@@ -46,6 +48,7 @@ class StoredPlan:
     rows: list[dict]
     warnings: list[str] = field(default_factory=list)
     assumptions: list[str] = field(default_factory=list)
+    account_id: str | None = None
 
     def summary(self) -> dict:
         """Краткая карточка для списка — без строк плана, они тяжёлые."""
@@ -89,6 +92,7 @@ class StoredPlan:
             rows=row.rows or [],
             warnings=row.warnings or [],
             assumptions=row.assumptions or [],
+            account_id=row.account_id,
         )
 
 
@@ -100,10 +104,24 @@ def _valid_id(plan_id: str) -> str:
 
 def save(name: str, request: dict, rows: list[dict],
          warnings: list[str] | None = None,
-         assumptions: list[str] | None = None) -> StoredPlan:
-    """Сохранить план под заданным именем."""
+         assumptions: list[str] | None = None,
+         account_id: str | None = None) -> StoredPlan:
+    """
+    Сохранить план под заданным именем.
+
+    account_id — чей это план (api/session.py). В dev — без ограничения
+    (см. _dev_unrestricted()). В проде account_id=None означает визит без
+    входа через SSO: сохранять некуда — раз list_plans()/load() в проде
+    честно не покажут план без account_id никому (см. их докстринги),
+    сохранённая под NULL строка была бы просто мёртвым весом в БД, и
+    хуже — молчаливой потерей плана для пользователя, который решит, что
+    он сохранён. Явная ошибка лучше тихо потерянного плана.
+    """
     from infra.db import session_scope
     from infra.models import Plan
+
+    if not _dev_unrestricted() and account_id is None:
+        raise PlanStorageError("Войдите через EVE SSO, чтобы сохранять планы")
 
     name = (name or "").strip() or f"План от {datetime.now().strftime('%d.%m %H:%M')}"
     if len(name) > MAX_NAME_LENGTH:
@@ -121,10 +139,13 @@ def save(name: str, request: dict, rows: list[dict],
         rows=rows,
         warnings=list(warnings or []),
         assumptions=list(assumptions or []),
+        account_id=account_id,
     )
 
     with session_scope() as session:
-        count = session.scalar(select(func.count()).select_from(Plan)) or 0
+        count = session.scalar(
+            select(func.count()).select_from(Plan).where(Plan.account_id == account_id)
+        ) or 0
         if count >= MAX_PLANS:
             raise PlanStorageError(
                 f"Сохранено уже {count} планов, это предел. "
@@ -134,35 +155,69 @@ def save(name: str, request: dict, rows: list[dict],
             id=plan.id, name=plan.name, created_at=plan.created_at,
             request=plan.request, rows=plan.rows,
             warnings=plan.warnings, assumptions=plan.assumptions,
+            account_id=plan.account_id,
         ))
 
     return plan
 
 
-def load(plan_id: str) -> StoredPlan:
+def _dev_unrestricted() -> bool:
+    """
+    Тот же байпас, что у scripts/seed_dev_characters.py::load_characters():
+    в dev (однопользовательская среда, сессии не имеют смысла) account_id
+    целиком игнорируется — иначе ломались бы все места, где план читают
+    без понятия о сессии (скрипты, тесты, scripts/diagnose.py).
+    """
+    from infra import config
+
+    return config.IS_DEV
+
+
+def load(plan_id: str, account_id: str | None = None) -> StoredPlan:
+    """
+    В dev — без ограничения доступа (см. _dev_unrestricted()). В проде
+    account_id=None означает «визит не входил через SSO» — честное «не
+    найдено», как и для чужого плана: не палим самим кодом ошибки, что
+    plan_id вообще существует, просто принадлежит не тебе.
+    """
     from infra.db import session_scope
     from infra.models import Plan
 
+    unrestricted = _dev_unrestricted()
     _valid_id(plan_id)
     with session_scope() as session:
         row = session.get(Plan, plan_id)
         if row is None:
             raise PlanStorageError("План не найден — возможно, он был удалён")
+        if not unrestricted and row.account_id != account_id:
+            raise PlanStorageError("План не найден — возможно, он был удалён")
         return StoredPlan._from_row(row)
 
 
-def list_plans() -> list[StoredPlan]:
-    """Все сохранённые планы, новые первыми."""
+def list_plans(account_id: str | None = None) -> list[StoredPlan]:
+    """
+    Сохранённые планы, новые первыми.
+
+    В dev — без фильтрации (см. _dev_unrestricted()). В проде
+    account_id=None (визит не входил через SSO) — честно пустой список,
+    а не все планы подряд; иначе — только планы этого account_id.
+    """
     from sqlalchemy.exc import OperationalError
 
     from infra.db import session_scope
     from infra.models import Plan
 
+    unrestricted = _dev_unrestricted()
+    if not unrestricted and account_id is None:
+        return []
+
+    query = select(Plan).order_by(Plan.created_at.desc())
+    if not unrestricted:
+        query = query.where(Plan.account_id == account_id)
+
     try:
         with session_scope() as session:
-            rows = session.scalars(
-                select(Plan).order_by(Plan.created_at.desc())
-            ).all()
+            rows = session.scalars(query).all()
             return [StoredPlan._from_row(r) for r in rows]
     except OperationalError:
         # Нет таблицы (свежий клон без `alembic upgrade`) — пустой список,
@@ -170,27 +225,33 @@ def list_plans() -> list[StoredPlan]:
         return []
 
 
-def delete(plan_id: str) -> bool:
+def delete(plan_id: str, account_id: str | None = None) -> bool:
+    """В dev — без ограничения доступа (см. load())."""
     from infra.db import session_scope
     from infra.models import Plan
 
+    unrestricted = _dev_unrestricted()
     _valid_id(plan_id)
+    if not unrestricted and account_id is None:
+        return False
     with session_scope() as session:
         row = session.get(Plan, plan_id)
         if row is None:
+            return False
+        if not unrestricted and row.account_id != account_id:
             return False
         session.delete(row)
     return True
 
 
-def compare(left_id: str, right_id: str) -> dict:
+def compare(left_id: str, right_id: str, account_id: str | None = None) -> dict:
     """
     Сравнить два плана.
 
     Показывает не только числа, но и что именно изменилось по колониям:
     сводка «на 3 планеты меньше» не отвечает на вопрос, каких именно.
     """
-    left, right = load(left_id), load(right_id)
+    left, right = load(left_id, account_id), load(right_id, account_id)
 
     def key(row: dict) -> tuple:
         return (str(row.get("system")), str(row.get("planet")), str(row.get("res_out")))

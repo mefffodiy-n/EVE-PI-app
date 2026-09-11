@@ -30,6 +30,8 @@ Flask-приложение — только HTTP-слой.
 from __future__ import annotations
 
 import os
+import secrets
+from datetime import timedelta
 from pathlib import Path
 
 from flask import Flask, jsonify, send_from_directory
@@ -47,6 +49,7 @@ def create_app(config: dict | None = None) -> Flask:
     """
     app = Flask(__name__, static_folder=None)
     app.config.setdefault("JSON_SORT_KEYS", False)
+    _configure_session(app)
     if config:
         app.config.update(config)
 
@@ -74,6 +77,35 @@ def create_app(config: dict | None = None) -> Flask:
     _register_dev_cors(app)
     _register_web(app)
     return app
+
+
+def _configure_session(app: Flask) -> None:
+    """
+    Cookie сессии — единственный способ узнать, ЧЕЙ это визит (см.
+    api/session.py). Без PI_SESSION_KEY в окружении подписываем разовым
+    ключом на процесс: сессии переживут запрос, но не рестарт/деплой —
+    хуже для UX (все выходят из аккаунта), но не дыра — никогда не бывает
+    так, что чужая подпись случайно совпадает с этим процессом.
+    """
+    from infra import config
+
+    if config.SESSION_SECRET_KEY:
+        app.secret_key = config.SESSION_SECRET_KEY
+    else:
+        app.secret_key = secrets.token_hex(32)
+        if not app.config.get("TESTING"):
+            app.logger.warning(
+                "PI_SESSION_KEY не задан — сессии подписаны одноразовым "
+                "ключом процесса и не переживут перезапуск. Сгенерируйте: "
+                "python -c \"import secrets; print(secrets.token_hex(32))\""
+            )
+
+    app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=90)
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+    # Secure-cookie (только по HTTPS) везде, кроме локальной разработки —
+    # там сервер обычно поднят на голом http://localhost.
+    app.config["SESSION_COOKIE_SECURE"] = not config.IS_DEV
 
 
 def _register_dev_cors(app: Flask) -> None:
