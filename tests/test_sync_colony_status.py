@@ -13,7 +13,7 @@ import pytest
 from infra import config, crypto
 from infra.credentials import save_tokens
 from infra.db import session_scope
-from infra.models import Character, Colony
+from infra.models import Character, Colony, ExtractionSample
 from scripts import sync_colony_status as sync
 from scripts.esi_client import EsiClient
 
@@ -198,6 +198,7 @@ class TestPinDetail:
         with_names = sync._name_by_type_id  # прогреть кэш реальными данными
         with_names.cache_clear()
         pin = {
+            "pin_id": 42,
             "expiry_time": "2026-09-11T14:45:01Z",
             "install_time": "2026-09-10T14:45:01Z",
             "extractor_details": {
@@ -206,8 +207,10 @@ class TestPinDetail:
             },
         }
         detail = sync.pin_detail(pin, "extractor_control_unit", client=None)
+        assert detail["pin_id"] == 42
         assert detail["heads"] == 10
         assert detail["product"] == "Suspended Plasma"
+        assert detail["product_type_id"] == 2308
         assert detail["qty_per_cycle"] == 5770
         assert detail["cycle_seconds"] == 900
         assert detail["expiry_time"] == "2026-09-11T14:45:01Z"
@@ -301,6 +304,54 @@ class TestRealColonyLoad:
         load = sync.real_colony_load(structures, [], link_count=0, system="57-KJB",
                                       planet_index_=1, ccu_level=5)
         assert load["cpu_percent"] is not None and load["pg_percent"] is not None
+
+
+class TestRecordExtractionSamples:
+    """
+    record_extraction_samples() — история скорости добычи копится по
+    каждому вызову, а не перезаписывается (ExtractionSample), потому что
+    ESI сама историю не хранит — только текущий снимок.
+    """
+
+    def test_appends_one_sample_per_extractor_pin(self):
+        pins = [
+            {"kind": "command_center"},
+            {"kind": "extractor_control_unit", "pin_id": 111,
+             "product_type_id": 2308, "qty_per_cycle": 5770, "cycle_seconds": 900},
+        ]
+        with session_scope() as s:
+            sync.record_extraction_samples(s, character_id=1, planet_id=2, pins=pins)
+        with session_scope() as s:
+            rows = s.query(ExtractionSample).all()
+            assert len(rows) == 1
+            assert rows[0].character_id == 1
+            assert rows[0].planet_id == 2
+            assert rows[0].pin_id == 111
+            assert rows[0].product_type_id == 2308
+            assert rows[0].qty_per_cycle == 5770
+            assert rows[0].cycle_seconds == 900
+
+    def test_skips_pins_without_rate_data(self):
+        """Простаивающий экстрактор (программа не запущена) — нечего записывать."""
+        pins = [
+            {"kind": "extractor_control_unit", "pin_id": 111,
+             "qty_per_cycle": None, "cycle_seconds": None},
+        ]
+        with session_scope() as s:
+            sync.record_extraction_samples(s, character_id=1, planet_id=2, pins=pins)
+        with session_scope() as s:
+            assert s.query(ExtractionSample).count() == 0
+
+    def test_two_syncs_accumulate_two_samples(self):
+        """История растёт, а не перезаписывается на каждом снимке."""
+        pins = [{"kind": "extractor_control_unit", "pin_id": 111,
+                  "product_type_id": 2308, "qty_per_cycle": 5770, "cycle_seconds": 900}]
+        with session_scope() as s:
+            sync.record_extraction_samples(s, character_id=1, planet_id=2, pins=pins)
+        with session_scope() as s:
+            sync.record_extraction_samples(s, character_id=1, planet_id=2, pins=pins)
+        with session_scope() as s:
+            assert s.query(ExtractionSample).count() == 2
 
 
 class TestSync:

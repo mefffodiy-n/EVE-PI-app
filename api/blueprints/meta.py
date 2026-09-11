@@ -124,11 +124,13 @@ def colonies():
     hours_left не считаем на сервере: фронтенд получает nearest_expiry
     и обновляет обратный отсчёт без повторного запроса.
     """
+    import copy
+
     from sqlalchemy import select
     from sqlalchemy.exc import OperationalError
 
     from infra.db import session_scope
-    from infra.models import Character, Colony
+    from infra.models import Character, Colony, ExtractionSample
 
     try:
         with session_scope() as session:
@@ -136,8 +138,35 @@ def colonies():
             rows = session.scalars(
                 select(Colony).order_by(Colony.nearest_expiry.is_(None), Colony.nearest_expiry)
             ).all()
-            payload = [
-                {
+
+            # История добычи по каждому экстрактору — копится
+            # sync_colony_status.py::record_extraction_samples(), ESI сама
+            # историю не хранит. Один запрос на все колонии разом, группировка
+            # по (character_id, planet_id, pin_id) в Python — таблица новая,
+            # объём пока небольшой, отдельный запрос на пин был бы overkill.
+            samples_by_pin: dict[tuple[int, int, int], list[ExtractionSample]] = {}
+            for sample in session.scalars(
+                select(ExtractionSample).order_by(ExtractionSample.sampled_at)
+            ):
+                key = (sample.character_id, sample.planet_id, sample.pin_id)
+                samples_by_pin.setdefault(key, []).append(sample)
+
+            payload = []
+            for row in rows:
+                pins = copy.deepcopy(row.pins or [])
+                for pin in pins:
+                    if pin.get("kind") != "extractor_control_unit" or pin.get("pin_id") is None:
+                        continue
+                    key = (row.character_id, row.planet_id, int(pin["pin_id"]))
+                    pin["extraction_history"] = [
+                        {
+                            "sampled_at": s.sampled_at.isoformat(),
+                            "qty_per_cycle": s.qty_per_cycle,
+                            "cycle_seconds": s.cycle_seconds,
+                        }
+                        for s in samples_by_pin.get(key, [])
+                    ]
+                payload.append({
                     "character": names.get(row.character_id, str(row.character_id)),
                     "character_id": row.character_id,
                     "planet_id": row.planet_id,
@@ -148,7 +177,7 @@ def colonies():
                     "upgrade_level": row.upgrade_level,
                     "num_pins": row.num_pins,
                     "structures": row.structures or [],
-                    "pins": row.pins or [],
+                    "pins": pins,
                     "cpu_percent": row.cpu_percent,
                     "pg_percent": row.pg_percent,
                     "cpu_used": row.cpu_used,
@@ -157,9 +186,7 @@ def colonies():
                     "pg_capacity": row.pg_capacity,
                     "nearest_expiry": row.nearest_expiry.isoformat() if row.nearest_expiry else None,
                     "synced_at": row.synced_at.isoformat() if row.synced_at else None,
-                }
-                for row in rows
-            ]
+                })
     except OperationalError:
         payload = []
 

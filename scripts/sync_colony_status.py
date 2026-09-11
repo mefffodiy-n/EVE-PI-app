@@ -206,6 +206,31 @@ def real_colony_load(
     }
 
 
+def record_extraction_samples(session, character_id: int, planet_id: int, pins: list[dict]) -> None:
+    """
+    Снимок расчётной скорости КАЖДОГО экстрактора планеты — копится, а не
+    перезаписывается (см. ExtractionSample). ESI истории не хранит, отдаёт
+    только qty_per_cycle/cycle_time на момент снимка; вызывается только
+    когда сами pins свежие (не detail.from_cache) — та же частота, что и
+    у остального снимка, лишних повторов не пишет.
+    """
+    from infra.models import ExtractionSample
+
+    for pin in pins:
+        if pin.get("kind") != "extractor_control_unit":
+            continue
+        if pin.get("qty_per_cycle") is None or pin.get("cycle_seconds") is None:
+            continue
+        pin_id = pin.get("pin_id")
+        if pin_id is None:
+            continue
+        session.add(ExtractionSample(
+            character_id=character_id, planet_id=planet_id, pin_id=int(pin_id),
+            product_type_id=pin.get("product_type_id"),
+            qty_per_cycle=pin.get("qty_per_cycle"), cycle_seconds=pin.get("cycle_seconds"),
+        ))
+
+
 @lru_cache(maxsize=1)
 def _name_by_type_id() -> dict[int, str]:
     """
@@ -388,8 +413,10 @@ def pin_detail(pin: dict, kind: str, client) -> dict:
         ed = pin.get("extractor_details") or {}
         product_id = ed.get("product_type_id")
         detail.update({
+            "pin_id": pin.get("pin_id"),
             "heads": len(ed.get("heads") or []) or None,
             "product": _name_by_type_id().get(int(product_id)) if product_id else None,
+            "product_type_id": int(product_id) if product_id else None,
             "qty_per_cycle": ed.get("qty_per_cycle"),
             "cycle_seconds": ed.get("cycle_time"),
             "install_time": pin.get("install_time"),
@@ -525,6 +552,7 @@ def sync_one(client, session, character) -> str:
                 fields.update(real_colony_load(
                     structures or [], raw_pins, link_count, system, idx, ccu_level,
                 ))
+                record_extraction_samples(session, cid, planet_id, pins or [])
             if row is None:
                 session.add(Colony(character_id=cid, planet_id=planet_id, **fields))
             else:
