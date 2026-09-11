@@ -139,6 +139,7 @@ def colonies():
             payload = [
                 {
                     "character": names.get(row.character_id, str(row.character_id)),
+                    "character_id": row.character_id,
                     "planet_id": row.planet_id,
                     "planet_name": row.planet_name,
                     "system_name": row.system_name,
