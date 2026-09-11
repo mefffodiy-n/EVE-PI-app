@@ -1,8 +1,8 @@
 """
 Целостность фронтенда и единственность версии.
 
-ПОЧЕМУ ЭТИ ПРОВЕРКИ ЕСТЬ. Обе проблемы уже случались в проекте, и обе
-прошли незамеченными до жалобы пользователя:
+ПОЧЕМУ ЭТИ ПРОВЕРКИ ЕСТЬ. Все три проблемы уже случались в проекте, и
+все прошли незамеченными до жалобы пользователя:
 
   1. Сломанный CSS. При замене первой строки многострочного правила
      оставался его хвост — объявление вне блока. Парсер принимает такое
@@ -14,6 +14,19 @@
   2. Разъехавшиеся версии. Номер был вписан в трёх местах и стал разным:
      0.5.0, 0.6.0 и 0.1.0 одновременно.
 
+  3. Оборванный template literal (11.09.2026). Текст справки — часть
+     JS template literal (`html:` ... `). Внутри самого текста добавили
+     markdown-стиля обратные кавычки вокруг `schematic_id` — они
+     преждевременно ЗАКРЫЛИ литерал, а дальше пошёл «голый» идентификатор
+     сразу после выражения — SyntaxError. `test_braces_are_balanced` этого
+     не ловит: фигурные скобки были в порядке, а сама ошибка —
+     грамматическая («два выражения подряд без оператора»), не просто
+     непарные кавычки — её не поймать подсчётом кавычек, нужен настоящий
+     разбор грамматики. Весь фронтенд переставал выполняться (SyntaxError
+     в каждом браузере) — обнаружено только вживую на боевом сервере.
+     `test_script_is_valid_javascript` разбирает <script> настоящим
+     JS-парсером (esprima) — детали и ограничение в его докстринге.
+
 Тесты дешёвые и запускаются вместе с остальными.
 """
 
@@ -22,6 +35,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import esprima
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -51,6 +65,50 @@ def _frontend() -> tuple[str, str]:
 def _style_block(text: str) -> str:
     start = text.index("<style>") + len("<style>")
     return text[start : text.index("</style>")]
+
+
+# ?.foo / ?.[i] / ?.() и ?? не понимает esprima (целится в ES2017-ish),
+# а в файле реально встречаются (web/index.html: `.match(...)?.[1]`,
+# `localStorage.getItem(k) ?? fallback`). Для ПРОВЕРКИ СИНТАКСИСА это
+# безопасно заменить на семантически другой, но структурно эквивалентный
+# код (не для исполнения — только чтобы парсер не спотыкался на токене,
+# которого не знает): `?.[`/`?.(` убираются целиком (обычный доступ по
+# индексу/вызов), одиночный `?.` -> `.`, `??` -> `||`. Ни один из этих
+# токенов не влияет на то, что мы на самом деле проверяем — вложенность
+# template literals, строк и скобок.
+_OPTIONAL_CHAIN_BEFORE_BRACKET = re.compile(r"\?\.(?=[\[\(])")
+
+
+def _js_syntax_errors(script: str) -> list[str]:
+    """
+    Разобрать JS настоящим парсером (esprima) и вернуть список ошибок
+    (пусто — синтаксис в порядке).
+
+    ПОЧЕМУ ESPRIMA, А НЕ САМОДЕЛЬНЫЙ СКАНЕР. Первая версия этого теста
+    была ручным сканером парности обратных кавычек/строк/скобок — и не
+    ловила сам баг 11.09.2026: там ДВЕ пары обратных кавычек (значит,
+    чётное число, «сбалансировано» с точки зрения подсчёта), но между
+    ними — «голое» слово, не являющееся допустимым продолжением
+    выражения. Это ГРАММАТИЧЕСКАЯ ошибка («два выражения подряд без
+    оператора»), а не лексическая непарность — поймать её можно только
+    настоящим разбором грамматики, не подсчётом кавычек.
+
+    ПОЧЕМУ НЕ NODE. `node --check` был бы так же надёжен, но Node.js в
+    этом окружении разработки не установлен — тест на такой машине
+    молча не находил бы сломанный файл.
+
+    ОГРАНИЧЕНИЕ: перед разбором заменяются `?.`/`??` (esprima их не
+    знает, см. комментарий у _OPTIONAL_CHAIN_BEFORE_BRACKET) — сама
+    семантика optional chaining этим тестом не проверяется, только
+    синтаксис вокруг неё.
+    """
+    safe = _OPTIONAL_CHAIN_BEFORE_BRACKET.sub("", script)
+    safe = safe.replace("?.", ".").replace("??", "||")
+    try:
+        esprima.parseScript(safe)
+    except Exception as exc:  # esprima.Error — не публичный класс модуля
+        return [str(exc)]
+    return []
 
 
 class TestStylesheet:
@@ -216,6 +274,67 @@ class TestScript:
         assert not found, (
             f"{name}: определения функций вне <script>: {', '.join(found[:5])}"
         )
+
+    def test_script_is_valid_javascript(self):
+        """
+        11.09.2026: markdown-стиля обратные кавычки внутри текста справки
+        (самой являющегося JS template literal) преждевременно закрыли
+        литерал, а следующее слово стало «голым» — SyntaxError в каждом
+        браузере, страница пустая. `test_braces_are_balanced` этого не
+        ловит (фигурные скобки были в порядке — ошибка не в них). См.
+        докстрайн _js_syntax_errors() — почему нужен настоящий парсер,
+        а не подсчёт кавычек.
+        """
+        name, text = _frontend()
+        script = text[text.rindex("<script>") + len("<script>") : text.rindex("</script>")]
+        errors = _js_syntax_errors(script)
+        assert not errors, f"{name}: <script> не парсится как JS — {'; '.join(errors)}"
+
+
+class TestJsSyntaxErrors:
+    """
+    _js_syntax_errors() — на синтетических примерах, не на реальном файле:
+    тест целостности выше проверяет файл, эти — что сама проверка не
+    путает корректный код с ошибкой и наоборот.
+    """
+
+    def test_plain_template_is_valid(self):
+        assert _js_syntax_errors("const s = `hello world`;") == []
+
+    def test_interpolation_with_nested_braces_is_valid(self):
+        # ${...} с вложенными {} (объектный литерал) и строкой внутри —
+        # ровно то, чем полон web/index.html.
+        js = "const s = `x ${ (function(){ return {a:1}; })() } y ${'a}b'}`;"
+        assert _js_syntax_errors(js) == []
+
+    def test_nested_template_literal_is_valid(self):
+        js = "const s = `outer ${ `inner ${1+1}` } end`;"
+        assert _js_syntax_errors(js) == []
+
+    def test_optional_chaining_and_nullish_are_tolerated(self):
+        # Ради этих двух конструкций и появилась замена ?./?? перед
+        # разбором — без неё esprima падает на корректном коде.
+        js = "const a = (x.match(/y/)?.[1]) ?? 'z'; const b = obj?.foo?.();"
+        assert _js_syntax_errors(js) == []
+
+    def test_stray_backtick_pair_inside_template_is_caught(self):
+        """
+        Ровно баг 11.09.2026: markdown-код `schematic_id` внутри текста,
+        который сам лежит в template literal — две пары обратных кавычек
+        (чётное число, «сбалансировано» для подсчёта), но между ними —
+        голое слово, невалидное продолжение выражения.
+        """
+        js = "const html = `some text with `schematic_id` inside`;"
+        assert _js_syntax_errors(js), "обязано заметить преждевременно закрытый литерал"
+
+    def test_unclosed_template_at_eof_is_caught(self):
+        assert _js_syntax_errors("const s = `never closed")
+
+    def test_unclosed_interpolation_is_caught(self):
+        assert _js_syntax_errors("const s = `x ${1+1 never closed`;")
+
+    def test_genuinely_invalid_syntax_is_caught(self):
+        assert _js_syntax_errors("function f( { return 1; }")
 
 
 class TestVersion:
