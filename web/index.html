@@ -178,6 +178,11 @@ button { font-family:inherit; }
 .orb .disc img { width:100%; height:100%; object-fit:cover; }
 .orb .cargo { position:absolute; inset:0; margin:auto; width:52%; height:52%;
               filter:drop-shadow(0 1px 2px rgba(0,0,0,.8)); }
+/* «Требует внимания» (программа кончилась или причал забит) — вместо
+   иконки ресурса красный знак запрета. Это UI-состояние, не тип предмета
+   из игры, поэтому рисуется как SVG, а не берётся с images.evetech.net. */
+.orb .cargo.alert { fill:none; stroke:var(--alarm); stroke-width:1.6;
+                     filter:drop-shadow(0 1px 2px rgba(0,0,0,.8)); }
 .orb svg.ring { position:absolute; inset:0; transform:rotate(-90deg); }
 .orb .ring circle { fill:none; stroke-width:2.5; }
 .orb .ring .track { stroke:var(--orb-track); }
@@ -217,6 +222,34 @@ button { font-family:inherit; }
               color:var(--dim); letter-spacing:-.02em; overflow:hidden; }
 .orb .pilot img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
 
+/* Подсказка при наведении — то же самое, что в игровом обзоре колоний:
+   что добывается/производится, заполненность причала, планета. Чистый
+   CSS (:hover), без JS: данные уже в разметке, лишний слушатель не нужен. */
+.orb .tip { position:absolute; left:50%; bottom:calc(100% + 8px); transform:translateX(-50%) translateY(4px);
+            width:170px; background:var(--hull); border:1px solid var(--seam); border-radius:4px;
+            padding:8px 10px; font-size:11px; color:var(--read); text-align:left; z-index:30;
+            opacity:0; visibility:hidden; pointer-events:none; transition:opacity .12s, transform .12s;
+            box-shadow:0 4px 16px rgba(0,0,0,.35); }
+.orb:hover .tip, .orb:focus-within .tip { opacity:1; visibility:visible; transform:translateX(-50%) translateY(0); }
+.tip-head { color:var(--alarm); font-weight:600; text-transform:uppercase; font-size:10px;
+            letter-spacing:.04em; margin-bottom:6px; }
+.tip-row { display:flex; gap:6px; align-items:center; margin-bottom:6px; }
+.tip-row img { width:20px; height:20px; flex:0 0 auto; }
+.tip-label { color:var(--dim); font-size:10px; text-transform:uppercase; letter-spacing:.03em; }
+.tip-bar { height:4px; background:var(--orb-track); border-radius:2px; overflow:hidden; margin:3px 0; }
+.tip-bar i { display:block; height:100%; background:var(--ring-infra); }
+.tip-meta { color:var(--dim); font-family:'IBM Plex Mono',monospace; font-size:10px; }
+.tip-planet { margin-top:4px; color:var(--bright); font-weight:500; }
+
+/* Свободный слот планеты у персонажа (вид «Список по персонажам») —
+   planet_slots из /api/characters (Interplanetary Consolidation + 1,
+   то же допущение, что в самом расчёте, см. CLAUDE.md) минус реально
+   построенные колонии. Пунктирный круг того же размера, что и .orb,
+   без содержимого, только на характерах, для которых реально известны
+   planet_slots — иначе честно ничего не дорисовываем. */
+.orb-slot { width:52px; height:52px; border-radius:50%; border:1px dashed var(--seam);
+            display:grid; place-items:center; color:var(--dim); font-size:20px; flex:0 0 auto; }
+
 /* ═══ Вид «Детали»: строка на колонию ═══════════════════════════ */
 .colony { border-bottom:1px solid var(--seam); padding:12px 14px;
           content-visibility:auto; contain-intrinsic-size:auto 190px; }
@@ -249,9 +282,15 @@ button { font-family:inherit; }
 .strip { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; padding-left:2px; }
 
 /* ═══ Вид «Список»: строка на персонажа ═════════════════════════ */
+/* Без content-visibility:auto — оно тянет за собой paint containment
+   (элемент обрезает всё, что выходит за его рамку, даже когда виден),
+   и подсказка .orb .tip, которая должна всплывать НАД строкой, обрезалась
+   бы по границе .pilot-row. Строк на персонажа немного (по одной на
+   персонажа с колониями в игре), в отличие от карточек «Деталей» —
+   экономия на рендере не так важна, как рабочая подсказка. */
 .pilot-row { display:flex; align-items:center; gap:12px; padding:10px 14px;
-             border-bottom:1px solid var(--seam); content-visibility:auto; contain-intrinsic-size:auto 78px; }
-.pilot-row .who { width:150px; flex:0 0 auto; }
+             border-bottom:1px solid var(--seam); }
+.pilot-row .who { width:52px; flex:0 0 auto; }
 .pilot-row .orbs { display:flex; gap:10px; flex-wrap:wrap; }
 
 /* ═══ Вид «Сетка» ═══════════════════════════════════════════════ */
@@ -869,7 +908,7 @@ const T={
   ssoUnavailable:'Вход недоступен',
   notJson:'{api} вернул не JSON. Запустите «python run.py» и откройте {flask}/',
   pPlanetN:['планета','планеты','планет'],coloniesIdle:'простаивает',coloniesAttention:'требуют внимания',
-  launchpadFull:'причал заполнен',
+  launchpadFull:'причал заполнен',needsAttention:'Требует внимания',freeSlot:'свободный слот планеты',
   themeTitle:'Тема',viewList:'Список по персонажам',viewGrid:'Сетка',sortTitle:'Сортировка',loadLbl:'Загрузка',
   inGameColonies:'Мои колонии в игре',cycOver:'программа завершена',cycIdle:'программа не запущена',
   hUnit:'ч',minUnit:'мин',dUnit:'д',pPin:['пин','пина','пинов'],
@@ -914,7 +953,7 @@ const T={
   ssoUnavailable:'Login unavailable',
   notJson:'{api} returned non-JSON. Run “python run.py” and open {flask}/',
   pPlanetN:['planet','planets','planets'],coloniesIdle:'idle',coloniesAttention:'need attention',
-  launchpadFull:'launchpad full',
+  launchpadFull:'launchpad full',needsAttention:'Needs attention',freeSlot:'free planet slot',
   themeTitle:'Theme',viewList:'By character',viewGrid:'Grid',sortTitle:'Sort',loadLbl:'Load',
   inGameColonies:'My in-game colonies',cycOver:'program ended',cycIdle:'no program running',
   hUnit:'h',minUnit:'min',dUnit:'d',pPin:['pin','pins','pins'],
@@ -1025,27 +1064,35 @@ function dominantStructureIconId(row){
   return kind?ids['structure:'+kind]:null;
 }
 
-/* Иконка того, ЧТО колония производит (а не иконка постройки) — по
+/* То, ЧТО колония производит (иконка + имя, а не иконка постройки) — по
    реальным данным пинов (row.pins, см. scripts/sync_colony_status.py::
    pin_detail): у добычи — сырьё активного/ближайшего экстрактора, у
    переработки — продукт самой старшей по тиру фабрики (high-tech, иначе
    advanced, иначе basic) — она и даёт конечный продукт цепочки на этой
    колонии. Если пины ещё не пересинхронизированы новым кодом (row.pins
-   пуст) — честный откат на иконку постройки, как раньше. */
-function producedIconId(row){
+   пуст) — честный откат на иконку постройки без имени, как раньше. */
+function producedInfo(row){
   const pins=row.pins||[];
   if(row.role_key==='mine'){
     const extractors=pins.filter(p=>p.kind==='extractor_control_unit'&&p.product);
     const match=extractors.find(p=>p.expiry_time===row.nearest_expiry)||extractors[0];
-    if(match) return ids[match.product];
+    if(match) return {iconId:ids[match.product], name:match.product};
   } else if(row.role_key==='proc'){
     const priority=['high_tech_industry_facility','advanced_industry_facility','basic_industry_facility'];
     for(const kind of priority){
       const pin=pins.find(p=>p.kind===kind&&p.product);
-      if(pin) return ids[pin.product];
+      if(pin) return {iconId:ids[pin.product], name:pin.product};
     }
   }
-  return dominantStructureIconId(row);
+  return {iconId:dominantStructureIconId(row), name:null};
+}
+
+/* Пин причала/склада с известным объёмом (используется и для процента
+   заполнения, и для текста в подсказке круга — см. orb()). */
+function launchpadPin(row){
+  const pins=row.pins||[];
+  return pins.find(p=>p.kind==='launchpad'&&p.used_m3!=null)
+    || pins.find(p=>p.kind==='storage_facility'&&p.used_m3!=null) || null;
 }
 
 /* Заполненность причала (в крайнем случае — склада) в процентах от
@@ -1055,9 +1102,7 @@ function producedIconId(row){
    предмета не удалось узнать у ESI — тогда кольцо не рисуется вовсе,
    а не рисуется пустым/полным наугад (правило 1). */
 function launchpadFillPct(row){
-  const pins=row.pins||[];
-  const pin=pins.find(p=>p.kind==='launchpad'&&p.used_m3!=null)
-    || pins.find(p=>p.kind==='storage_facility'&&p.used_m3!=null);
+  const pin=launchpadPin(row);
   return pin?Math.min(100,100*pin.used_m3/pin.capacity_m3):null;
 }
 
@@ -1096,25 +1141,46 @@ function orb(row,size){
     // подставляется «нет данных».
     const showBadge=exp!=null||row.role_key!=='proc';
     const badgeTxt=exp!=null?fmtBadgeLeft(left):t('cycIdle');
-    const activityId=producedIconId(row);
+    const info=producedInfo(row);
+    const pin=launchpadPin(row);
     const fillPct=launchpadFillPct(row);
     // Причал забит под завязку — добыче дальше складывать некуда, это
     // требует внимания не меньше, чем истекающая программа (см. attnN в
     // renderColonies()). Кольцо переключается с синего «заполненность» на
     // мигающее красное — тот же сигнал, что и .badge.hot у таймера.
     const full=isLaunchpadFull(row);
-    return `<div class="orb real" style="--orb:${size}px"
+    // «Требует внимания» — то же условие, что и в attnN сводки: программа
+    // экстрактора кончилась или причал забит. Центральная иконка ресурса
+    // в этом случае уступает место красному «запрету» — как в игре;
+    // это своя иконка (UI-состояние, не тип предмета из игры), поэтому
+    // рисуется SVG, а не берётся с images.evetech.net.
+    const attention=over||full;
+    const noEntry=`<svg class="cargo alert" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="9.5"/><line x1="5.3" y1="18.7" x2="18.7" y2="5.3"/>
+      </svg>`;
+    const tip=`<div class="tip">
+      ${attention?`<div class="tip-head">${t('needsAttention')}</div>`:''}
+      ${info.name?`<div class="tip-row">${info.iconId?`<img src="${ICON(info.iconId)}" alt="">`:''}
+        <span><b>${row.role_key==='mine'?t('extractsW'):t('producesW')}</b><br>${info.name}</span></div>`:''}
+      ${pin?`<div class="tip-label">${sname(pin.kind)}</div>
+        <div class="tip-bar"><i style="width:${fillPct.toFixed(0)}%"></i></div>
+        <div class="tip-meta">${nloc(Math.round(pin.used_m3))}/${nloc(pin.capacity_m3)} m³</div>`:''}
+      <div class="tip-planet">${row.system} ${row.planet}</div>
+      <div class="tip-meta">${row.planet_type} ${(T[lang]||T.ru).pPlanetN[0]}</div>
+    </div>`;
+    return `<div class="orb real${attention?' attn':''}" style="--orb:${size}px"
               onclick="openColony('${row.matchId}')"
-              title="${row.character} · ${row.system} ${row.planet}${full?' · '+t('launchpadFull'):''}">
+              aria-label="${row.character} · ${row.system} ${row.planet}">
       <div class="disc">${planetId?`<img src="${ICON(planetId,128)}" alt="">`:''}</div>
       ${fillPct!=null?`<svg class="ring${full?' full':''}" viewBox="0 0 ${size} ${size}">
         <circle class="track" cx="${size/2}" cy="${size/2}" r="${r}"/>
         <circle cx="${size/2}" cy="${size/2}" r="${r}" stroke="var(${full?'--alarm':'--ring-infra'})"
           stroke-dasharray="${c*fillPct/100} ${c}" stroke-linecap="round"/>
       </svg>`:''}
-      ${activityId?`<img class="cargo" src="${ICON(activityId)}" alt="">`:''}
+      ${attention?noEntry:(info.iconId?`<img class="cargo" src="${ICON(info.iconId)}" alt="">`:'')}
       ${showBadge?`<div class="badge${over?' hot':''}"${exp!=null?` data-exp="${exp}"`:''}>${badgeTxt}</div>`:''}
       <div class="pilot" title="${row.character}">${initials(row.character)}${avatarImg(charIdOf(row.character))}</div>
+      ${tip}
     </div>`;
   }
   const peak=Math.max(row.cpu_percent,row.pg_percent);
@@ -1639,15 +1705,22 @@ function renderColonies(){
   } else if(view==='list'){
     const byPilot={};
     rows.forEach(p=>(byPilot[p.character]=byPilot[p.character]||[]).push(p));
-    body=Object.entries(byPilot).map(([name,items])=>`
+    // Свободные слоты — planet_slots персонажа (Interplanetary Consolidation
+    // + 1, /api/characters, то же допущение, что в самом расчёте) минус
+    // реально построенные колонии. Только там, где planet_slots вообще
+    // известны — иначе честно ни одного пунктирного кружка не рисуем.
+    body=Object.entries(byPilot).map(([name,items])=>{
+      const c=crew.find(x=>x.name===name);
+      const freeN=c?Math.max(0,c.planet_slots-items.length):0;
+      const freeSlots=Array.from({length:freeN},()=>`<div class="orb-slot" title="${t('freeSlot')}">+</div>`).join('');
+      return `
       <div class="pilot-row">
-        <div class="who">
-          <div class="pilot-lg" style="margin-bottom:4px">${initials(name)}${avatarImg(charIdOf(name))}</div>
-          <div class="pilot-name" style="font-size:12px">${name}</div>
-          <div class="sub" style="font-size:11px">${pl(items.length,'pColony')}</div>
+        <div class="who" title="${name} · ${pl(items.length,'pColony')}">
+          <div class="pilot-lg" style="width:52px;height:52px;font-size:16px">${initials(name)}${avatarImg(charIdOf(name))}</div>
         </div>
-        <div class="orbs">${items.map(p=>orb(p,52)).join('')}</div>
-      </div>`).join('');
+        <div class="orbs">${items.map(p=>orb(p,52)).join('')}${freeSlots}</div>
+      </div>`;
+    }).join('');
   } else if(view==='grid'){
     body=`<div class="grid">${rows.map(p=>orb(p,58)).join('')}</div>`;
   }
@@ -2209,9 +2282,15 @@ const DOC={
    двух часов) подсвечивается, как и планета с забитым под завязку причалом
    (кольцо заполненности мигает красным вместо ровного синего — складывать
    добычу больше некуда, даже если таймер программы ещё идёт). Сводная строка
-   над блоком считает оба случая в «требуют внимания». Карточка колонии
-   выглядит так же, как у расчётного плана: та же полоса иконок структур,
-   только состав берётся не
+   над блоком считает оба случая в «требуют внимания», а иконка ресурса на
+   такой колонии в сетке и списке уступает место красному знаку запрета —
+   при наведении всплывает подсказка с причиной, добываемым/производимым
+   ресурсом и заполненностью причала. В виде «Список по персонажам» после
+   колоний персонажа — пунктирные кружки со «+»: свободные слоты планет
+   (Interplanetary Consolidation + 1 минус реально построенные колонии, то
+   же допущение, что в расчёте плана), только там, где эти данные о
+   персонаже вообще известны. Карточка колонии выглядит так же, как у
+   расчётного плана: та же полоса иконок структур, только состав берётся не
    из шаблона застройки, а из настоящих пинов на планете — колония в игре не
    обязана совпадать ни с одним из игровых шаблонов. Портрет персонажа —
    настоящий, с серверов CCP; пока он не загрузился или персонаж
@@ -2375,7 +2454,13 @@ const DOC={
    highlighted, and so is a planet whose launchpad is full to the brim (the fill ring
    blinks red instead of a steady blue — nowhere left to store more, even if the program
    timer is still running). The summary line above the panel counts both cases as
-   "need attention". A colony card looks the same as a plan colony — the same strip of structure
+   "need attention", and in the grid and list views the resource icon on such a colony
+   gives way to a red no-entry sign — hovering shows why, plus what's being
+   extracted/produced and the launchpad fill level. In "List by character" view, after a
+   character's colonies come dashed circles with a "+": free planet slots (Interplanetary
+   Consolidation + 1 minus colonies actually built, the same assumption the plan itself
+   uses), shown only where that character's data is actually known. A colony card looks
+   the same as a plan colony — the same strip of structure
    icons — except the composition comes from the real pins on the planet, not a building
    template: an in-game colony need not match any of the game templates. The portrait is
    real, served from CCP's own servers; until it loads, or for a test character, initials
