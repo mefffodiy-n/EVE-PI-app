@@ -908,6 +908,7 @@ const T={
   extrRateNow:'Сейчас',extrRateAvg:'В среднем',extrRateUnit:'ед./ч',
   extrHistoryBuilding:'копим историю',
   extrDeficit:'дефицит — нужна дополнительная добыча',
+  extrDeficitChain:'дефицит — под угрозой цепочка {product}, добавьте ещё добывающую колонию',
   afterGame:'появится после подключения к игре',producesW:'Производит',inputW:'Вход',
   pHead:['голова','головы','голов'],emptyStorage:'пусто',
   inProduction:'В производстве',cycIdleSince:'Простаивает',
@@ -959,6 +960,7 @@ const T={
   extrRateNow:'Now',extrRateAvg:'Average',extrRateUnit:'units/h',
   extrHistoryBuilding:'building up history',
   extrDeficit:'deficit — needs extra extraction',
+  extrDeficitChain:'deficit — {product} chain at risk, add another mining colony',
   afterGame:'appears once connected to the game',producesW:'Produces',inputW:'Input',
   pHead:['head','heads','heads'],emptyStorage:'empty',
   inProduction:'In production',cycIdleSince:'Idle',
@@ -1186,34 +1188,79 @@ function extractorRateChartSVG(rates){
    (extractorRatePerHour, всегда доступна, если запущена программа),
    средняя по накопленной истории (extractorAvgRatePerHour, null, пока
    снимков нет) и предупреждение о дефиците (см. DEFICIT_UNITS_PER_HOUR). */
+/* Дефицитный ресурс угрожает цепочке — только если эту цепочку прямо
+   сейчас держит НАСТОЯЩАЯ колония того же пользователя (coloniesData),
+   а не расчётный план (Фаза 7, решение пользователя 11.09.2026: «это
+   касается только если персонажи уже что-то производят — либо цепочка
+   была при входе, либо построена по плану и стала настоящей колонией»).
+   recipeInputs — что каждый продукт потребляет на входе (/api/initial-data,
+   data/recipes.json, правило 2), пары строятся по РЕАЛЬНЫМ пинам фабрик
+   всех колоний, план сюда не подмешивается. */
+function realChainProductsUsing(resource){
+  const products=new Set();
+  coloniesData.forEach(c=>(c.pins||[]).forEach(pin=>{
+    if(!pin.kind||!pin.kind.endsWith('industry_facility')||!pin.product) return;
+    if((recipeInputs[pin.product]||[]).includes(resource)) products.add(pin.product);
+  }));
+  return [...products];
+}
+
+/* Один экстрактор — дефицит прямо сейчас (extractorRatePerHour ниже
+   DEFICIT_UNITS_PER_HOUR) и, если есть, реальные продукты, чья цепочка от
+   него зависит (см. realChainProductsUsing). atRisk пуст, если дефицитный
+   ресурс сейчас никем из настоящих колоний не потребляется — предупреждение
+   всё равно показывается (правило 1: колония дефицитна сама по себе), но
+   без утверждения об угрозе конкретной цепочке, которого нет. */
+function pinDeficitInfo(pin){
+  const rate=extractorRatePerHour(pin);
+  if(rate==null || rate>=DEFICIT_UNITS_PER_HOUR) return {deficient:false, atRisk:[]};
+  return {deficient:true, atRisk: pin.product?realChainProductsUsing(pin.product):[]};
+}
+
 /* Колония в дефиците добычи — хотя бы один её экстрактор прямо сейчас
-   даёт меньше DEFICIT_UNITS_PER_HOUR (extractorRatePerHour, реальные
-   qty_per_cycle/cycle_seconds). Тот же сигнал «требует внимания», что и
-   истекающий таймер/забитый причал — ресурс всё равно приходится
+   даёт меньше DEFICIT_UNITS_PER_HOUR. Тот же сигнал «требует внимания»,
+   что и истекающий таймер/забитый причал — ресурс всё равно приходится
    дублировать добычей (решение пользователя 11.09.2026). */
 function isColonyDeficient(row){
   if(row.role_key!=='mine') return false;
-  return (row.pins||[]).some(p=>{
-    if(p.kind!=='extractor_control_unit') return false;
-    const rate=extractorRatePerHour(p);
-    return rate!=null && rate<DEFICIT_UNITS_PER_HOUR;
+  return (row.pins||[]).some(p=>p.kind==='extractor_control_unit' && pinDeficitInfo(p).deficient);
+}
+
+/* Реальные продукты, чьи цепочки под угрозой из-за дефицита ЭТОЙ колонии —
+   объединение atRisk всех её дефицитных экстракторов (обычно один). */
+function colonyDeficitRisk(row){
+  if(row.role_key!=='mine') return [];
+  const products=new Set();
+  (row.pins||[]).forEach(p=>{
+    if(p.kind!=='extractor_control_unit') return;
+    pinDeficitInfo(p).atRisk.forEach(x=>products.add(x));
   });
+  return [...products];
+}
+
+/* Текст предупреждения о дефиците — с указанием цепочки под угрозой,
+   когда она известна (см. colonyDeficitRisk/pinDeficitInfo.atRisk), иначе
+   общий текст. plain=true — без HTML (для атрибута title). */
+function deficitText(atRisk,plain){
+  if(!atRisk.length) return t('extrDeficit');
+  const tpl=t('extrDeficitChain');
+  return plain ? tpl.replace('{product}',atRisk.join(', ')) : fmt(tpl,{product:atRisk.join(', ')});
 }
 
 function extractorRateHTML(pin){
   const now=extractorRatePerHour(pin);
   if(now==null) return '';
   const avg=extractorAvgRatePerHour(pin);
-  const deficit=now<DEFICIT_UNITS_PER_HOUR;
+  const info=pinDeficitInfo(pin);
   const hist=pin.extraction_history||[];
   const rates=hist.map(s=>s.qty_per_cycle!=null&&s.cycle_seconds
     ?s.qty_per_cycle*3600/s.cycle_seconds:null).filter(r=>r!=null);
   return `<div class="meta" style="margin-top:8px">
     <div style="display:flex;gap:16px;flex-wrap:wrap">
-      <span>${t('extrRateNow')}: <b style="color:${deficit?'var(--alarm)':'var(--read)'}">${nloc(Math.round(now))} ${t('extrRateUnit')}</b></span>
+      <span>${t('extrRateNow')}: <b style="color:${info.deficient?'var(--alarm)':'var(--read)'}">${nloc(Math.round(now))} ${t('extrRateUnit')}</b></span>
       <span>${t('extrRateAvg')}: <b>${avg!=null?`${nloc(Math.round(avg))} ${t('extrRateUnit')}`:t('extrHistoryBuilding')}</b></span>
     </div>
-    ${deficit?`<div style="color:var(--alarm);margin-top:4px">⚠ ${t('extrDeficit')}</div>`:''}
+    ${info.deficient?`<div style="color:var(--alarm);margin-top:4px">⚠ ${deficitText(info.atRisk,false)}</div>`:''}
     ${rates.length>1?extractorRateChartSVG(rates):''}
   </div>`;
 }
@@ -1265,13 +1312,14 @@ function orb(row,size,showPilot=true){
     // сюда: иначе одна причина маскировала бы другую в общем счёте, а у
     // дефицита и так свой явный маркер (.def-mark) и подсказка.
     const deficient=isColonyDeficient(row);
+    const deficitRisk=deficient?colonyDeficitRisk(row):[];
     const attention=over||full;
     const noEntry=`<svg class="cargo alert" viewBox="0 0 24 24">
         <circle cx="12" cy="12" r="9.5"/><line x1="5.3" y1="18.7" x2="18.7" y2="5.3"/>
       </svg>`;
     const tip=`<div class="tip">
       ${attention?`<div class="tip-head">${t('needsAttention')}</div>`:''}
-      ${deficient?`<div class="tip-meta" style="color:var(--amber)">⚠ ${t('extrDeficit')}</div>`:''}
+      ${deficient?`<div class="tip-meta" style="color:var(--amber)">⚠ ${deficitText(deficitRisk,false)}</div>`:''}
       ${info.name?`<div class="tip-row">${info.iconId?`<img src="${ICON(info.iconId)}" alt="">`:''}
         <span><b>${row.role_key==='mine'?t('extractsW'):t('producesW')}</b><br>${info.name}</span></div>`:''}
       ${pin?`<div class="tip-label">${sname(pin.kind)}</div>
@@ -1292,7 +1340,7 @@ function orb(row,size,showPilot=true){
       ${attention?noEntry:(info.iconId?`<img class="cargo" src="${ICON(info.iconId)}" alt="">`:'')}
       ${showBadge?`<div class="badge${over?' hot':''}"${exp!=null?` data-exp="${exp}"`:''}>${badgeTxt}</div>`:''}
       ${showPilot?`<div class="pilot" title="${row.character}">${initials(row.character)}${avatarImg(charIdOf(row.character))}</div>`:''}
-      ${deficient?`<div class="def-mark" title="${t('extrDeficit')}"></div>`:''}
+      ${deficient?`<div class="def-mark" title="${deficitText(deficitRisk,true)}"></div>`:''}
       ${tip}
     </div>`;
   }
@@ -2643,7 +2691,12 @@ const DOC={
    там уже не работает как надо прямо сейчас). Дефицитная колония
    продолжает добывать, просто ниже порога — на круге у неё маленькая
    янтарная точка, иконка ресурса не гасится, а в сводной строке свой
-   счётчик «M дефицит добычи».</p>
+   счётчик «M дефицит добычи». Если дефицитный ресурс прямо сейчас
+   потребляет фабрика другой вашей настоящей колонии — предупреждение
+   называет продукт этой цепочки и предлагает добавить ещё одну
+   добывающую колонию; сверяется только с уже действующими колониями
+   (теми, что были при входе, или построенными по плану и попавшими в
+   игру), а не с расчётным планом на экране.</p>
 
    <h3>Чего программа пока не знает</h3>
    <p>Загрузка CPU/Power командного центра колонии за пределами загруженного
@@ -2846,7 +2899,11 @@ const DOC={
    for an expiring timer or a full launchpad — a colony that isn't working right just now).
    A colony in deficit keeps extracting, just below the threshold, so its circle gets a
    small amber dot instead of losing its resource icon, and the summary line carries its
-   own "M in deficit" count.</p>
+   own "M in deficit" count. If a factory on another one of your actual colonies is
+   currently consuming the deficient resource, the warning names that chain's product and
+   suggests adding another mining colony; it only checks against colonies that already
+   exist (ones you had at login, or built from a plan and now real in-game), never against
+   the calculated plan on screen.</p>
 
    <h3>What the program does not know yet</h3>
    <p>CPU/Power load for a colony outside the loaded region (no row in the planet file —
