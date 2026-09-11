@@ -24,6 +24,7 @@ def _env(monkeypatch, tmp_path):
     import scripts.esi_client as ec
     monkeypatch.setattr(ec, "ETAG_STORE", tmp_path / "etags.json")
     monkeypatch.setattr(sync, "SCHEMATIC_CACHE_PATH", tmp_path / "schematics.json")
+    monkeypatch.setattr(sync, "VOLUME_CACHE_PATH", tmp_path / "type_volumes.json")
 
 
 def _iso(minutes):
@@ -34,7 +35,7 @@ SYSTEM_ID = 30000142
 SYSTEM_NAME = "Jita"
 
 
-def _opener(planets: dict, schematics: dict | None = None):
+def _opener(planets: dict, schematics: dict | None = None, volumes: dict | None = None):
     """
     planets: {planet_id: {"type": str, "level": int, "pins": [expiry_iso|None], "name": str}}
 
@@ -42,9 +43,11 @@ def _opener(planets: dict, schematics: dict | None = None):
     словарём {"expiry", "type_id", "schematic_id", "last_cycle_start",
     "contents", "extractor_details", "install_time"} — для structures_detail
     и pins_detail. schematics — {schematic_id: {"schematic_name", "cycle_time"}}
-    для мока GET /universe/schematics/{id}/.
+    для мока GET /universe/schematics/{id}/. volumes — {type_id: объём_м3}
+    для мока GET /universe/types/{id}/ (поле "volume").
     """
     schematics = schematics or {}
+    volumes = volumes or {}
     listing = [
         {"planet_id": pid, "planet_type": p["type"],
          "upgrade_level": p["level"], "num_pins": len(p["pins"]), "solar_system_id": SYSTEM_ID}
@@ -64,6 +67,11 @@ def _opener(planets: dict, schematics: dict | None = None):
             if sid not in schematics:
                 return 404, "{}", {}
             body = schematics[sid]
+        elif "/universe/types/" in url:
+            tid = int(m.group(1))
+            if tid not in volumes:
+                return 404, "{}", {}
+            body = {"volume": volumes[tid]}
         elif m:
             pins = []
             for i, entry in enumerate(planets[int(m.group(1))]["pins"]):
@@ -218,9 +226,27 @@ class TestPinDetail:
         assert detail["contents"] == [{"type_id": 2308, "name": "Suspended Plasma", "amount": 2604}]
 
     def test_storage_contents(self):
+        client = EsiClient(opener=_opener({}, volumes={2308: 0.15}))
         pin = {"contents": [{"type_id": 2308, "amount": 25320}]}
-        detail = sync.pin_detail(pin, "storage_facility", client=None)
+        detail = sync.pin_detail(pin, "storage_facility", client)
         assert detail["contents"] == [{"type_id": 2308, "name": "Suspended Plasma", "amount": 25320}]
+        assert detail["used_m3"] == 3798.0
+        assert detail["capacity_m3"] == 12_000
+
+    def test_storage_used_volume_is_none_without_item_volume(self):
+        """
+        Честный пробел, а не заниженная сумма: если объём хоть одного
+        предмета неизвестен, used_m3 не считается вовсе (правило 1).
+        """
+        client = EsiClient(opener=_opener({}, volumes={}))
+        pin = {"contents": [{"type_id": 2308, "amount": 100}]}
+        detail = sync.pin_detail(pin, "launchpad", client)
+        assert detail["used_m3"] is None
+        assert detail["capacity_m3"] == 10_000
+
+    def test_storage_used_volume_zero_when_empty(self):
+        detail = sync.pin_detail({"contents": []}, "launchpad", client=None)
+        assert detail["used_m3"] == 0.0
 
     def test_command_center_has_no_extra_fields(self):
         assert sync.pin_detail({}, "command_center", client=None) == {"kind": "command_center"}
