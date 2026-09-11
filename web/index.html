@@ -171,6 +171,9 @@ button { font-family:inherit; }
 .orb { position:relative; width:var(--orb,58px); height:var(--orb,58px); flex:0 0 auto; cursor:pointer; }
 .orb .disc { position:absolute; inset:5px; border-radius:50%; overflow:hidden;
              background:var(--inset); display:grid; place-items:center; }
+/* У факта из игры («Мои колонии в игре») нет кольца загрузки (см. orb()) —
+   текстура планеты занимает почти весь круг, как в игровом обзоре. */
+.orb.real .disc { inset:1px; }
 .orb .disc img { width:100%; height:100%; object-fit:cover; }
 .orb .cargo { position:absolute; inset:0; margin:auto; width:52%; height:52%;
               filter:drop-shadow(0 1px 2px rgba(0,0,0,.8)); }
@@ -504,7 +507,8 @@ details.msgs[open] > summary::before { content:'▾ '; }
    выглядеть как план, а не отдельным списком строк. */
 .colonies { border-top:1px solid var(--seam); }
 .colonies h3 { font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--dim);
-  margin:0; padding:14px 14px 4px; }
+  margin:0; padding:14px 14px 4px; display:flex; justify-content:space-between; align-items:baseline; }
+.colonies h3 .colsum { text-transform:none; letter-spacing:normal; font-weight:400; }
 .colonies .colony:last-child { border-bottom:none; }
 .tail .val.soon { color:var(--amber); }
 .tail .val.over { color:var(--alarm); font-weight:600; }
@@ -794,7 +798,7 @@ const FLASK='http://127.0.0.1:8000';
 const LIVE_SERVER=/^(127\.0\.0\.1|localhost)$/.test(location.hostname)
   && location.port && location.port!=='8000';
 const API=LIVE_SERVER?`${FLASK}/api`:'/api';
-const ICON=id=>`https://images.evetech.net/types/${id}/icon?size=64`;
+const ICON=(id,size)=>`https://images.evetech.net/types/${id}/icon?size=${size||64}`;
 // Портрет персонажа — тот же публичный CDN CCP, без токена. Только для
 // реальных ESI-персонажей: у dev-заглушек этого character_id не
 // существует в игре, картинка получает 404 и удаляет себя (onerror),
@@ -858,6 +862,7 @@ const T={
   pProd:['продукт','продукта','продуктов'],
   ssoUnavailable:'Вход недоступен',
   notJson:'{api} вернул не JSON. Запустите «python run.py» и откройте {flask}/',
+  pPlanetN:['планета','планеты','планет'],coloniesIdle:'простаивает',coloniesAttention:'требуют внимания',
   themeTitle:'Тема',viewList:'Список по персонажам',viewGrid:'Сетка',sortTitle:'Сортировка',loadLbl:'Загрузка',
   inGameColonies:'Мои колонии в игре',cycOver:'программа завершена',cycIdle:'программа не запущена',
   hUnit:'ч',minUnit:'мин',dUnit:'д',pPin:['пин','пина','пинов'],
@@ -901,6 +906,7 @@ const T={
   pProd:['product','products','products'],
   ssoUnavailable:'Login unavailable',
   notJson:'{api} returned non-JSON. Run “python run.py” and open {flask}/',
+  pPlanetN:['planet','planets','planets'],coloniesIdle:'idle',coloniesAttention:'need attention',
   themeTitle:'Theme',viewList:'By character',viewGrid:'Grid',sortTitle:'Sort',loadLbl:'Load',
   inGameColonies:'My in-game colonies',cycOver:'program ended',cycIdle:'no program running',
   hUnit:'h',minUnit:'min',dUnit:'d',pPin:['pin','pins','pins'],
@@ -999,36 +1005,50 @@ function plural(n,one,few,many){
   if(a>10&&a<20)return `${n} ${many}`; if(b>1&&b<5)return `${n} ${few}`;
   if(b===1)return `${n} ${one}`; return `${n} ${many}`;}
 
+/* Иконка «чем занята колония» для сетки/списка «Моих колоний в игре» —
+   по реальному составу пинов (row.structures_detail), не по роли:
+   есть экстрактор — его иконка, иначе самая старшая по тиру фабрика,
+   иначе склад/причал. Ничего не выдумывается — то, что реально стоит. */
+function dominantStructureIconId(row){
+  const kinds=(row.structures_detail||[]).map(s=>s.kind);
+  const priority=['extractor_control_unit','high_tech_industry_facility',
+    'advanced_industry_facility','basic_industry_facility','launchpad','storage_facility'];
+  const kind=priority.find(k=>kinds.includes(k));
+  return kind?ids['structure:'+kind]:null;
+}
+
 /* ── Круг колонии ───────────────────────────────────────────────
    Кольцо показывает загрузку по узкому ресурсу, а не таймер цикла:
    таймеров у нас пока нет, и рисовать вымышленное число нельзя.
 
    row.isReal — та же функция для факта из игры («Мои колонии в игре»,
-   см. realRows()): загрузки CPU/PG там нет (её ESI не отдаёт), поэтому
-   кольцо красится по срочности (осталось < 2 ч — янтарь, кончилось —
-   алярм, иначе по роли) и в бейдже настоящий обратный отсчёт вместо
-   процента — придумывать число там, где его нет, нельзя (правило 1). */
+   см. realRows()) — вид как в самой игре (обзорная сетка): текстура
+   планеты крупным планом, плашка с обратным отсчётом сверху-слева,
+   иконка занятости колонии по центру, портрет персонажа справа-снизу.
+   Кольца загрузки нет — загрузки CPU/PG у факта из игры не бывает
+   (ESI не отдаёт радиус планеты), рисовать вымышленный процент нельзя
+   (правило 1). */
 function orb(row,size){
   const r=(size/2)-2, c=2*Math.PI*r;
   const planetId=ids['planet:'+row.planet_type];
   if(row.isReal){
     const exp=row.nearest_expiry?Date.parse(row.nearest_expiry):null;
     const left=exp!=null?exp-Date.now():null;
-    const over=left!=null&&left<=0, soon=left!=null&&left>0&&left<7200000;
-    const color=over?'var(--alarm)':soon?'var(--amber)':
-                row.role_key==='mine'?'var(--ring-extract)':
-                row.role_key==='proc'?'var(--ring-adv)':'var(--seam)';
-    const badgeTxt=exp!=null?fmtLeft(left):(row.role_key==='proc'?t('noData'):t('cycIdle'));
-    return `<div class="orb" style="--orb:${size}px"
+    const over=left!=null&&left<=0;
+    // Таймер показывается только там, где он есть по-настоящему (активный
+    // экстрактор) или где его отсутствие само по себе сигнал (простаивающий
+    // экстрактор). У колоний переработки без экстрактора таймера в игре нет
+    // вовсе — как на референсном скрине, там чип не рисуется совсем, а не
+    // подставляется «нет данных».
+    const showBadge=exp!=null||row.role_key!=='proc';
+    const badgeTxt=exp!=null?fmtLeft(left):t('cycIdle');
+    const activityId=dominantStructureIconId(row);
+    return `<div class="orb real" style="--orb:${size}px"
               onclick="openColony('${row.matchId}')"
               title="${row.character} · ${row.system} ${row.planet}">
-      <div class="disc">${planetId?`<img src="${ICON(planetId)}" alt="">`:''}</div>
-      <svg class="ring" viewBox="0 0 ${size} ${size}">
-        <circle class="track" cx="${size/2}" cy="${size/2}" r="${r}"/>
-        <circle cx="${size/2}" cy="${size/2}" r="${r}" stroke="${color}"
-          stroke-dasharray="${c} ${c}" stroke-linecap="round"/>
-      </svg>
-      <div class="badge${over?' hot':''}"${exp!=null?` data-exp="${exp}"`:''}>${badgeTxt}</div>
+      <div class="disc">${planetId?`<img src="${ICON(planetId,128)}" alt="">`:''}</div>
+      ${activityId?`<img class="cargo" src="${ICON(activityId)}" alt="">`:''}
+      ${showBadge?`<div class="badge${over?' hot':''}"${exp!=null?` data-exp="${exp}"`:''}>${badgeTxt}</div>`:''}
       <div class="pilot" title="${row.character}">${initials(row.character)}${avatarImg(charIdOf(row.character))}</div>
     </div>`;
   }
@@ -1553,7 +1573,18 @@ function renderColonies(){
   } else if(view==='grid'){
     body=`<div class="grid">${rows.map(p=>orb(p,58)).join('')}</div>`;
   }
-  box.innerHTML=`<div class="colonies"><h3>${t('inGameColonies')}</h3>${body}</div>`;
+  // Простаивает — добывающая колония без запущенной программы (роль
+  // «переработка» тут не считается: фабрика может идти циклом, которого
+  // мы для сводки не проверяли построчно). Требует внимания — программа
+  // экстрактора кончилась или кончается меньше чем через 2 ч. Оба честно
+  // из тех же полей, что и остальной блок, не выдумка.
+  const idleN=rows.filter(p=>p.role_key==='mine'&&!p.nearest_expiry).length;
+  const attnN=rows.filter(p=>{
+    if(p.role_key!=='mine'||!p.nearest_expiry) return false;
+    return Date.parse(p.nearest_expiry)-Date.now()<7200000;
+  }).length;
+  const summary=`${pl(rows.length,'pPlanetN')} · ${idleN} ${t('coloniesIdle')} · ${attnN} ${t('coloniesAttention')}`;
+  box.innerHTML=`<div class="colonies"><h3>${t('inGameColonies')} <span class="colsum">${summary}</span></h3>${body}</div>`;
 }
 
 /* Живой отсчёт: перерисовываем только числа, не весь блок. Работает
