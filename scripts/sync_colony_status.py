@@ -80,17 +80,38 @@ def _parse_iso(value) -> datetime | None:
     return moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc)
 
 
+# Отображаемое имя структуры в игре -> «kind», тот же словарь значений,
+# что у structures_detail расчётного плана (domain/planner.py).
+#
+# ОШИБКА, КОТОРУЮ ЭТО ИСПРАВЛЯЕТ (11.09.2026, живые данные). Раньше
+# считалось, что только командный центр специфичен для типа планеты, а
+# у launchpad/storage/extractor control unit/фабрик один type_id на всех.
+# Неверно: «Storm Basic Industry Facility» и «Temperate Basic Industry
+# Facility» — разные предметы с разными type_id, как и все остальные
+# структуры. Реальная колония на любой планете кроме Barren/Temperate
+# показывала только командный центр — остальные пины (те же самые
+# постройки!) не распознавались. Полная матрица «тип планеты × структура»
+# добыта через `scripts/resolve_pi_structure_type_ids.py` (ESI
+# `/universe/ids/`) и лежит в data/type_ids.json как «<Тип> <Имя>»,
+# в тех же именах, что показывает сама игра.
+_STRUCTURE_SUFFIX_TO_KIND = {
+    " Launchpad": "launchpad",
+    " Storage Facility": "storage_facility",
+    " Extractor Control Unit": "extractor_control_unit",
+    " Basic Industry Facility": "basic_industry_facility",
+    " Advanced Industry Facility": "advanced_industry_facility",
+    # В игре — «…High-Tech Production Plant», не «…Industry Facility»,
+    # и существует только для Barren/Temperate: P4 ставится только на
+    # них (правило игры, см. CLAUDE.md), другим планетам эта структура
+    # просто не нужна и не существует.
+    " High-Tech Production Plant": "high_tech_industry_facility",
+    " Command Center": "command_center",
+}
+
+
 @lru_cache(maxsize=1)
 def _kind_by_type_id() -> dict[int, str]:
-    """
-    type_id пина -> та же строка «kind», что и в structures_detail
-    расчётного плана (domain/planner.py). У launchpad/storage/extractor
-    control unit/фабрик в игре нет вариантов размера — их type_id всегда
-    один и тот же, а командный центр специфичен для типа планеты
-    («Barren Command Center» и т.д., см. data/type_ids.json). Реверс
-    того же файла, что уже отдаёт эти id фронтенду для иконок — вторая
-    карта не заводится.
-    """
+    """type_id пина -> «kind» — реверс матрицы из data/type_ids.json."""
     if not TYPE_IDS_PATH.is_file():
         return {}
     raw = json.loads(TYPE_IDS_PATH.read_text(encoding="utf-8"))
@@ -98,8 +119,11 @@ def _kind_by_type_id() -> dict[int, str]:
     for name, type_id in raw.items():
         if name.startswith("structure:"):
             out[int(type_id)] = name.split(":", 1)[1]
-        elif name.endswith(" Command Center"):
-            out[int(type_id)] = "command_center"
+            continue
+        for suffix, kind in _STRUCTURE_SUFFIX_TO_KIND.items():
+            if name.endswith(suffix):
+                out[int(type_id)] = kind
+                break
     return out
 
 

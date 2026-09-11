@@ -129,6 +129,30 @@ class TestStructuresDetail:
     def test_pin_without_type_id_skipped(self):
         assert sync.structures_detail([{"pin_id": 1}]) == []
 
+    def test_non_temperate_planet_structures_recognised(self):
+        """
+        Регрессия 11.09.2026: считалось, что только командный центр
+        специфичен для типа планеты, у остальных структур — один type_id
+        на всех. Неверно: у КАЖДОЙ структуры свой id на планету
+        («Storm Basic Industry Facility» != «Temperate Basic Industry
+        Facility»). Реальная Storm-колония показывала только командный
+        центр — эти самые пины молча пропускались.
+        """
+        pins = [
+            {"type_id": 2550},  # Storm Command Center
+            {"type_id": 3067},  # Storm Extractor Control Unit
+            {"type_id": 2557},  # Storm Launchpad
+            {"type_id": 2561},  # Storm Storage Facility
+            {"type_id": 2483}, {"type_id": 2483},  # Storm Basic Industry Facility ×2
+        ]
+        assert sync.structures_detail(pins) == [
+            {"kind": "command_center", "count": 1},
+            {"kind": "launchpad", "count": 1},
+            {"kind": "storage_facility", "count": 1},
+            {"kind": "extractor_control_unit", "count": 1},
+            {"kind": "basic_industry_facility", "count": 2},
+        ]
+
 
 class TestSync:
     def test_writes_colonies_with_name_and_expiry(self):
