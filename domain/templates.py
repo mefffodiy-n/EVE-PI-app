@@ -20,7 +20,13 @@ https://github.com/DalShooth/EVE_PI_Templates):
 Поля пина:
     H  — число голов экстрактора (0 у не-экстракторов)
     La/Lo — широта/долгота размещения
-    S  — schematic_id (что производит структура); null у storage/launchpad
+    S  — что производит структура; null у storage/launchpad. Называется
+         здесь schematic_id по аналогии с игровым полем, но это НЕ то
+         же число, что ESI кладёт в `schematic_id` пина фабрики — здесь
+         это type_id продукта (проверено 11.09.2026: для Plasmoids тут
+         2389 — её type_id, а у ESI schematic_id той же фабрики 122).
+         Для сопоставления с настоящим ESI schematic_id — см.
+         scripts/sync_colony_status.py::schematic_info().
     T  — type_id структуры. ВАЖНО: один и тот же тип структуры имеет
          РАЗНЫЕ type_id на разных типах планет, поэтому категория
          определяется по таблице pin_type_ids в data/pi_reference.json,

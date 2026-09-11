@@ -128,6 +128,13 @@ class Colony(Base):
     # а не берётся из шаблона — колония в игре не обязана совпадать с шаблоном.
     structures: Mapped[list] = mapped_column(JSON, default=list)
 
+    # Детали по каждому пину — то же, что и structures, только поштучно
+    # и с реальным состоянием (не просто «есть 8 фабрик», а какая что
+    # производит и простаивает ли). Строится из полей ESI, которые раньше
+    # не читались (schematic_id, last_cycle_start, extractor_details,
+    # contents), см. scripts/sync_colony_status.py::pin_detail().
+    pins: Mapped[list] = mapped_column(JSON, default=list)
+
     # Ближайшее время окончания программы экстрактора на этой планете
     # (soonest expiry_time среди extractor-пинов). None — экстракторов нет
     # или программы не запущены.

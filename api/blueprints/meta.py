@@ -148,6 +148,7 @@ def colonies():
                     "upgrade_level": row.upgrade_level,
                     "num_pins": row.num_pins,
                     "structures": row.structures or [],
+                    "pins": row.pins or [],
                     "nearest_expiry": row.nearest_expiry.isoformat() if row.nearest_expiry else None,
                     "synced_at": row.synced_at.isoformat() if row.synced_at else None,
                 }
