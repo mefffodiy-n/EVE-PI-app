@@ -214,6 +214,13 @@ button { font-family:inherit; }
               padding:0 4px; font-size:10px; line-height:14px;
               font-family:'IBM Plex Mono',monospace; color:var(--amber); }
 .orb .badge.hot { color:var(--alarm); border-color:var(--alarm); }
+/* Дефицит добычи (isColonyDeficient) — отдельная категория от «требует
+   внимания» (.attn/noEntry): не гасит иконку ресурса, только маленькая
+   янтарная точка в свободном углу — колония всё ещё работает, просто
+   ниже порога DEFICIT_UNITS_PER_HOUR. */
+.orb .def-mark { position:absolute; top:-2px; right:-2px; z-index:4;
+                  width:10px; height:10px; border-radius:50%;
+                  background:var(--amber); border:1px solid var(--inset); }
 /* Портрет персонажа — images.evetech.net, публичный CDN CCP, без токена
    (тот же принцип, что ICON() для иконок типов). Инициалы лежат под
    картинкой всегда: у dev-заглушек портрета в игре не существует,
@@ -917,6 +924,7 @@ const T={
   ssoUnavailable:'Вход недоступен',
   notJson:'{api} вернул не JSON. Запустите «python run.py» и откройте {flask}/',
   pPlanetN:['планета','планеты','планет'],coloniesIdle:'простаивает',coloniesAttention:'требуют внимания',
+  coloniesDeficit:'дефицит добычи',
   launchpadFull:'причал заполнен',needsAttention:'Требует внимания',freeSlot:'свободный слот планеты',
   themeTitle:'Тема',viewList:'Список по персонажам',viewGrid:'Сетка',sortTitle:'Сортировка',loadLbl:'Загрузка',
   inGameColonies:'Мои колонии в игре',cycOver:'программа завершена',cycIdle:'программа не запущена',
@@ -967,6 +975,7 @@ const T={
   ssoUnavailable:'Login unavailable',
   notJson:'{api} returned non-JSON. Run “python run.py” and open {flask}/',
   pPlanetN:['planet','planets','planets'],coloniesIdle:'idle',coloniesAttention:'need attention',
+  coloniesDeficit:'in deficit',
   launchpadFull:'launchpad full',needsAttention:'Needs attention',freeSlot:'free planet slot',
   themeTitle:'Theme',viewList:'By character',viewGrid:'Grid',sortTitle:'Sort',loadLbl:'Load',
   inGameColonies:'My in-game colonies',cycOver:'program ended',cycIdle:'no program running',
@@ -1251,15 +1260,18 @@ function orb(row,size,showPilot=true){
     // экстрактора кончилась или причал забит. Центральная иконка ресурса
     // в этом случае уступает место красному «запрету» — как в игре;
     // это своя иконка (UI-состояние, не тип предмета из игры), поэтому
-    // рисуется SVG, а не берётся с images.evetech.net.
+    // рисуется SVG, а не берётся с images.evetech.net. Дефицит добычи —
+    // отдельная категория (см. deficitN в renderColonies()), не смешана
+    // сюда: иначе одна причина маскировала бы другую в общем счёте, а у
+    // дефицита и так свой явный маркер (.def-mark) и подсказка.
     const deficient=isColonyDeficient(row);
-    const attention=over||full||deficient;
+    const attention=over||full;
     const noEntry=`<svg class="cargo alert" viewBox="0 0 24 24">
         <circle cx="12" cy="12" r="9.5"/><line x1="5.3" y1="18.7" x2="18.7" y2="5.3"/>
       </svg>`;
     const tip=`<div class="tip">
       ${attention?`<div class="tip-head">${t('needsAttention')}</div>`:''}
-      ${deficient?`<div class="tip-meta" style="color:var(--alarm)">⚠ ${t('extrDeficit')}</div>`:''}
+      ${deficient?`<div class="tip-meta" style="color:var(--amber)">⚠ ${t('extrDeficit')}</div>`:''}
       ${info.name?`<div class="tip-row">${info.iconId?`<img src="${ICON(info.iconId)}" alt="">`:''}
         <span><b>${row.role_key==='mine'?t('extractsW'):t('producesW')}</b><br>${info.name}</span></div>`:''}
       ${pin?`<div class="tip-label">${sname(pin.kind)}</div>
@@ -1280,6 +1292,7 @@ function orb(row,size,showPilot=true){
       ${attention?noEntry:(info.iconId?`<img class="cargo" src="${ICON(info.iconId)}" alt="">`:'')}
       ${showBadge?`<div class="badge${over?' hot':''}"${exp!=null?` data-exp="${exp}"`:''}>${badgeTxt}</div>`:''}
       ${showPilot?`<div class="pilot" title="${row.character}">${initials(row.character)}${avatarImg(charIdOf(row.character))}</div>`:''}
+      ${deficient?`<div class="def-mark" title="${t('extrDeficit')}"></div>`:''}
       ${tip}
     </div>`;
   }
@@ -1940,12 +1953,20 @@ function renderColonies(){
     body=`<div class="grid">${rows.map(p=>orb(p,58)).join('')}</div>`;
   }
   const idleN=rows.filter(isColonyIdle).length;
+  // «Требует внимания» — программа экстрактора кончилась или кончается
+  // меньше чем через 2 ч, либо причал забит (обе причины показывают
+  // красный запрет вместо иконки ресурса на круге, см. orb()). Дефицит
+  // добычи — своя категория рядом, не смешана сюда: колония в дефиците
+  // всё ещё работает (просто ниже DEFICIT_UNITS_PER_HOUR), это другая по
+  // смыслу проблема, и у неё свой маркер (.def-mark), не «запрет».
   const attnN=rows.filter(p=>{
     const soon=p.role_key==='mine'&&p.nearest_expiry
       &&Date.parse(p.nearest_expiry)-Date.now()<7200000;
-    return soon||isLaunchpadFull(p)||isColonyDeficient(p);
+    return soon||isLaunchpadFull(p);
   }).length;
-  const summary=`${pl(rows.length,'pPlanetN')} · ${idleN} ${t('coloniesIdle')} · ${attnN} ${t('coloniesAttention')}`;
+  const deficitN=rows.filter(isColonyDeficient).length;
+  const summary=`${pl(rows.length,'pPlanetN')} · ${idleN} ${t('coloniesIdle')} · ${attnN} ${t('coloniesAttention')}`
+    + ` · ${deficitN} ${t('coloniesDeficit')}`;
   box.innerHTML=`<div class="colonies"><h3>${t('inGameColonies')} <span class="colsum">${summary}</span></h3>${body}</div>`;
 }
 
@@ -2604,8 +2625,12 @@ const DOC={
    помечается как дефицитная — фиксированный порог по решению пользователя
    (не история самой колонии): при такой скорости ресурса всё равно не
    хватит на всю цепочку, значит его придётся дублировать дополнительной
-   добычей. Дефицит — тот же сигнал «требует внимания», что истекающий
-   таймер и забитый причал.</p>
+   добычей. Дефицит — своя категория, отдельная от «требуют внимания»
+   (там остаются только истекающий таймер и забитый причал: колония
+   там уже не работает как надо прямо сейчас). Дефицитная колония
+   продолжает добывать, просто ниже порога — на круге у неё маленькая
+   янтарная точка, иконка ресурса не гасится, а в сводной строке свой
+   счётчик «M дефицит добычи».</p>
 
    <h3>Чего программа пока не знает</h3>
    <p>Загрузка CPU/Power командного центра колонии за пределами загруженного
@@ -2801,7 +2826,11 @@ const DOC={
    under 48,000 units/hour is flagged as in deficit — a fixed threshold by the user's own
    decision, not derived from that colony's own history: at that rate the resource won't
    cover the whole chain regardless, so it needs duplicating with extra extraction.
-   Deficit is the same "needs attention" signal as an expiring timer or a full launchpad.</p>
+   Deficit is its own category, separate from "need attention" (that one stays reserved
+   for an expiring timer or a full launchpad — a colony that isn't working right just now).
+   A colony in deficit keeps extracting, just below the threshold, so its circle gets a
+   small amber dot instead of losing its resource icon, and the summary line carries its
+   own "M in deficit" count.</p>
 
    <h3>What the program does not know yet</h3>
    <p>CPU/Power load for a colony outside the loaded region (no row in the planet file —
