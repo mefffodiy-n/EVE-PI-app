@@ -901,6 +901,8 @@ const T={
   afterGame:'появится после подключения к игре',producesW:'Производит',inputW:'Вход',
   pHead:['голова','головы','голов'],emptyStorage:'пусто',
   inProduction:'В производстве',cycIdleSince:'Простаивает',
+  cycNeverStarted:'Ещё ни разу не запускалась',
+  cycProjectedHint:'проекция: колонию давно не открывали в игре',
   sharedExtract:'На этой планете {n} наших экстрактора на одном сырье — выработка каждого будет ниже расчётной.',
   onPlan:'к плану',onPlanets:'на',
   thColony:'Колония',thColonySub:'кто и где',thProd:'Производство',thProdSub:'что делает и из чего',
@@ -946,6 +948,8 @@ const T={
   afterGame:'appears once connected to the game',producesW:'Produces',inputW:'Input',
   pHead:['head','heads','heads'],emptyStorage:'empty',
   inProduction:'In production',cycIdleSince:'Idle',
+  cycNeverStarted:'Never started yet',
+  cycProjectedHint:'projected: colony not opened in-game recently',
   sharedExtract:'This planet has {n} of our extractors on the same resource — each will yield below the estimate.',
   onPlan:'on the plan',onPlanets:'across',
   thColony:'Colony',thColonySub:'who and where',thProd:'Production',thProdSub:'what it makes and from what',
@@ -1131,7 +1135,12 @@ function isLaunchpadFull(row){
    справа-снизу. Кольцо здесь — не CPU/PG (тех честно нет, ESI не отдаёт
    радиус планеты, правило 1), а заполненность причала — те же данные,
    что в самой игре. */
-function orb(row,size){
+/* showPilot=false — там, где портрет персонажа уже показан рядом
+   (карточка колонии, ряд «Список по персонажам») и повторять его на
+   самом круге было бы дублем; в сетке, где на один экран приходится
+   много разных персонажей и рядом с кругом портрета больше нигде нет,
+   остаётся включённым по умолчанию. */
+function orb(row,size,showPilot=true){
   const r=(size/2)-2, c=2*Math.PI*r;
   const planetId=ids['planet:'+row.planet_type];
   if(row.isReal){
@@ -1183,7 +1192,7 @@ function orb(row,size){
       </svg>`:''}
       ${attention?noEntry:(info.iconId?`<img class="cargo" src="${ICON(info.iconId)}" alt="">`:'')}
       ${showBadge?`<div class="badge${over?' hot':''}"${exp!=null?` data-exp="${exp}"`:''}>${badgeTxt}</div>`:''}
-      <div class="pilot" title="${row.character}">${initials(row.character)}${avatarImg(charIdOf(row.character))}</div>
+      ${showPilot?`<div class="pilot" title="${row.character}">${initials(row.character)}${avatarImg(charIdOf(row.character))}</div>`:''}
       ${tip}
     </div>`;
   }
@@ -1205,7 +1214,7 @@ function orb(row,size){
         stroke-dasharray="${c*Math.min(peak,100)/100} ${c}" stroke-linecap="round"/>
     </svg>
     <div class="badge${peak>=95?' hot':''}">${peak.toFixed(0)}%</div>
-    <div class="pilot" title="${row.character}">${initials(row.character)}</div>
+    ${showPilot?`<div class="pilot" title="${row.character}">${initials(row.character)}</div>`:''}
   </div>`;
 }
 
@@ -1269,32 +1278,58 @@ function expandStructures(p){
   return out;
 }
 
-/* Прогресс цикла ОДНОЙ настоящей фабрики — те же поля ESI, что и в
-   панели колонии (structureUnitFields, isFactory): last_cycle_start +
-   cycle_minutes у самой схемы производства (schematic_info), не выдумка.
-   {cycle:null} — нет данных о цикле вовсе (ещё не пересинхронизировано);
-   {idle:true} — данные есть, но цикл уже кончился, новый не начался. */
+/* Прогресс цикла ОДНОЙ настоящей фабрики — last_cycle_start+cycle_minutes,
+   те же поля ESI, что и в панели колонии (structureUnitFields, isFactory).
+
+   История вопроса (11.09.2026). ESI пересчитывает last_cycle_start НЕ в
+   реальном времени, а только когда игрок открывает колонию в игровом
+   клиенте (esi-issues #654, форум разработчиков ESI) — сам факт
+   подтверждён. Первая версия отсюда делала вывод «после
+   last_cycle_start+cycle_minutes ничего не известно» и показывала честное
+   «нет свежих данных». Но пользователь показал скриншот RIFT (сторонний
+   intel-инструмент) с работающими фабриками БЕЗ захода в игру, и
+   оказалось: так по сообществу и принято — RIFT и Planets in Space
+   (сторонний PI-трекер, открыто описывает это в чейнджлоге: «Between ESI
+   updates the app simulates your colony forward so the storage bars stay
+   current») оба ДОСЧИТЫВАЮТ цикл вперёд локально от последнего
+   подтверждённого снимка, предполагая, что фабрика продолжает крутиться
+   сама, пока есть сырьё (так фабрика PI и ведёт себя в игре). Это не
+   «выдуманное» число в смысле правила 1 — это честная проекция от
+   настоящих данных (last_cycle_start и cycle_minutes реальные, ESI), а
+   не случайное. Planets in Space по своему опыту чинили в этой же
+   симуляции две ошибки — отсчёт от устаревшей точки и экстрактор,
+   «крутящийся» дольше своей настоящей программы; вторая для нас
+   неактуальна (у фабрик нет expiry_time, это только у экстракторов, и их
+   таймер и так честный — отдельная, надёжная ветка).
+
+   Состояния:
+     cycle: 0-100 — фаза текущего (возможно, уже не первого) цикла,
+            (now - last_cycle_start) по модулю cycle_minutes.
+     idle: true    — last_cycle_start вообще нет: фабрика точно ни разу
+            не запускалась (единственный факт, для которого досчитывать
+            нечего).
+     projected: true — расчётный конец ПЕРВОГО известного цикла уже
+            прошёл, показанный прогресс — проекция вперёд, а не то, что
+            подтверждено последним снимком ESI напрямую. */
 function pinCycleInfo(pin){
-  if(!pin.kind || !pin.kind.endsWith('industry_facility')) return {cycle:null, idle:false};
-  const end=(pin.last_cycle_start&&pin.cycle_minutes)
-    ? Date.parse(pin.last_cycle_start)+pin.cycle_minutes*60000 : null;
-  if(end==null) return {cycle:null, idle:false};
-  const now=Date.now();
-  if(now<end){
-    const total=pin.cycle_minutes*60000;
-    return {cycle:100*(total-(end-now))/total, idle:false};
-  }
-  return {cycle:null, idle:true};
+  if(!pin.kind || !pin.kind.endsWith('industry_facility')) return {cycle:null, idle:false, projected:false};
+  if(!pin.cycle_minutes) return {cycle:null, idle:false, projected:false};
+  if(!pin.last_cycle_start) return {cycle:null, idle:true, projected:false};
+  const cycleMs=pin.cycle_minutes*60000;
+  const elapsed=Math.max(0, Date.now()-Date.parse(pin.last_cycle_start));
+  const phase=elapsed%cycleMs;
+  return {cycle:100*phase/cycleMs, idle:false, projected:elapsed>=cycleMs};
 }
 
 /* Колония простаивает — общее определение для сводки «N простаивает»
    (см. renderColonies()), одно на все три вида (детали/список/сетка),
    а не свой счёт в каждом: у добычи это «нет запущенной программы
-   экстрактора» (nearest_expiry), у переработки — «ни одна фабрика не
-   крутит цикл прямо сейчас» (pinCycleInfo по каждому пину-фабрике, те же
-   реальные ESI-данные, что и у прогресса на круге). Без данных о пинах
-   переработку честно не считаем ни простаивающей, ни работающей —
-   выдумывать нечем. */
+   экстрактора» (nearest_expiry), у переработки — «ни одна фабрика ни
+   разу не запускалась» (pinCycleInfo(...).idle — единственное надёжно
+   известное «простаивает» для фабрики, см. её докстринг: истекший по
+   расчёту цикл сам по себе НЕ значит простой, ESI мог просто давно не
+   обновлять last_cycle_start). Без данных о пинах переработку честно не
+   считаем ни простаивающей, ни работающей — выдумывать нечем. */
 function isColonyIdle(p){
   if(p.role_key==='mine') return !p.nearest_expiry;
   if(p.role_key==='proc'){
@@ -1393,7 +1428,7 @@ function colonyCardHTML(p){
   const detailsBtn = `<button class="details-btn" onclick="openColony('${p.isReal?p.matchId:p.id}')">${t('details')}</button>`;
   return `<div class="colony">
     <div class="colony-head">
-      ${orb(p,54)}
+      ${orb(p,54,false)}
       <div class="pilot-lg" title="${p.character}">${initials(p.character)}${avatarImg(charIdOf(p.character))}</div>
       <div>
         <div class="pilot-name">${p.character}</div>
@@ -1433,7 +1468,7 @@ function renderDash(){
           <div class="pilot-name" style="font-size:12px">${name}</div>
           <div class="sub" style="font-size:11px">${pl(items.length,'pColony')}</div>
         </div>
-        <div class="orbs">${items.map(p=>orb(p,52)).join('')}</div>
+        <div class="orbs">${items.map(p=>orb(p,52,false)).join('')}</div>
       </div>`).join('');
   }
 
@@ -1809,7 +1844,7 @@ function renderColonies(){
         <div class="who" title="${name} · ${pl(items.length,'pColony')}">
           <div class="pilot-lg" style="width:52px;height:52px;font-size:16px">${initials(name)}${avatarImg(charIdOf(name))}</div>
         </div>
-        <div class="orbs">${items.map(p=>orb(p,52)).join('')}${freeSlots}</div>
+        <div class="orbs">${items.map(p=>orb(p,52,false)).join('')}${freeSlots}</div>
       </div>`;
     }).join('');
   } else if(view==='grid'){
@@ -2046,25 +2081,32 @@ function structureUnitFields(kind, ctx){
   if(isFactory){
     // pin.last_cycle_start + pin.cycle_minutes (продукт и длительность —
     // с самой ESI, GET /universe/schematics/{id}/, см. schematic_info()
-    // в sync_colony_status.py) — реальный прогресс/простой, не выдумка.
+    // в sync_colony_status.py). ESI пересчитывает last_cycle_start только
+    // когда колонию открывают в игровом клиенте (esi-issues #654), а не
+    // в реальном времени — но фабрика в игре крутит циклы сама, пока
+    // есть сырьё, поэтому текущая фаза досчитывается вперёд по модулю от
+    // последнего подтверждённого снимка (pinCycleInfo — см. её докстринг:
+    // так же делают RIFT и Planets in Space, сторонние PI-инструменты).
+    // «Простаивает» — только когда last_cycle_start нет вовсе: фабрика
+    // точно ни разу не запускалась, досчитывать не от чего.
     if(pin){
-      const cycleEndMs=(pin.last_cycle_start && pin.cycle_minutes)
-        ? Date.parse(pin.last_cycle_start)+pin.cycle_minutes*60000 : null;
       const now=Date.now();
       let state;
-      if(cycleEndMs==null){
+      if(pin.cycle_minutes==null){
         state=`<div class="state-wait">${t('cycUnknown')}</div>
           <div class="meter"><i style="width:0%"></i></div>
           <div class="meta">${t('cycNoFactory')}</div>`;
-      } else if(now<cycleEndMs){
-        const total=pin.cycle_minutes*60000, pct=Math.round(100*(total-(cycleEndMs-now))/total);
+      } else if(!pin.last_cycle_start){
+        state=`<div class="state-wait">${t('cycNeverStarted')}</div>
+          <div class="meter"><i style="width:0%"></i></div>`;
+      } else {
+        const cycleMs=pin.cycle_minutes*60000;
+        const elapsed=Math.max(0, now-Date.parse(pin.last_cycle_start));
+        const phase=elapsed%cycleMs, pct=Math.round(100*phase/cycleMs);
+        const projected=elapsed>=cycleMs;
         state=`<div class="lbl" style="color:var(--ring-adv)">${t('inProduction')}</div>
           <div class="meter"><i style="width:${pct}%;background:var(--ring-adv)"></i></div>
-          <div class="meta">${fmtLeft(cycleEndMs-now)}</div>`;
-      } else {
-        state=`<div class="state-wait">${t('cycIdleSince')}</div>
-          <div class="meter"><i style="width:100%"></i></div>
-          <div class="meta">${fmtDuration(now-cycleEndMs)}</div>`;
+          <div class="meta">${fmtLeft(cycleMs-phase)}${projected?` · ${t('cycProjectedHint')}`:''}</div>`;
       }
       return `<div class="cols2">
         <div>${state}</div>
@@ -2412,13 +2454,22 @@ const DOC={
    объём каждого предмета берёт сама ESI), экстрактор — сколько голов и
    что именно добывает, базовая/продвинутая/высокотехнологичная фабрика —
    что производит и идёт ли сейчас цикл («В производстве» с отсчётом до
-   конца) или простаивает в ожидании сырья («Простаивает» — сколько
-   времени, вплоть до нескольких дней). Длительность цикла фабрики
-   берётся у самой ESI (справочник схем производства), а не подгоняется
-   под предположение. Компактная полоса иконок под карточкой колонии
-   показывает то же самое покруговому: белое кольцо каждой фабрики крутится
-   дугой во время цикла и мигает целиком, когда фабрика простаивает, а
-   кольцо командного центра — та же настоящая загрузка CPU/Power. В сетке
+   конца). Длительность цикла — у самой ESI (справочник схем
+   производства). ESI обновляет состояние фабрики только когда колонию
+   открывают в игровом клиенте, а не в реальном времени; в игре фабрика
+   при этом продолжает крутить циклы сама, пока есть сырьё. Поэтому,
+   если с последнего подтверждённого цикла прошло больше его длительности,
+   прогресс досчитывается вперёд по модулю от последнего известного
+   старта (так же поступают сторонние PI-инструменты — RIFT, Planets in
+   Space) и подписывается «проекция: колонию давно не открывали в игре» —
+   это честная оценка от настоящих данных, а не гарантированный факт.
+   «Простаивает» пишется только когда фабрика точно ни разу не
+   запускалась — единственное состояние, для которого проецировать
+   нечего. Компактная полоса иконок под карточкой колонии показывает то
+   же самое по кругу: белое кольцо фабрики крутится дугой и во время
+   подтверждённого, и во время спроецированного цикла, и мигает целиком
+   только у той, что не запускалась ни разу; кольцо командного центра —
+   та же настоящая загрузка CPU/Power. В сетке
    и списке «Моих колоний» — иконка добываемого сырья или конечного
    продукта переработки поверх текстуры планеты, голубое кольцо —
    заполненность причала, плашка — время до конца программы экстрактора
@@ -2587,12 +2638,20 @@ const DOC={
    capacity (10,000 m³ for a launchpad, 12,000 m³ for storage — per-item volume comes
    from ESI itself), the extractor shows how many heads it has and exactly what it's
    pulling, and basic/advanced/high-tech facilities show what they produce and whether a
-   cycle is running ("In production" with a countdown) or idle waiting for input ("Idle" —
-   for however long, up to several days). The factory cycle length itself comes straight
-   from ESI's own production-schematic catalogue, not a guess. The compact strip under a
-   colony card shows the same thing as circles: each factory's white ring sweeps an arc
-   during a cycle and blinks whole when idle, and the command centre's ring is the same
-   real CPU/Power load. The grid and list views of
+   cycle is running ("In production" with a countdown). The cycle length itself comes
+   straight from ESI's own production-schematic catalogue. ESI only updates a factory's
+   state when the colony is opened in the game client, not in real time — but in the game
+   the factory keeps auto-cycling on its own as long as it has input. So once more time
+   has passed than one cycle length since the last confirmed start, the progress shown is
+   projected forward by taking the elapsed time modulo the cycle length from that last
+   known start (the same approach third-party PI tools use — RIFT, Planets in Space) and
+   labelled "projected: colony not opened in-game recently" — an honest estimate from real
+   data, not a guaranteed fact. "Idle" is only shown when a factory has genuinely never
+   been started — the one state with nothing to project from. The compact strip under a
+   colony card shows the same thing as circles: a factory's white ring sweeps an arc
+   during both a confirmed and a projected cycle, and blinks whole only for one that's
+   never run, and the command
+   centre's ring is the same real CPU/Power load. The grid and list views of
    "My colonies in the game" show the same data: the icon over the planet texture is the
    raw resource being extracted or the processing chain's final product, the ring is
    launchpad fullness (blue normally, blinking red once it's full), and the chip is time
