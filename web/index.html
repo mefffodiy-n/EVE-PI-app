@@ -1321,7 +1321,15 @@ function orb(row,size,showPilot=true){
 /* Маленький круг структуры внутри колонии. */
 function structOrb(kind,count,planetType,opts){
   opts=opts||{};
-  const id = kind==='command_center' ? ids[`${planetType} Command Center`] : ids['structure:'+kind];
+  // У фабрики (в отличие от экстрактора/причала/КЦ) содержимое разное
+  // от пина к пину — та же постройка, но продукт свой (см. pin.product,
+  // scripts/sync_colony_status.py::pin_detail()). Иконка постройки была
+  // одинаковой для всех фабрик колонии и не отличала их друг от друга;
+  // иконка продукта — то же самое отличие, что уже показано в детальной
+  // панели пина (pinUnitsHTML), но и в компактной полосе (structOrbsForRow).
+  const productIconId = opts.product ? ids[opts.product] : null;
+  const id = productIconId
+    || (kind==='command_center' ? ids[`${planetType} Command Center`] : ids['structure:'+kind]);
   const size=opts.size||46, R=(size/2)-2, r2=R-5;
   const cOut=2*Math.PI*R, cIn=2*Math.PI*r2;
 
@@ -1469,6 +1477,7 @@ function structOrbsForRow(p){
       if(pin.kind==='command_center' && p.cpu_percent!=null){
         opts.cpu=p.cpu_percent; opts.pg=p.pg_percent;
       }
+      if(pin.kind.endsWith('industry_facility') && pin.product) opts.product=pin.product;
       return structOrb(pin.kind,1,p.planet_type,opts);
     }).join('');
   }
@@ -2378,6 +2387,7 @@ function openRealColonyDetail(id){
   const expMs=c.nearest_expiry?Date.parse(c.nearest_expiry):null;
   const row={isReal:true, character:c.character, system:c.system_name,
     planet:String(c.planet_index), planet_type:ptype, nearest_expiry:c.nearest_expiry,
+    structures_detail:c.structures||[], pins:c.pins||[],
     role_key:(c.structures||[]).some(s=>s.kind==='extractor_control_unit')?'mine':
       (c.structures||[]).some(s=>s.kind.endsWith('industry_facility'))?'proc':null};
   const char=crew.find(x=>x.name===c.character);
