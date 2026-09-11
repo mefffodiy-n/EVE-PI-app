@@ -252,6 +252,47 @@ class TestPinDetail:
         assert sync.pin_detail({}, "command_center", client=None) == {"kind": "command_center"}
 
 
+class TestRealColonyLoad:
+    """
+    real_colony_load() — CPU/Power командного центра НАСТОЯЩЕЙ колонии,
+    из реального состава структур/линков/голов (ESI) и реального радиуса
+    планеты (data/planet_industry.csv, не ESI — она радиус не отдаёт).
+    """
+
+    def test_computes_from_real_planet_in_region_csv(self):
+        # 57-KJB I — реальная строка CSV, радиус 2570 км (см. test_planets.py).
+        structures = [
+            {"kind": "command_center", "count": 1},
+            {"kind": "extractor_control_unit", "count": 1},
+            {"kind": "basic_industry_facility", "count": 4},
+        ]
+        raw_pins = [
+            {"extractor_details": {"heads": [{"head_id": i} for i in range(2)]}},
+        ]
+        cpu, pg = sync.real_colony_load(structures, raw_pins, link_count=7, system="57-KJB",
+                                         planet_index_=1, ccu_level=5)
+        assert cpu is not None and pg is not None
+        assert cpu > 0 and pg > 0
+
+    def test_none_when_planet_not_in_region_csv(self):
+        """Jita — не входит в загруженный регион planet_industry.csv."""
+        cpu, pg = sync.real_colony_load([], [], link_count=0, system="Jita",
+                                         planet_index_=4, ccu_level=5)
+        assert (cpu, pg) == (None, None)
+
+    def test_command_center_excluded_before_calling_domain(self):
+        """
+        Командный центр — единственная структура в списке. Если бы он не
+        фильтровался, calculate_real_colony_load() упал бы (его нет в
+        каталоге потребления) — здесь фиксируется, что real_colony_load()
+        отфильтровывает его сам, а не полагается на пустой список извне.
+        """
+        structures = [{"kind": "command_center", "count": 1}]
+        cpu, pg = sync.real_colony_load(structures, [], link_count=0, system="57-KJB",
+                                         planet_index_=1, ccu_level=5)
+        assert cpu is not None and pg is not None
+
+
 class TestSync:
     def test_writes_colonies_with_name_and_expiry(self):
         _add_esi_character()

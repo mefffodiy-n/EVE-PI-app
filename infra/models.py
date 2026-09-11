@@ -140,6 +140,18 @@ class Colony(Base):
     # или программы не запущены.
     nearest_expiry: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
 
+    # Загрузка CPU/Power командного центра — считается ИЗ НАСТОЯЩИХ данных:
+    # реальный состав структур (structures), реальное число линков и голов
+    # экстрактора (из самого ответа ESI), реальный upgrade_level (тоже ESI),
+    # и радиус планеты — из data/planet_industry.csv (см. domain/planets.py),
+    # если планета в нём есть: файл покрывает не весь New Eden, а только
+    # загруженный регион. Раньше это поле пустовало для ЛЮБОЙ реальной
+    # колонии, хотя радиус нужен был только у ESI (её действительно нет) —
+    # у CSV он есть. None — планета не найдена в CSV или структура с
+    # неизвестным type_id (см. scripts/sync_colony_status.py::real_colony_load()).
+    cpu_percent: Mapped[float | None] = mapped_column(nullable=True)
+    pg_percent: Mapped[float | None] = mapped_column(nullable=True)
+
     synced_at: Mapped[datetime] = mapped_column(
         UtcDateTime, default=_utcnow, onupdate=_utcnow
     )
