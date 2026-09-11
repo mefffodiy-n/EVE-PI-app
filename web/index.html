@@ -1766,6 +1766,7 @@ function openColony(id){
 
   document.getElementById('dashBody').style.display='none';
   document.getElementById('shopping').style.display='none';
+  document.getElementById('colonies').style.display='none';
   document.querySelector('#page-dash .tools').style.display='none';
   document.getElementById('colonyPage').classList.add('on');
 }
@@ -1808,6 +1809,7 @@ function openRealColonyDetail(id){
 
   document.getElementById('dashBody').style.display='none';
   document.getElementById('shopping').style.display='none';
+  document.getElementById('colonies').style.display='none';
   document.querySelector('#page-dash .tools').style.display='none';
   document.getElementById('colonyPage').classList.add('on');
 }
@@ -1817,6 +1819,7 @@ function closeColony(){
   document.getElementById('colonyPage').classList.remove('on');
   document.getElementById('dashBody').style.display='';
   document.getElementById('shopping').style.display='';
+  document.getElementById('colonies').style.display='';
   document.querySelector('#page-dash .tools').style.display='';
 }
 document.addEventListener('keydown',e=>{ if(e.key==='Escape')closeColony(); });
