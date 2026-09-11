@@ -94,10 +94,17 @@ def characters():
     Персонажи, доступные планировщику: и dev-заглушки, и вошедшие через
     EVE SSO (`source` в таблице `characters`). Фронтенду происхождение
     не видно — поля одинаковые.
+
+    Реальные (esi) персонажи — только этого визита (api/session.py):
+    load_characters() без account_id в проде честно отдаёт пусто, а не
+    всех подряд (правило 1) — так до 11.09.2026 разные пользователи
+    видели персонажей друг друга.
     """
     from scripts.seed_dev_characters import load_characters
 
-    crew = load_characters()
+    from api.session import current_account_id
+
+    crew = load_characters(current_account_id())
     return json_ok(
         characters=[
             {
@@ -123,20 +130,30 @@ def colonies():
 
     hours_left не считаем на сервере: фронтенд получает nearest_expiry
     и обновляет обратный отсчёт без повторного запроса.
+
+    Колонии — только персонажей этого визита (api/session.py, тот же
+    список, что отдаёт /api/characters): до 11.09.2026 сюда попадали
+    колонии вообще всех пользователей приложения без разбора.
     """
     import copy
 
     from sqlalchemy import select
     from sqlalchemy.exc import OperationalError
 
+    from api.session import current_account_id
     from infra.db import session_scope
     from infra.models import Character, Colony, ExtractionSample
+    from scripts.seed_dev_characters import load_characters
+
+    allowed_ids = {c.character_id for c in load_characters(current_account_id())}
 
     try:
         with session_scope() as session:
             names = dict(session.execute(select(Character.character_id, Character.name)).all())
             rows = session.scalars(
-                select(Colony).order_by(Colony.nearest_expiry.is_(None), Colony.nearest_expiry)
+                select(Colony)
+                .where(Colony.character_id.in_(allowed_ids or {-1}))
+                .order_by(Colony.nearest_expiry.is_(None), Colony.nearest_expiry)
             ).all()
 
             # История добычи по каждому экстрактору — копится
@@ -146,7 +163,9 @@ def colonies():
             # объём пока небольшой, отдельный запрос на пин был бы overkill.
             samples_by_pin: dict[tuple[int, int, int], list[ExtractionSample]] = {}
             for sample in session.scalars(
-                select(ExtractionSample).order_by(ExtractionSample.sampled_at)
+                select(ExtractionSample)
+                .where(ExtractionSample.character_id.in_(allowed_ids or {-1}))
+                .order_by(ExtractionSample.sampled_at)
             ):
                 key = (sample.character_id, sample.planet_id, sample.pin_id)
                 samples_by_pin.setdefault(key, []).append(sample)

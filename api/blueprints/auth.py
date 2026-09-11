@@ -161,13 +161,25 @@ def _sync_first_login_async(character_id: int) -> None:
 
 
 def _store(character_id: int, name: str, tokens: dict, claims: dict) -> None:
-    """Записать персонажа (source="esi") и зашифрованные токены."""
+    """
+    Записать персонажа (source="esi") и зашифрованные токены.
+
+    account_id (см. api/session.py) привязывает персонажа к ТЕКУЩЕМУ
+    визиту — единственное место, где решается, кому этот персонаж будет
+    виден дальше в /api/characters, /api/colonies, /api/calculate и
+    сохранённых планах (найдено 11.09.2026: без этого разные пользователи
+    видели персонажей и колонии друг друга). Повторный вход тем же
+    персонажем из другого браузера/сессии ПЕРЕВЯЗЫВАЕТ его новому визиту
+    — это ожидаемо: доступ туда, откуда только что подтверждён логин.
+    """
+    from api.session import ensure_account_id
     from infra.credentials import save_tokens
     from infra.db import session_scope
     from infra.models import Character
 
     scopes = claims.get("scp")
     scopes = scopes if isinstance(scopes, list) else ([scopes] if scopes else [])
+    account_id = ensure_account_id()
 
     with session_scope() as session:
         char = session.get(Character, character_id)
@@ -178,10 +190,11 @@ def _store(character_id: int, name: str, tokens: dict, claims: dict) -> None:
                 character_id=character_id, name=name,
                 command_center_upgrades_level=0,
                 interplanetary_consolidation_level=0,
-                source="esi",
+                source="esi", account_id=account_id,
             ))
         else:
             char.name = name
             char.source = "esi"
+            char.account_id = account_id
 
         save_tokens(session, character_id, tokens, scopes)

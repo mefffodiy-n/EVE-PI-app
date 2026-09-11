@@ -2,13 +2,19 @@
 ORM-модели.
 
   - `characters` — персонажи. Пишут два источника: `seed_dev_characters`
-    (source="dev", только PI_ENV=dev) и будущий ESI SSO callback
-    (source="esi"). `domain/planner.py` о происхождении не знает.
+    (source="dev", только PI_ENV=dev) и ESI SSO callback (source="esi").
+    `domain/planner.py` о происхождении не знает.
   - `plans` — сохранённые планы (замена json-файлов в data/plans/).
     Публичный интерфейс — `domain/plan_storage.py`.
 
-Колонка `account_id` есть в обеих таблицах под multi-tenant Фазы 3;
-пока всегда NULL, но заведена сразу, чтобы не делать ALTER позже.
+Колонка `account_id` есть в обеих таблицах — разделяет данные разных
+пользователей приложения (`api/session.py`). Была заведена под
+multi-tenant Фазы 3 заранее (чтобы не делать ALTER позже) и до
+11.09.2026 оставалась незаполненной ни одним запросом — из-за этого
+разные вошедшие через SSO пользователи видели персонажей, колонии и
+планы друг друга. Теперь заполняется в `api/blueprints/auth.py::_store()`
+(персонаж) и `domain/plan_storage.py::save()` (план), и читается везде,
+где отдаются эти данные.
 """
 
 from __future__ import annotations
@@ -40,8 +46,12 @@ class Character(Base):
     # диагностика могла отличить окружение.
     source: Mapped[str] = mapped_column(String(16), default="esi")
 
-    # Владелец записи. Multi-tenant — Фаза 3; сейчас всегда NULL, но
-    # колонка есть, чтобы не делать миграцию с ALTER позже.
+    # Владелец записи — account_id визита, вошедшего через SSO этим
+    # персонажем (api/session.py, api/blueprints/auth.py::_store()).
+    # NULL — персонаж заведён до 11.09.2026 (когда колонка была
+    # зарезервирована, но ещё не читалась ни одним запросом) и пока не
+    # входил заново: /api/characters честно его не покажет никому, пока
+    # не перелогинится.
     account_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     updated_at: Mapped[datetime] = mapped_column(

@@ -101,6 +101,60 @@ class TestListing:
         assert delete(plan.id) is False
 
 
+class TestAccountIsolation:
+    """
+    Найдено 11.09.2026: account_id заводился под Фазу 3 заранее, но
+    save/list/load/delete/compare его не читали — план одного пользователя
+    было видно всем. Здесь — прод-поведение (`_dev_unrestricted()` даёт
+    False); dev-поведение уже покрыто остальными тестами этого файла,
+    где save() зовётся вообще без account_id.
+    """
+
+    def test_prod_save_requires_account_id(self, monkeypatch):
+        from infra import config
+
+        monkeypatch.setattr(config, "IS_DEV", False)
+        with pytest.raises(PlanStorageError):
+            save("Аноним", {}, ROWS)
+
+    def test_prod_lists_and_loads_only_own_plans(self, monkeypatch):
+        from infra import config
+
+        plan_a = save("A", {}, ROWS, account_id="acct-a")
+        plan_b = save("B", {}, ROWS, account_id="acct-b")
+
+        monkeypatch.setattr(config, "IS_DEV", False)
+        assert [p.id for p in list_plans(account_id="acct-a")] == [plan_a.id]
+        assert [p.id for p in list_plans(account_id="acct-b")] == [plan_b.id]
+        assert list_plans(account_id=None) == []
+
+        assert load(plan_a.id, account_id="acct-a").name == "A"
+        with pytest.raises(PlanStorageError, match="не найден"):
+            load(plan_a.id, account_id="acct-b")
+        with pytest.raises(PlanStorageError, match="не найден"):
+            load(plan_a.id, account_id=None)
+
+    def test_prod_delete_is_scoped_to_owner(self, monkeypatch):
+        from infra import config
+
+        plan_a = save("A", {}, ROWS, account_id="acct-a")
+
+        monkeypatch.setattr(config, "IS_DEV", False)
+        assert delete(plan_a.id, account_id="acct-b") is False
+        assert delete(plan_a.id, account_id=None) is False
+        assert delete(plan_a.id, account_id="acct-a") is True
+
+    def test_prod_compare_requires_both_plans_owned_by_caller(self, monkeypatch):
+        from infra import config
+
+        plan_a = save("A", {}, ROWS, account_id="acct-a")
+        plan_b = save("B", {}, ROWS, account_id="acct-b")
+
+        monkeypatch.setattr(config, "IS_DEV", False)
+        with pytest.raises(PlanStorageError, match="не найден"):
+            compare(plan_a.id, plan_b.id, account_id="acct-a")
+
+
 class TestComparison:
     def test_shows_which_colonies_changed_not_just_counts(self):
         """
