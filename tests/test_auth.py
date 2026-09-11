@@ -8,6 +8,7 @@ persist персонажа (source="esi") и зашифрованных токе
 
 from __future__ import annotations
 
+import json
 import urllib.parse
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
@@ -97,7 +98,7 @@ class TestCallback:
         q = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
         return q["state"][0]
 
-    def test_full_flow_persists_character_and_encrypted_tokens(self, client, sso_env, _rsa_key):
+    def test_full_flow_persists_character_and_encrypted_tokens(self, client, sso_env, _rsa_key, monkeypatch):
         access = _make_jwt(_rsa_key)
         sso_env._post_form = lambda *a, **k: {
             "access_token": access, "refresh_token": "refresh-xyz", "expires_in": 1199,
@@ -105,6 +106,13 @@ class TestCallback:
         # monkeypatch через атрибут модуля (fixture уже импортировала его)
         import scripts.esi_sso as mod
         mod._post_form = sso_env._post_form
+
+        # Первичный синк персонажа реально ходит в esi.evetech.net (см.
+        # _sync_first_login_async) — здесь это не тестируется, только
+        # что колбэк сохранил персонажа и токены. Не даём фоновому
+        # потоку стартовать реальный EsiClient() во время теста.
+        import api.blueprints.auth as auth_module
+        monkeypatch.setattr(auth_module, "_sync_first_login_async", lambda cid: None)
 
         state = self._login(client)
         r = client.get(f"/api/auth/callback?code=abc&state={state}")
@@ -117,6 +125,24 @@ class TestCallback:
             assert cred and cred.access_token != access  # зашифрован
             assert crypto.decrypt(cred.refresh_token) == "refresh-xyz"
             assert cred.scopes == ["esi-skills.read_skills.v1"]
+
+    def test_callback_triggers_first_sync_for_the_new_character(self, client, sso_env, _rsa_key, monkeypatch):
+        """Колбэк обязан запустить первичный синк именно этого персонажа."""
+        import api.blueprints.auth as auth_module
+
+        access = _make_jwt(_rsa_key)
+        sso_env._post_form = lambda *a, **k: {
+            "access_token": access, "refresh_token": "refresh-xyz", "expires_in": 1199,
+        }
+        import scripts.esi_sso as mod
+        mod._post_form = sso_env._post_form
+
+        seen = []
+        monkeypatch.setattr(auth_module, "_sync_first_login_async", lambda cid: seen.append(cid))
+
+        state = self._login(client)
+        client.get(f"/api/auth/callback?code=abc&state={state}")
+        assert seen == [95538921]
 
     def test_unknown_state_redirects_to_error(self, client, sso_env):
         r = client.get("/api/auth/callback?code=abc&state=nonexistent")
@@ -138,6 +164,75 @@ class TestCallback:
         assert "auth=error" in r.headers["Location"]
         with session_scope() as s:
             assert s.get(Character, 95538921) is None
+
+
+class TestFirstSyncOne:
+    """
+    _first_sync_one — то, что реально бежит в фоновом потоке после входа.
+    Вызывается тут напрямую (синхронно, с мок-клиентом), а не через
+    threading.Thread — гоняться за фоновым потоком в тесте незачем,
+    достаточно проверить саму функцию.
+    """
+
+    def _opener(self, ccu_level=5, ic_level=4):
+        from scripts.sync_character_skills import (
+            SKILL_COMMAND_CENTER_UPGRADES, SKILL_INTERPLANETARY_CONSOLIDATION,
+        )
+
+        def opener(url, headers):
+            if url.endswith("/skills/"):
+                body = {"skills": [
+                    {"skill_id": SKILL_COMMAND_CENTER_UPGRADES, "active_skill_level": ccu_level},
+                    {"skill_id": SKILL_INTERPLANETARY_CONSOLIDATION, "active_skill_level": ic_level},
+                ], "total_sp": 1}
+            elif url.endswith("/planets/"):
+                body = []  # у персонажа пока нет колоний — синк не должен споткнуться
+            else:
+                body = {}
+            return 200, json.dumps(body), {}
+        return opener
+
+    def _add_character(self, cid=95538921):
+        with session_scope() as s:
+            s.add(Character(character_id=cid, name="Pilot",
+                            command_center_upgrades_level=0,
+                            interplanetary_consolidation_level=0, source="esi"))
+
+    def test_updates_skills_without_waiting_for_schedule(self, monkeypatch, tmp_path):
+        from infra import config, crypto
+        from infra.credentials import save_tokens
+        from scripts.esi_client import EsiClient
+
+        monkeypatch.setattr(config, "TOKEN_ENCRYPTION_KEY", crypto.generate_key())
+        import scripts.esi_client as ec
+        monkeypatch.setattr(ec, "ETAG_STORE", tmp_path / "etags.json")
+
+        self._add_character()
+        with session_scope() as s:
+            save_tokens(s, 95538921, {"access_token": "a", "refresh_token": "r",
+                                      "expires_in": 3600}, ["esi-skills.read_skills.v1"])
+
+        import api.blueprints.auth as auth_module
+        client = EsiClient(opener=self._opener(ccu_level=5, ic_level=4))
+        auth_module._first_sync_one(95538921, client=client)
+
+        with session_scope() as s:
+            char = s.get(Character, 95538921)
+            assert char.command_center_upgrades_level == 5
+            assert char.interplanetary_consolidation_level == 4
+
+    def test_unknown_character_is_a_noop(self, monkeypatch, tmp_path):
+        from infra import config, crypto
+        from scripts.esi_client import EsiClient
+
+        monkeypatch.setattr(config, "TOKEN_ENCRYPTION_KEY", crypto.generate_key())
+        import scripts.esi_client as ec
+        monkeypatch.setattr(ec, "ETAG_STORE", tmp_path / "etags.json")
+
+        import api.blueprints.auth as auth_module
+        # Не должно бросить исключение, даже если персонажа уже нет в БД
+        # (устарел, пока поток стартовал).
+        auth_module._first_sync_one(999999999, client=EsiClient(opener=self._opener()))
 
 
 def test_verify_rejects_missing_eve_online_audience(sso_env, _rsa_key, monkeypatch):

@@ -847,6 +847,7 @@ const T={
   inGameColonies:'Мои колонии в игре',cycOver:'программа завершена',cycIdle:'программа не запущена',
   hUnit:'ч',minUnit:'мин',pPin:['пин','пина','пинов'],
   progEnds:'до конца программы экстрактора',syncedColony:'колония в игре',
+  procCycleLbl:'до конца цикла переработки',
   cycNoFactory:'ESI не отдаёт состояние фабрик — только экстракторы',
   role_mine:'Добыча',role_mine_surplus:'Добыча (избыток)',role_proc:'Переработка',role_direct_p2:'Прямое P2',
   factW:'фабрик',pFactory:['фабрика','фабрики','фабрик']},
@@ -887,6 +888,7 @@ const T={
   inGameColonies:'My in-game colonies',cycOver:'program ended',cycIdle:'no program running',
   hUnit:'h',minUnit:'min',pPin:['pin','pins','pins'],
   progEnds:'until the extraction program ends',syncedColony:'built in game',
+  procCycleLbl:'until the processing cycle ends',
   cycNoFactory:'ESI does not expose factory state — extractors only',
   role_mine:'Extraction',role_mine_surplus:'Extraction (surplus)',role_proc:'Processing',role_direct_p2:'Direct P2',
   factW:'factories',pFactory:['factory','factories','factories']}
@@ -982,13 +984,41 @@ function plural(n,one,few,many){
 
 /* ── Круг колонии ───────────────────────────────────────────────
    Кольцо показывает загрузку по узкому ресурсу, а не таймер цикла:
-   таймеров у нас пока нет, и рисовать вымышленное время нельзя. */
+   таймеров у нас пока нет, и рисовать вымышленное число нельзя.
+
+   row.isReal — та же функция для факта из игры («Мои колонии в игре»,
+   см. realRows()): загрузки CPU/PG там нет (её ESI не отдаёт), поэтому
+   кольцо красится по срочности (осталось < 2 ч — янтарь, кончилось —
+   алярм, иначе по роли) и в бейдже настоящий обратный отсчёт вместо
+   процента — придумывать число там, где его нет, нельзя (правило 1). */
 function orb(row,size){
-  const peak=Math.max(row.cpu_percent,row.pg_percent);
   const r=(size/2)-2, c=2*Math.PI*r;
+  const planetId=ids['planet:'+row.planet_type];
+  if(row.isReal){
+    const exp=row.nearest_expiry?Date.parse(row.nearest_expiry):null;
+    const left=exp!=null?exp-Date.now():null;
+    const over=left!=null&&left<=0, soon=left!=null&&left>0&&left<7200000;
+    const color=over?'var(--alarm)':soon?'var(--amber)':
+                row.role_key==='mine'?'var(--ring-extract)':
+                row.role_key==='proc'?'var(--ring-adv)':'var(--seam)';
+    const badgeTxt=exp!=null?fmtLeft(left):(row.role_key==='proc'?t('noData'):t('cycIdle'));
+    return `<div class="orb" style="--orb:${size}px"
+              ${row.matchId?`onclick="openColony('${row.matchId}')"`:''}
+              title="${row.character} · ${row.system} ${row.planet}">
+      <div class="disc">${planetId?`<img src="${ICON(planetId)}" alt="">`:''}</div>
+      <svg class="ring" viewBox="0 0 ${size} ${size}">
+        <circle class="track" cx="${size/2}" cy="${size/2}" r="${r}"/>
+        <circle cx="${size/2}" cy="${size/2}" r="${r}" stroke="${color}"
+          stroke-dasharray="${c} ${c}" stroke-linecap="round"/>
+      </svg>
+      <div class="badge${over?' hot':''}"${exp!=null?` data-exp="${exp}"`:''}>${badgeTxt}</div>
+      <div class="pilot" title="${row.character}">${initials(row.character)}</div>
+    </div>`;
+  }
+  const peak=Math.max(row.cpu_percent,row.pg_percent);
   const color=peak>=95?'var(--alarm)':peak>=90?'var(--amber)':
               (isMining(row)?'var(--ring-extract)':'var(--ring-adv)');
-  const planetId=ids['planet:'+row.planet_type], cargoId=row.type_id;
+  const cargoId=row.type_id;
   return `<div class="orb" style="--orb:${size}px" onclick="openColony('${row.id}')"
             title="${row.character} · ${row.system} ${row.planet} · ${row.res_out}">
     <div class="disc">${planetId?`<img src="${ICON(planetId)}" alt="">`:''}</div>
@@ -1071,37 +1101,71 @@ function sorted(){
   return c;
 }
 
+/* Правая плашка колонии: у плана — загрузка CPU/PG, у факта из игры —
+   роль (добыча/переработка) диктует, ЧЕЙ цикл показывать справа.
+   Фабричный цикл ESI не отдаёт вовсе (см. cycNoFactory) — показывается
+   честное «нет данных», а не выдуманное время. */
+function colonyTail(p){
+  if(!p.isReal){
+    const peak=Math.max(p.cpu_percent,p.pg_percent);
+    return {lbl:t('loadLbl'), cls:peak>=90?' hot':'',
+      val:`CPU ${p.cpu_percent.toFixed(1)}% · PG ${p.pg_percent.toFixed(1)}%`};
+  }
+  const exp=p.nearest_expiry?Date.parse(p.nearest_expiry):null;
+  if(p.role_key==='mine'){
+    const left=exp!=null?exp-Date.now():null;
+    const cls=left==null?'':left<=0?' over':left<7200000?' soon':'';
+    return {lbl:t('progEnds'), cls, exp, val:left==null?t('cycIdle'):fmtLeft(left)};
+  }
+  if(p.role_key==='proc'){
+    return {lbl:t('procCycleLbl'), cls:'', val:t('noData'), title:t('cycNoFactory')};
+  }
+  return {lbl:t('progEnds'), cls:'', val:t('cycIdle')};
+}
+
+/* Карточка колонии — общая для плана и «Моих колоний в игре»: та же
+   разметка .colony/.colony-head/.strip, разница только в бейдже роли
+   (у факта он не всегда известен) и в правой плашке (colonyTail). */
+function colonyCardHTML(p){
+  const tail=colonyTail(p);
+  const roleBadge=p.role_key?`<span class="rolebadge ${roleClass(p)}">${roleLabel(p)}</span>`:'';
+  const subExtra=p.isReal
+    ? `<span class="synced">${t('syncedColony')}${p.upgrade_level?` · CC${p.upgrade_level}`:''} · ${pl(p.num_pins,'pPin')}</span>`
+    : `<span class="num">${nloc(Math.round(p.planet_radius_km))} ${t('km')}</span>`;
+  const detailsBtn = p.isReal
+    ? (p.matchId?`<button class="details-btn" onclick="openColony('${p.matchId}')">${t('details')}</button>`:'')
+    : `<button class="details-btn" onclick="openColony('${p.id}')">${t('details')}</button>`;
+  return `<div class="colony">
+    <div class="colony-head">
+      ${orb(p,54)}
+      <div class="pilot-lg" title="${p.character}">${initials(p.character)}</div>
+      <div>
+        <div class="pilot-name">${p.character}</div>
+        <div class="sub">
+          ${roleBadge}
+          <span class="sysbadge">${p.system} ${p.planet}</span>
+          <span class="sec" style="color:${secColor(p.planet_type)}">${p.planet_type}</span>
+          ${subExtra}
+        </div>
+      </div>
+      <div class="tail">
+        <div class="lbl">${tail.lbl}</div>
+        <div class="val${tail.cls}"${tail.exp!=null?` data-exp="${tail.exp}"`:''}${tail.title?` title="${tail.title}"`:''}>${tail.val}</div>
+      </div>
+      ${detailsBtn}
+    </div>
+    <div class="strip">${expandStructures(p).map(kind=>structOrb(kind,1,p.planet_type,
+          (!p.isReal&&kind==="command_center")?{cpu:p.cpu_percent,pg:p.pg_percent}:{})).join('')}</div>
+  </div>`;
+}
+
 function renderDash(){
   const box=document.getElementById('dashBody');
   if(!plan.length){ box.innerHTML=`<div class="empty">${t('noPlan')}</div>`; return; }
   const rows=sorted();
 
   if(view==='details'){
-    box.innerHTML=rows.map(p=>{
-      const peak=Math.max(p.cpu_percent,p.pg_percent);
-      return `<div class="colony">
-        <div class="colony-head">
-          ${orb(p,54)}
-          <div class="pilot-lg" title="${p.character}">${initials(p.character)}</div>
-          <div>
-            <div class="pilot-name">${p.character}</div>
-            <div class="sub">
-              <span class="rolebadge ${roleClass(p)}">${roleLabel(p)}</span>
-              <span class="sysbadge">${p.system} ${p.planet}</span>
-              <span class="sec" style="color:${secColor(p.planet_type)}">${p.planet_type}</span>
-              <span class="num">${nloc(Math.round(p.planet_radius_km))} ${t('km')}</span>
-            </div>
-          </div>
-          <div class="tail">
-            <div class="lbl">${t('loadLbl')}</div>
-            <div class="val${peak>=90?' hot':''}">CPU ${p.cpu_percent.toFixed(1)}% · PG ${p.pg_percent.toFixed(1)}%</div>
-          </div>
-          <button class="details-btn" onclick="openColony('${p.id}')">${t('details')}</button>
-        </div>
-        <div class="strip">${expandStructures(p).map(kind=>structOrb(kind,1,p.planet_type,
-              kind==="command_center"?{cpu:p.cpu_percent,pg:p.pg_percent}:{})).join('')}</div>
-      </div>`;
-    }).join('');
+    box.innerHTML=rows.map(colonyCardHTML).join('');
   }
 
   if(view==='list'){
@@ -1388,54 +1452,83 @@ function matchColony(p){
 
 /* Обратный поиск: под реальную колонию — строку расчётного плана
    (если план вообще построен и в нём есть этот персонаж/планета).
-   Нужен только для кнопки «Детали» — она ведёт в ту же панель по
-   структурам, что и колонии плана. */
+   Нужен для кнопки «Детали» — она ведёт в ту же панель по структурам,
+   что и колонии плана. */
 function matchPlanRow(c){
   return plan.find(p=>p.character===c.character && p.system===c.system_name &&
     parseInt(p.planet,10)===c.planet_index) || null;
 }
 
+/* Реальные колонии в форме строки плана (isReal:true) — чтобы дальше
+   их вела ровно та же машина рендера: orb(), colonyCardHTML(), режимы
+   вида и сортировка. Роль определяем по составу, а не выдумываем:
+   есть экстрактор — добыча, нет экстрактора, но есть фабрики —
+   переработка, иначе роль неизвестна (только что поставлен CC). */
+function realRows(){
+  return coloniesData.map(c=>{
+    // ESI отдаёт planet_type строчными («ice»), иконки в data/type_ids.json —
+    // с заглавной («Ice Command Center»).
+    const ptype=c.planet_type?c.planet_type[0].toUpperCase()+c.planet_type.slice(1):'';
+    const kinds=(c.structures||[]).map(sd=>sd.kind);
+    const role_key=kinds.includes('extractor_control_unit') ? 'mine'
+      : kinds.some(k=>k.endsWith('industry_facility')) ? 'proc' : null;
+    return {
+      isReal:true, matchId:(matchPlanRow(c)||{}).id||null,
+      character:c.character, system:c.system_name, planet:String(c.planet_index),
+      planet_type:ptype, role_key, role_tier:null,
+      structures_detail:c.structures||[],
+      nearest_expiry:c.nearest_expiry,
+      upgrade_level:c.upgrade_level, num_pins:c.num_pins,
+    };
+  });
+}
+
+/* Та же сортировка, что и у плана (sorted()), на тех же кнопках —
+   только «загрузка»/«запас» не про CPU/PG (её нет), а про срочность
+   обратного отсчёта: самая горящая программа первой / самая свободная
+   первой. Персонаж и система сравниваются буквально как у плана. */
+function sortedColonies(){
+  const rows=realRows();
+  const left=c=>c.nearest_expiry?Date.parse(c.nearest_expiry)-Date.now():Infinity;
+  if(sortBy==='load')    rows.sort((a,b)=>left(a)-left(b));
+  if(sortBy==='reserve') rows.sort((a,b)=>left(b)-left(a));
+  if(sortBy==='pilot')   rows.sort((a,b)=>a.character.localeCompare(b.character)||a.system.localeCompare(b.system));
+  if(sortBy==='system')  rows.sort((a,b)=>a.system.localeCompare(b.system)||(+a.planet)-(+b.planet));
+  return rows;
+}
+
+/* «Мои колонии в игре» — те же три режима вида (детали/список/сетка) и
+   та же сортировка, что и у плана дашборда: одни кнопки управляют обоими
+   блоками, поведение не должно расходиться. */
 function renderColonies(){
   const box=document.getElementById('colonies'); if(!box) return;
   if(!coloniesData.length){ box.innerHTML=''; return; }
-  const now=Date.now();
-  const cards=coloniesData.map(c=>{
-    const exp=c.nearest_expiry?Date.parse(c.nearest_expiry):null;
-    const left=exp!=null?exp-now:null;
-    const cls=left==null?'':left<=0?' over':left<7200000?' soon':'';
-    const when=left==null?t('cycIdle'):fmtLeft(left);
-    // ESI отдаёт planet_type строчными («ice»), а иконка командного
-    // центра в data/type_ids.json — с заглавной («Ice Command Center»).
-    const ptype=c.planet_type?c.planet_type[0].toUpperCase()+c.planet_type.slice(1):'';
-    const strip=(c.structures||[]).flatMap(sd=>Array(sd.count).fill(sd.kind))
-      .map(kind=>structOrb(kind,1,ptype,{})).join('');
-    const match=matchPlanRow(c);
-    return `<div class="colony">
-      <div class="colony-head">
-        <div class="pilot-lg" title="${c.character}">${initials(c.character)}</div>
-        <div>
-          <div class="pilot-name">${c.character}</div>
-          <div class="sub">
-            <span class="sysbadge">${c.system_name} ${c.planet_index}</span>
-            <span class="sec" style="color:${secColor(ptype)}">${ptype}</span>
-            <span class="synced">${t('syncedColony')}${c.upgrade_level?` · CC${c.upgrade_level}`:''} · ${pl(c.num_pins,'pPin')}</span>
-          </div>
+  const rows=sortedColonies();
+  let body='';
+  if(view==='details'){
+    body=rows.map(colonyCardHTML).join('');
+  } else if(view==='list'){
+    const byPilot={};
+    rows.forEach(p=>(byPilot[p.character]=byPilot[p.character]||[]).push(p));
+    body=Object.entries(byPilot).map(([name,items])=>`
+      <div class="pilot-row">
+        <div class="who">
+          <div class="pilot-lg" style="margin-bottom:4px">${initials(name)}</div>
+          <div class="pilot-name" style="font-size:12px">${name}</div>
+          <div class="sub" style="font-size:11px">${pl(items.length,'pColony')}</div>
         </div>
-        <div class="tail">
-          <div class="lbl">${t('progEnds')}</div>
-          <div class="val${cls}" ${exp!=null?`data-exp="${exp}"`:''}>${when}</div>
-        </div>
-        ${match?`<button class="details-btn" onclick="openColony('${match.id}')">${t('details')}</button>`:''}
-      </div>
-      ${strip?`<div class="strip">${strip}</div>`:''}
-    </div>`;
-  }).join('');
-  box.innerHTML=`<div class="colonies"><h3>${t('inGameColonies')}</h3>${cards}</div>`;
+        <div class="orbs">${items.map(p=>orb(p,52)).join('')}</div>
+      </div>`).join('');
+  } else if(view==='grid'){
+    body=`<div class="grid">${rows.map(p=>orb(p,58)).join('')}</div>`;
+  }
+  box.innerHTML=`<div class="colonies"><h3>${t('inGameColonies')}</h3>${body}</div>`;
 }
 
-/* Живой отсчёт: перерисовываем только числа, не весь блок.
-   Работает и для «Моих колоний» (.tail .val), и для таймера в панели
-   колонии (.extractor-left) — оба сами несут data-exp и класс soon/over. */
+/* Живой отсчёт: перерисовываем только числа, не весь блок. Работает
+   для .tail .val (soon/over), .extractor-left в панели колонии и
+   .orb .badge в list/grid-видах «Моих колоний» (hot) — у каждого свой
+   класс подсветки, поэтому тут выставляются оба набора сразу. */
 setInterval(()=>{
   const now=Date.now();
   document.querySelectorAll('[data-exp]').forEach(el=>{
@@ -1443,6 +1536,7 @@ setInterval(()=>{
     el.textContent=fmtLeft(left);
     el.classList.toggle('soon', left>0 && left<7200000);
     el.classList.toggle('over', left<=0);
+    el.classList.toggle('hot', left<=0);
   });
 }, 60000);
 
@@ -1766,11 +1860,12 @@ const DOC={
 
    <h3>Вход через EVE Online</h3>
    <p>Кнопка «Войти через EVE SSO» подключает ваших персонажей по официальному
-   протоколу CCP. После входа планировщик берёт настоящие уровни скиллов
-   (Command Center Upgrades и Interplanetary Consolidation) вместо ручных, а на
-   дашборде появляются реальные колонии из игры. Токены хранятся на сервере
-   в зашифрованном виде; приложение не видит ваш пароль. Пока владелец не
-   зарегистрировал приложение у CCP, кнопка отвечает, что вход не настроен.</p>
+   протоколу CCP. Сразу после входа планировщик подтягивает настоящие уровни
+   скиллов (Command Center Upgrades и Interplanetary Consolidation) и реальные
+   колонии — не нужно ждать ближайшего планового обновления, обычно это
+   занимает несколько секунд. Токены хранятся на сервере в зашифрованном виде;
+   приложение не видит ваш пароль. Пока владелец не зарегистрировал приложение
+   у CCP, кнопка отвечает, что вход не настроен.</p>
 
    <h3>Мои колонии в игре</h3>
    <p>Отдельный блок на дашборде: что у персонажей действительно построено и
@@ -1909,11 +2004,11 @@ const DOC={
 
    <h3>Log in with EVE Online</h3>
    <p>The “Log in with EVE SSO” button connects your characters through CCP's official
-   protocol. After you log in, the planner uses your real skill levels (Command Center
-   Upgrades and Interplanetary Consolidation) instead of manual ones, and your real
-   in-game colonies appear on the dashboard. Tokens are stored encrypted on the server;
-   the app never sees your password. Until the owner registers the app with CCP, the
-   button replies that login is not configured.</p>
+   protocol. Right after you log in the planner pulls your real skill levels (Command
+   Center Upgrades and Interplanetary Consolidation) and your real colonies — no need
+   to wait for the next scheduled refresh, it usually takes a few seconds. Tokens are
+   stored encrypted on the server; the app never sees your password. Until the owner
+   registers the app with CCP, the button replies that login is not configured.</p>
 
    <h3>My in-game colonies</h3>
    <p>A separate dashboard panel: what your characters have actually built and how long
@@ -2073,7 +2168,7 @@ async function boot(){
   buildSortMenu();
 }
 function setSort(k){ sortBy=k; document.getElementById('sortMenu').classList.remove('open');
-  buildSortMenu(); renderDash(); }
+  buildSortMenu(); renderDash(); renderColonies(); }
 
 /* ── Списки выбора ────────────────────────────────────────────── */
 function renderProducts(){
@@ -2326,7 +2421,7 @@ document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>show(t.dataset.page))
 document.querySelectorAll('.tool[data-view]').forEach(t=>t.onclick=()=>{
   view=t.dataset.view;
   document.querySelectorAll('.tool[data-view]').forEach(x=>x.classList.toggle('on',x===t));
-  renderDash();
+  renderDash(); renderColonies();
 });
 document.addEventListener('click',e=>{ if(!e.target.closest('#sortMenu'))
   document.getElementById('sortMenu').classList.remove('open'); });
