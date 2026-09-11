@@ -150,10 +150,17 @@ def structures_detail(pins: list[dict]) -> list[dict]:
     ]
 
 
+_EMPTY_LOAD: dict[str, float | None] = {
+    "cpu_percent": None, "pg_percent": None,
+    "cpu_used": None, "cpu_capacity": None,
+    "pg_used": None, "pg_capacity": None,
+}
+
+
 def real_colony_load(
     structures: list[dict], raw_pins: list[dict], link_count: int,
     system: str, planet_index_: int, ccu_level: int,
-) -> tuple[float | None, float | None]:
+) -> dict[str, float | None]:
     """
     Загрузка CPU/Power командного центра настоящей колонии — из
     НАСТОЯЩИХ данных, а не оценка: состав структур и число линков ESI
@@ -162,7 +169,11 @@ def real_colony_load(
     чего ESI не даёт) берём из data/planet_industry.csv — того же файла,
     что использует сам расчётный план (domain/planets.py).
 
-    (None, None), если планеты нет в этом файле (он покрывает только
+    Отдаёт и проценты, и абсолютные числа (cpu_used/cpu_capacity и т.п.,
+    tf/MW) — панель колонии в игре показывает оба, см. скриншот
+    пользователя 11.09.2026.
+
+    Все None, если планеты нет в этом файле (он покрывает только
     загруженный регион, не весь New Eden) — честный пробел вместо
     «правдоподобного, но ложного» числа (правило 1), а не выдумка.
     """
@@ -171,7 +182,7 @@ def real_colony_load(
 
     radius = load_planets().radius_km(system, planet_index_)
     if radius is None:
-        return None, None
+        return dict(_EMPTY_LOAD)
 
     heads = sum(
         len((pin.get("extractor_details") or {}).get("heads") or [])
@@ -187,8 +198,12 @@ def real_colony_load(
     except UnsupportedSetup:
         # Неизвестный уровень CC (ESI отдал не 0..5) — теоретически не
         # должно случиться, но лучше честный пробел, чем падение сборщика.
-        return None, None
-    return load.cpu_percent, load.pg_percent
+        return dict(_EMPTY_LOAD)
+    return {
+        "cpu_percent": load.cpu_percent, "pg_percent": load.pg_percent,
+        "cpu_used": round(load.used.cpu, 1), "cpu_capacity": round(load.capacity.cpu, 1),
+        "pg_used": round(load.used.pg, 1), "pg_capacity": round(load.capacity.pg, 1),
+    }
 
 
 @lru_cache(maxsize=1)
@@ -275,10 +290,13 @@ def schematic_info(client, schematic_id: int) -> dict | None:
 
 VOLUME_CACHE_PATH = ROOT / "data" / "cache" / "type_volumes.json"
 
-# Ёмкость причала/склада — стандартная игровая константа (одинакова у всех
-# построек своего вида, от типа планеты не зависит), не из ESI. Тот же
-# фронтенд уже полагался на эти числа для подписи «X / 10 000 m³» и т.п.
-STORAGE_CAPACITY_M3 = {"launchpad": 10_000, "storage_facility": 12_000}
+# Ёмкость причала/склада/командного центра — стандартная игровая константа
+# (одинакова у всех построек своего вида, от типа планеты не зависит), не
+# из ESI. Тот же фронтенд уже полагался на эти числа для подписи
+# «X / 10 000 m³» и т.п. 500 м³ у командного центра — верифицировано
+# скриншотом реального игрового клиента (11.09.2026), у самой ESI этого
+# числа нет (не отдаёт ёмкость структур).
+STORAGE_CAPACITY_M3 = {"launchpad": 10_000, "storage_facility": 12_000, "command_center": 500}
 
 
 def _load_volume_cache() -> dict[str, float]:
@@ -386,7 +404,9 @@ def pin_detail(pin: dict, kind: str, client) -> dict:
             "last_cycle_start": pin.get("last_cycle_start"),
             "contents": _content_list(pin),
         })
-    elif kind in ("launchpad", "storage_facility"):
+    elif kind in ("launchpad", "storage_facility", "command_center"):
+        # У командного центра тоже есть собственное небольшое хранилище
+        # (500 м³, см. STORAGE_CAPACITY_M3) — раньше не читалось вовсе.
         contents = _content_list(pin)
         detail.update({
             "contents": contents,
@@ -502,9 +522,9 @@ def sync_one(client, session, character) -> str:
                 fields["structures"] = structures
                 fields["pins"] = pins
                 link_count = len((detail.data or {}).get("links") or [])
-                fields["cpu_percent"], fields["pg_percent"] = real_colony_load(
+                fields.update(real_colony_load(
                     structures or [], raw_pins, link_count, system, idx, ccu_level,
-                )
+                ))
             if row is None:
                 session.add(Colony(character_id=cid, planet_id=planet_id, **fields))
             else:
