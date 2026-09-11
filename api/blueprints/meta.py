@@ -149,6 +149,8 @@ def colonies():
                     "num_pins": row.num_pins,
                     "structures": row.structures or [],
                     "pins": row.pins or [],
+                    "cpu_percent": row.cpu_percent,
+                    "pg_percent": row.pg_percent,
                     "nearest_expiry": row.nearest_expiry.isoformat() if row.nearest_expiry else None,
                     "synced_at": row.synced_at.isoformat() if row.synced_at else None,
                 }
