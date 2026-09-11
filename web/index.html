@@ -1135,7 +1135,12 @@ function isLaunchpadFull(row){
    справа-снизу. Кольцо здесь — не CPU/PG (тех честно нет, ESI не отдаёт
    радиус планеты, правило 1), а заполненность причала — те же данные,
    что в самой игре. */
-function orb(row,size){
+/* showPilot=false — там, где портрет персонажа уже показан рядом
+   (карточка колонии, ряд «Список по персонажам») и повторять его на
+   самом круге было бы дублем; в сетке, где на один экран приходится
+   много разных персонажей и рядом с кругом портрета больше нигде нет,
+   остаётся включённым по умолчанию. */
+function orb(row,size,showPilot=true){
   const r=(size/2)-2, c=2*Math.PI*r;
   const planetId=ids['planet:'+row.planet_type];
   if(row.isReal){
@@ -1187,7 +1192,7 @@ function orb(row,size){
       </svg>`:''}
       ${attention?noEntry:(info.iconId?`<img class="cargo" src="${ICON(info.iconId)}" alt="">`:'')}
       ${showBadge?`<div class="badge${over?' hot':''}"${exp!=null?` data-exp="${exp}"`:''}>${badgeTxt}</div>`:''}
-      <div class="pilot" title="${row.character}">${initials(row.character)}${avatarImg(charIdOf(row.character))}</div>
+      ${showPilot?`<div class="pilot" title="${row.character}">${initials(row.character)}${avatarImg(charIdOf(row.character))}</div>`:''}
       ${tip}
     </div>`;
   }
@@ -1209,7 +1214,7 @@ function orb(row,size){
         stroke-dasharray="${c*Math.min(peak,100)/100} ${c}" stroke-linecap="round"/>
     </svg>
     <div class="badge${peak>=95?' hot':''}">${peak.toFixed(0)}%</div>
-    <div class="pilot" title="${row.character}">${initials(row.character)}</div>
+    ${showPilot?`<div class="pilot" title="${row.character}">${initials(row.character)}</div>`:''}
   </div>`;
 }
 
@@ -1407,7 +1412,7 @@ function colonyCardHTML(p){
   const detailsBtn = `<button class="details-btn" onclick="openColony('${p.isReal?p.matchId:p.id}')">${t('details')}</button>`;
   return `<div class="colony">
     <div class="colony-head">
-      ${orb(p,54)}
+      ${orb(p,54,false)}
       <div class="pilot-lg" title="${p.character}">${initials(p.character)}${avatarImg(charIdOf(p.character))}</div>
       <div>
         <div class="pilot-name">${p.character}</div>
@@ -1447,7 +1452,7 @@ function renderDash(){
           <div class="pilot-name" style="font-size:12px">${name}</div>
           <div class="sub" style="font-size:11px">${pl(items.length,'pColony')}</div>
         </div>
-        <div class="orbs">${items.map(p=>orb(p,52)).join('')}</div>
+        <div class="orbs">${items.map(p=>orb(p,52,false)).join('')}</div>
       </div>`).join('');
   }
 
@@ -1823,7 +1828,7 @@ function renderColonies(){
         <div class="who" title="${name} · ${pl(items.length,'pColony')}">
           <div class="pilot-lg" style="width:52px;height:52px;font-size:16px">${initials(name)}${avatarImg(charIdOf(name))}</div>
         </div>
-        <div class="orbs">${items.map(p=>orb(p,52)).join('')}${freeSlots}</div>
+        <div class="orbs">${items.map(p=>orb(p,52,false)).join('')}${freeSlots}</div>
       </div>`;
     }).join('');
   } else if(view==='grid'){
