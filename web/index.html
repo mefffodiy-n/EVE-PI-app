@@ -755,6 +755,10 @@ body.light .rolebadge.excess { background:rgba(154,107,18,.12); }
     </div>
     <button class="mini" id="exportBtn" onclick="exportPlan()" style="margin-left:10px"
             data-i18n="export">Экспорт в Excel</button>
+    <button class="mini" id="jumpColonies" onclick="jumpTo('colonies')" style="margin-left:6px;display:none"
+            data-i18n="jumpColonies">↓ Мои колонии</button>
+    <button class="mini" id="jumpShopping" onclick="jumpTo('shopping')" style="margin-left:6px;display:none"
+            data-i18n="jumpShopping">↓ Список закупки</button>
     <div class="counts" id="counts" data-i18n="counts0">план не построен</div>
   </div>
   <div id="dashBody"><div class="empty" data-i18n="noPlanLong">План не построен. Откройте вкладку «Настройки», выберите продукты и постройте план.</div></div>
@@ -895,7 +899,7 @@ const T={
   noReserve:'без запаса',sortLoad:'По загрузке',sortReserve:'По остатку запаса',
   sortPilot:'По имени персонажа',sortSystem:'По системе',
   cProc:'переработка',cMine:'добыча',crewHint:'Персонажи хранятся на сервере и не пропадают при перезаходе.',
-  planetSlots:'слотов планет',wholeRegion:'Весь регион',clearAll:'Снять всё',nothingChosen:'ничего не выбрано',systems:'систем',selectAll:'Выбрать все',pickProducts:'Выберите хотя бы один продукт',pickConst:'Выберите хотя бы одно созвездие',export:'Экспорт в Excel',shopping:'Список закупки: командные центры',shopTotal:'Всего командных центров',exportEmpty:'Сначала постройте план',exportFail:'Не удалось выгрузить файл',profitTitle:'Что выгоднее производить',collectedAgo:'снимок собран',minutesAgo:'мин назад',stale:'устарел',colProduct:'Продукт',colColonies:'Планет',colPerColony:'ISK / колония-час',colPerHour:'ISK / час',colPrice:'Цена за единицу',noPrice:'нет цены',noSnapshot:'Снимок цен не собран',advDeficit:'Персонажей не хватает на эту цепочку',advSurplus:'Персонажей больше, чем нужно',advDeficitLead:'Полный цикл требует {need} колоний, а в пуле {have} слотов. Вот что поместится целиком:',advSurplusLead:'Выбранное занимает {need} колоний из {have}. Свободно {spare} — можно добавить:',advTake:'Взять',advIgnoreDeficit:'Строить как есть',advIgnoreSurplus:'Занять свободных добычей',advIgnoreDeficitHint:'план будет с дефицитом сырья',advIgnoreSurplusHint:'добыча сырья той же цепочки, по убыванию дефицитности',colonies3:'колоний',excess:'Добыча (избыток)',directP2:'Делать P2 прямо на добывающих планетах',directP2Hint:'где есть оба вида сырья — не нужно возить P1',mSpread:'Разброс по системам',logi:'всего задействовано',systemsAvg:'систем на персонажа',sysOne:'система',sysFew:'системы',sysMany:'систем',logiGood:'колонии собраны компактно',logiPoor:'урожай придётся собирать в разъездах',mColonies:'Колоний в плане',mChars:'Персонажей занято',mPeak:'Самая нагруженная',mShort:'Не хватает персонажей',planClosed:'план закрыт',fitsUpTo:'двойной шаблон помещается на планеты до',km:'км',suitableHere:'подходящих планет в системе',ofThem:'из них',decisionTitle:'План упёрся в размер планет',decisionText:'В выбранной домашней системе двойной шаблон не помещается ни на одну планету. Выберите, как поступить.',chooseOther:'Выбрать другую систему',useSingle:'Ставить по одному шаблону',singleNote:'планет и персонажей потребуется вдвое больше',savedPlans:'Сохранённые планы',save:'Сохранить',load:'Открыть',del:'Удалить',compare:'Сравнить',noSaved:'Пока ничего не сохранено',saveFirst:'Сначала постройте план',pickTwo:'Отметьте два плана для сравнения',cmpTitle:'Разница',colonies2:'колоний',chars2:'персонажей',peak2:'пиковая загрузка',onlyLeft:'Только в первом',onlyRight:'Только во втором',same:'Совпало',
+  planetSlots:'слотов планет',wholeRegion:'Весь регион',clearAll:'Снять всё',nothingChosen:'ничего не выбрано',systems:'систем',selectAll:'Выбрать все',pickProducts:'Выберите хотя бы один продукт',pickConst:'Выберите хотя бы одно созвездие',export:'Экспорт в Excel',jumpColonies:'↓ Мои колонии',jumpShopping:'↓ Список закупки',shopping:'Список закупки: командные центры',shopTotal:'Всего командных центров',exportEmpty:'Сначала постройте план',exportFail:'Не удалось выгрузить файл',profitTitle:'Что выгоднее производить',collectedAgo:'снимок собран',minutesAgo:'мин назад',stale:'устарел',colProduct:'Продукт',colColonies:'Планет',colPerColony:'ISK / колония-час',colPerHour:'ISK / час',colPrice:'Цена за единицу',noPrice:'нет цены',noSnapshot:'Снимок цен не собран',advDeficit:'Персонажей не хватает на эту цепочку',advSurplus:'Персонажей больше, чем нужно',advDeficitLead:'Полный цикл требует {need} колоний, а в пуле {have} слотов. Вот что поместится целиком:',advSurplusLead:'Выбранное занимает {need} колоний из {have}. Свободно {spare} — можно добавить:',advTake:'Взять',advIgnoreDeficit:'Строить как есть',advIgnoreSurplus:'Занять свободных добычей',advIgnoreDeficitHint:'план будет с дефицитом сырья',advIgnoreSurplusHint:'добыча сырья той же цепочки, по убыванию дефицитности',colonies3:'колоний',excess:'Добыча (избыток)',directP2:'Делать P2 прямо на добывающих планетах',directP2Hint:'где есть оба вида сырья — не нужно возить P1',mSpread:'Разброс по системам',logi:'всего задействовано',systemsAvg:'систем на персонажа',sysOne:'система',sysFew:'системы',sysMany:'систем',logiGood:'колонии собраны компактно',logiPoor:'урожай придётся собирать в разъездах',mColonies:'Колоний в плане',mChars:'Персонажей занято',mPeak:'Самая нагруженная',mShort:'Не хватает персонажей',planClosed:'план закрыт',fitsUpTo:'двойной шаблон помещается на планеты до',km:'км',suitableHere:'подходящих планет в системе',ofThem:'из них',decisionTitle:'План упёрся в размер планет',decisionText:'В выбранной домашней системе двойной шаблон не помещается ни на одну планету. Выберите, как поступить.',chooseOther:'Выбрать другую систему',useSingle:'Ставить по одному шаблону',singleNote:'планет и персонажей потребуется вдвое больше',savedPlans:'Сохранённые планы',save:'Сохранить',load:'Открыть',del:'Удалить',compare:'Сравнить',noSaved:'Пока ничего не сохранено',saveFirst:'Сначала постройте план',pickTwo:'Отметьте два плана для сравнения',cmpTitle:'Разница',colonies2:'колоний',chars2:'персонажей',peak2:'пиковая загрузка',onlyLeft:'Только в первом',onlyRight:'Только во втором',same:'Совпало',
   noPlanLong:'План не построен. Откройте вкладку «Настройки», выберите продукты и постройте план.',
   planEmpty:'План пуст.',counts0:'план не построен',searchPh:'поиск…',planNamePh:'название плана',
   crewPre:'Появятся после расчёта: планировщик сам распределяет персонажей по планетам с учётом их прокачки.',
@@ -947,7 +951,7 @@ const T={
   noReserve:'no headroom',sortLoad:'By load',sortReserve:'By remaining headroom',
   sortPilot:'By character name',sortSystem:'By system',
   cProc:'processing',cMine:'extraction',crewHint:'Characters live on the server and survive a reload.',
-  planetSlots:'planet slots',wholeRegion:'Whole region',clearAll:'Clear all',nothingChosen:'nothing selected',systems:'systems',selectAll:'Select all',pickProducts:'Select at least one product',pickConst:'Select at least one constellation',export:'Export to Excel',shopping:'Shopping list: command centres',shopTotal:'Command centres in total',exportEmpty:'Build a plan first',exportFail:'Export failed',profitTitle:'What is most profitable to produce',collectedAgo:'snapshot taken',minutesAgo:'min ago',stale:'stale',colProduct:'Product',colColonies:'Planets',colPerColony:'ISK / colony-hour',colPerHour:'ISK / hour',colPrice:'Unit price',noPrice:'no price',noSnapshot:'No price snapshot yet',advDeficit:'Not enough characters for this chain',advSurplus:'More characters than needed',advDeficitLead:'A full cycle needs {need} colonies, the pool has {have} slots. These fit entirely:',advSurplusLead:'Your choice takes {need} of {have} colonies. {spare} free — you could add:',advTake:'Take',advIgnoreDeficit:'Build as is',advIgnoreSurplus:'Put spare on extraction',advIgnoreDeficitHint:'the plan will report a raw material shortage',advIgnoreSurplusHint:'extraction of the same chain, scarcest first',colonies3:'colonies',excess:'Extraction (surplus)',directP2:'Make P2 right on the extraction planets',directP2Hint:'where both raw materials occur — no P1 hauling',mSpread:'Systems per character',logi:'systems used in total',systemsAvg:'systems each',sysOne:'system',sysFew:'systems',sysMany:'systems',logiGood:'colonies are compact',logiPoor:'harvesting will need travel',mColonies:'Colonies in the plan',mChars:'Characters used',mPeak:'Most loaded',mShort:'Characters missing',planClosed:'plan is complete',fitsUpTo:'a double template fits planets up to',km:'km',suitableHere:'suitable planets in this system',ofThem:'of them',decisionTitle:'The plan hit planet size limits',decisionText:'No planet in the chosen home system fits a double template. Pick how to proceed.',chooseOther:'Pick another system',useSingle:'Use single templates',singleNote:'twice as many planets and characters will be needed',savedPlans:'Saved plans',save:'Save',load:'Open',del:'Delete',compare:'Compare',noSaved:'Nothing saved yet',saveFirst:'Build a plan first',pickTwo:'Tick two plans to compare',cmpTitle:'Difference',colonies2:'colonies',chars2:'characters',peak2:'peak load',onlyLeft:'Only in the first',onlyRight:'Only in the second',same:'Unchanged',
+  planetSlots:'planet slots',wholeRegion:'Whole region',clearAll:'Clear all',nothingChosen:'nothing selected',systems:'systems',selectAll:'Select all',pickProducts:'Select at least one product',pickConst:'Select at least one constellation',export:'Export to Excel',jumpColonies:'↓ My colonies',jumpShopping:'↓ Shopping list',shopping:'Shopping list: command centres',shopTotal:'Command centres in total',exportEmpty:'Build a plan first',exportFail:'Export failed',profitTitle:'What is most profitable to produce',collectedAgo:'snapshot taken',minutesAgo:'min ago',stale:'stale',colProduct:'Product',colColonies:'Planets',colPerColony:'ISK / colony-hour',colPerHour:'ISK / hour',colPrice:'Unit price',noPrice:'no price',noSnapshot:'No price snapshot yet',advDeficit:'Not enough characters for this chain',advSurplus:'More characters than needed',advDeficitLead:'A full cycle needs {need} colonies, the pool has {have} slots. These fit entirely:',advSurplusLead:'Your choice takes {need} of {have} colonies. {spare} free — you could add:',advTake:'Take',advIgnoreDeficit:'Build as is',advIgnoreSurplus:'Put spare on extraction',advIgnoreDeficitHint:'the plan will report a raw material shortage',advIgnoreSurplusHint:'extraction of the same chain, scarcest first',colonies3:'colonies',excess:'Extraction (surplus)',directP2:'Make P2 right on the extraction planets',directP2Hint:'where both raw materials occur — no P1 hauling',mSpread:'Systems per character',logi:'systems used in total',systemsAvg:'systems each',sysOne:'system',sysFew:'systems',sysMany:'systems',logiGood:'colonies are compact',logiPoor:'harvesting will need travel',mColonies:'Colonies in the plan',mChars:'Characters used',mPeak:'Most loaded',mShort:'Characters missing',planClosed:'plan is complete',fitsUpTo:'a double template fits planets up to',km:'km',suitableHere:'suitable planets in this system',ofThem:'of them',decisionTitle:'The plan hit planet size limits',decisionText:'No planet in the chosen home system fits a double template. Pick how to proceed.',chooseOther:'Pick another system',useSingle:'Use single templates',singleNote:'twice as many planets and characters will be needed',savedPlans:'Saved plans',save:'Save',load:'Open',del:'Delete',compare:'Compare',noSaved:'Nothing saved yet',saveFirst:'Build a plan first',pickTwo:'Tick two plans to compare',cmpTitle:'Difference',colonies2:'colonies',chars2:'characters',peak2:'peak load',onlyLeft:'Only in the first',onlyRight:'Only in the second',same:'Unchanged',
   noPlanLong:'No plan yet. Open the Settings tab, pick products and build a plan.',
   planEmpty:'The plan is empty.',counts0:'no plan yet',searchPh:'search…',planNamePh:'plan name',
   crewPre:'They appear after the calculation: the planner spreads characters across planets by their skills.',
@@ -1987,9 +1991,21 @@ function sortedColonies(){
 /* «Мои колонии в игре» — те же три режима вида (детали/список/сетка) и
    та же сортировка, что и у плана дашборда: одни кнопки управляют обоими
    блоками, поведение не должно расходиться. */
+/* Быстрая навигация — план (dashBody) обычно длиннее экрана, а «Мои
+   колонии» и «Список закупки» идут ниже него; .tools прилипает к верху
+   (position:sticky), поэтому кнопки прыжка там всегда под рукой, даже
+   когда план прокручен на много колоний вниз. Видимость переключается
+   в renderColonies()/renderShopping() — кнопка есть, только пока в
+   соответствующем блоке действительно есть что показать. */
+function jumpTo(id){
+  document.getElementById(id).scrollIntoView({behavior:'smooth', block:'start'});
+}
+
 function renderColonies(){
   const box=document.getElementById('colonies'); if(!box) return;
-  if(!coloniesData.length){ box.innerHTML=''; return; }
+  const jumpBtn=document.getElementById('jumpColonies');
+  if(!coloniesData.length){ box.innerHTML=''; if(jumpBtn) jumpBtn.style.display='none'; return; }
+  if(jumpBtn) jumpBtn.style.display='';
   const rows=sortedColonies();
   let body='';
   if(view==='details'){
@@ -2098,7 +2114,9 @@ function renderProfit(){
    и в игре это отдельный предмет с собственным type_id. */
 function renderShopping(){
   const box=document.getElementById('shopping');
-  if(!plan.length){ box.innerHTML=''; return; }
+  const jumpBtn=document.getElementById('jumpShopping');
+  if(!plan.length){ box.innerHTML=''; if(jumpBtn) jumpBtn.style.display='none'; return; }
+  if(jumpBtn) jumpBtn.style.display='';
   const byType={};
   plan.forEach(p=>{ byType[p.planet_type]=(byType[p.planet_type]||0)+1; });
   const total=Object.values(byType).reduce((a,b)=>a+b,0);
@@ -2539,6 +2557,9 @@ const DOC={
     загрузки, причалы, склады, экстрактор и каждая фабрика со своими показателями.</div>
     <div>Список закупки</div><div>Внизу дашборда — сколько командных центров какого
     типа купить под этот план.</div>
+    <div>Быстрые переходы</div><div>Кнопки «↓ Мои колонии» и «↓ Список закупки» в панели
+    вида — прокручивают прямо к нужному блоку, не листая длинный план вручную.
+    Появляются, только когда в соответствующем блоке есть что показать.</div>
     <div>Выгрузка в Excel</div><div>Кнопка в панели вида. В книге три листа: план,
     сводка и проверка запаса. Сводка считается формулами и пересчитывается,
     если править лист вручную.</div>
@@ -2760,6 +2781,9 @@ const DOC={
     bars, launchpads, storage, the extractor and every factory with its own readings.</div>
     <div>Shopping list</div><div>At the bottom of the dashboard: how many command centres
     of each type this plan needs.</div>
+    <div>Quick jump</div><div>The "↓ My colonies" and "↓ Shopping list" buttons in the view
+    bar scroll straight to that block instead of paging through a long plan by hand. They
+    only appear when that block actually has something to show.</div>
     <div>Excel export</div><div>Button in the view bar. The workbook has three sheets:
     plan, summary and headroom check. The summary uses formulas, so it recalculates
     if you edit the sheet by hand.</div>
