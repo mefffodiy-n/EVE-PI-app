@@ -150,6 +150,155 @@ def structures_detail(pins: list[dict]) -> list[dict]:
     ]
 
 
+@lru_cache(maxsize=1)
+def _name_by_type_id() -> dict[int, str]:
+    """
+    type_id сырья/продукта -> имя — реверс тех же записей data/type_ids.json,
+    что фронтенд использует для иконок (не структуры/командные центры/
+    планеты — те же исключены той же таблицей суффиксов, что и в
+    _kind_by_type_id()). Нужен, чтобы честно показать, что именно
+    добывает экстрактор и что лежит на складе, а не только type_id.
+    """
+    if not TYPE_IDS_PATH.is_file():
+        return {}
+    raw = json.loads(TYPE_IDS_PATH.read_text(encoding="utf-8"))
+    out: dict[int, str] = {}
+    for name, type_id in raw.items():
+        if name.startswith("structure:"):
+            continue
+        if any(name.endswith(suffix) for suffix in _STRUCTURE_SUFFIX_TO_KIND):
+            continue
+        out[int(type_id)] = name
+    return out
+
+
+SCHEMATIC_CACHE_PATH = ROOT / "data" / "cache" / "schematics.json"
+
+
+def _load_schematic_cache() -> dict[str, dict]:
+    if not SCHEMATIC_CACHE_PATH.is_file():
+        return {}
+    try:
+        return json.loads(SCHEMATIC_CACHE_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def _save_schematic_cache(cache: dict) -> None:
+    SCHEMATIC_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    SCHEMATIC_CACHE_PATH.write_text(
+        json.dumps(cache, ensure_ascii=False, indent=1), encoding="utf-8"
+    )
+
+
+def schematic_info(client, schematic_id: int) -> dict | None:
+    """
+    Имя продукта и длительность цикла по schematic_id — у самой ESI
+    (`GET /universe/schematics/{id}/`, публичный, статические игровые
+    данные), а НЕ из data/schematics.json.
+
+    ОШИБКА, КОТОРУЮ ЭТО ОБХОДИТ (11.09.2026, живые данные). data/schematics.json
+    извлечён из игровых шаблонов застройки (scripts/extract_schematics.py),
+    и его докстринг утверждал, что поле «S» шаблона — это schematic_id.
+    Неверно: «S» — на самом деле type_id продукта (для Plasmoids у нас в
+    файле ключ 2389 — это и есть type_id Plasmoids), а настоящий ESI
+    schematic_id той же самой фабрики — 122, число из совсем другого
+    пространства. Использовать этот файл для сопоставления с ESI
+    schematic_id было бы той же ошибкой, что и со старым `type_id`
+    структур: тихо неверные сопоставления вместо честного пробела.
+
+    Схемы производства — статические данные игры, практически не
+    меняются, поэтому результат кэшируется на диске: не ходить в ESI за
+    одним и тем же на каждой синхронизации.
+    """
+    from scripts.esi_client import EsiError
+
+    cache = _load_schematic_cache()
+    key = str(schematic_id)
+    if key in cache:
+        return cache[key]
+    try:
+        response = client.get(f"/universe/schematics/{schematic_id}/")
+    except EsiError:
+        return None
+    if not isinstance(response.data, dict):
+        return None
+    info = {
+        "product": response.data.get("schematic_name"),
+        "cycle_minutes": (response.data.get("cycle_time") or 0) / 60,
+    }
+    cache[key] = info
+    _save_schematic_cache(cache)
+    return info
+
+
+def _content_list(pin: dict) -> list[dict]:
+    """Содержимое пина (склад/причал/буфер фабрики) — реальные contents ESI."""
+    names = _name_by_type_id()
+    out = []
+    for item in pin.get("contents", []) or []:
+        type_id = int(item.get("type_id", 0))
+        out.append({
+            "type_id": type_id,
+            "name": names.get(type_id),
+            "amount": item.get("amount"),
+        })
+    return out
+
+
+def pin_detail(pin: dict, kind: str, client) -> dict:
+    """
+    Подробности одного пина сверх «какой он структуры» — поля ESI,
+    которые раньше не читались: schematic_id/last_cycle_start у фабрик
+    (простой/производство честно считает фронтенд по ним же — не по
+    выдуманному таймеру), extractor_details у экстрактора, contents у
+    склада/причала/фабрики.
+    """
+    detail: dict = {"kind": kind}
+
+    if kind == "extractor_control_unit":
+        ed = pin.get("extractor_details") or {}
+        product_id = ed.get("product_type_id")
+        detail.update({
+            "heads": len(ed.get("heads") or []) or None,
+            "product": _name_by_type_id().get(int(product_id)) if product_id else None,
+            "qty_per_cycle": ed.get("qty_per_cycle"),
+            "cycle_seconds": ed.get("cycle_time"),
+            "install_time": pin.get("install_time"),
+            "expiry_time": pin.get("expiry_time"),
+        })
+    elif kind.endswith("industry_facility"):
+        schematic_id = pin.get("schematic_id")
+        info = schematic_info(client, int(schematic_id)) if schematic_id else None
+        detail.update({
+            "product": info["product"] if info else None,
+            "cycle_minutes": info["cycle_minutes"] if info else None,
+            "last_cycle_start": pin.get("last_cycle_start"),
+            "contents": _content_list(pin),
+        })
+    elif kind in ("launchpad", "storage_facility"):
+        detail["contents"] = _content_list(pin)
+
+    return detail
+
+
+def pins_detail(pins: list[dict], client) -> list[dict]:
+    """
+    Один пин — одна строка (в отличие от structures_detail, где пины
+    одного вида схлопнуты в count). Нужно показать состояние КАЖДОЙ
+    фабрики/экстрактора по отдельности, как в игре — на одной планете
+    разные фабрики производят разное и простаивают в разное время.
+    Пин с неизвестным type_id пропускается молча, как и в structures_detail.
+    """
+    kind_by_type = _kind_by_type_id()
+    out = []
+    for pin in pins:
+        kind = kind_by_type.get(int(pin.get("type_id", 0)))
+        if kind:
+            out.append(pin_detail(pin, kind, client))
+    return out
+
+
 def nearest_expiry(planet_detail: dict) -> datetime | None:
     """Самое раннее expiry_time среди пинов планеты (экстракторы)."""
     times = [
@@ -215,9 +364,9 @@ def sync_one(client, session, character) -> str:
             seen.add(planet_id)
             detail = client.get(f"/characters/{cid}/planets/{planet_id}/", token=token)
             expiry = None if detail.from_cache else nearest_expiry(detail.data or {})
-            structures = None if detail.from_cache else structures_detail(
-                (detail.data or {}).get("pins", [])
-            )
+            raw_pins = (detail.data or {}).get("pins", [])
+            structures = None if detail.from_cache else structures_detail(raw_pins)
+            pins = None if detail.from_cache else pins_detail(raw_pins, client)
 
             name = _planet_name(client, planet_id)
             system = _system_name(client, int(entry.get("solar_system_id", 0)), system_cache)
@@ -234,6 +383,7 @@ def sync_one(client, session, character) -> str:
             if not detail.from_cache:
                 fields["nearest_expiry"] = expiry
                 fields["structures"] = structures
+                fields["pins"] = pins
             if row is None:
                 session.add(Colony(character_id=cid, planet_id=planet_id, **fields))
             else:
