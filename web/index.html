@@ -196,13 +196,17 @@ button { font-family:inherit; }
               padding:0 4px; font-size:10px; line-height:14px;
               font-family:'IBM Plex Mono',monospace; color:var(--amber); }
 .orb .badge.hot { color:var(--alarm); border-color:var(--alarm); }
-/* Портрет персонажа придёт из игры в Фазе 3. Пока — инициалы:
-   пустой серый круг выглядит как незагрузившаяся картинка. */
+/* Портрет персонажа — images.evetech.net, публичный CDN CCP, без токена
+   (тот же принцип, что ICON() для иконок типов). Инициалы лежат под
+   картинкой всегда: у dev-заглушек портрета в игре не существует,
+   картинка получает 404 и снимает себя через onerror, снизу остаются
+   инициалы — тот самый пустой серый круг, который раньше был
+   единственным видом (Фаза 3 подключила реальных персонажей). */
 .orb .pilot { position:absolute; right:-2px; bottom:-2px; width:40%; height:40%;
               border-radius:50%; border:1px solid var(--seam); background:var(--seam);
               display:grid; place-items:center; font-size:9px; font-weight:600;
-              color:var(--dim); letter-spacing:-.02em; }
-.orb .pilot img { width:100%; height:100%; object-fit:cover; }
+              color:var(--dim); letter-spacing:-.02em; overflow:hidden; }
+.orb .pilot img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
 
 /* ═══ Вид «Детали»: строка на колонию ═══════════════════════════ */
 .colony { border-bottom:1px solid var(--seam); padding:12px 14px;
@@ -210,8 +214,9 @@ button { font-family:inherit; }
 .colony:hover { background:var(--hover); }
 .colony-head { display:flex; align-items:center; gap:10px; }
 .pilot-lg { width:30px; height:30px; border-radius:50%; background:var(--seam); flex:0 0 auto;
-            display:grid; place-items:center; font-size:11px; font-weight:600; color:var(--dim); }
-.pilot-lg img { width:100%; height:100%; object-fit:cover; }
+            display:grid; place-items:center; font-size:11px; font-weight:600; color:var(--dim);
+            position:relative; overflow:hidden; }
+.pilot-lg img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
 .pilot-name { color:var(--bright); font-weight:500; }
 .pilot-name .skills { color:var(--dim); font-weight:400; font-size:11px;
   font-family:'IBM Plex Mono',monospace; margin-left:8px; }
@@ -790,6 +795,14 @@ const LIVE_SERVER=/^(127\.0\.0\.1|localhost)$/.test(location.hostname)
   && location.port && location.port!=='8000';
 const API=LIVE_SERVER?`${FLASK}/api`:'/api';
 const ICON=id=>`https://images.evetech.net/types/${id}/icon?size=64`;
+// Портрет персонажа — тот же публичный CDN CCP, без токена. Только для
+// реальных ESI-персонажей: у dev-заглушек этого character_id не
+// существует в игре, картинка получает 404 и удаляет себя (onerror),
+// снизу остаются инициалы — как было единственным видом до Фазы 3.
+const PORTRAIT=id=>`https://images.evetech.net/characters/${id}/portrait?size=64`;
+const charIdOf=name=>{ const c=crew.find(x=>x.name===name); return c?c.character_id:null; };
+const avatarImg=characterId=>characterId
+  ? `<img src="${PORTRAIT(characterId)}" alt="" onerror="this.remove()">` : '';
 
 let ids={}, plan=[], staffing={}, view='details', sortBy='load';
 let lang='ru', crew=[], meta={};
@@ -1003,7 +1016,7 @@ function orb(row,size){
                 row.role_key==='proc'?'var(--ring-adv)':'var(--seam)';
     const badgeTxt=exp!=null?fmtLeft(left):(row.role_key==='proc'?t('noData'):t('cycIdle'));
     return `<div class="orb" style="--orb:${size}px"
-              ${row.matchId?`onclick="openColony('${row.matchId}')"`:''}
+              onclick="openColony('${row.matchId}')"
               title="${row.character} · ${row.system} ${row.planet}">
       <div class="disc">${planetId?`<img src="${ICON(planetId)}" alt="">`:''}</div>
       <svg class="ring" viewBox="0 0 ${size} ${size}">
@@ -1012,7 +1025,7 @@ function orb(row,size){
           stroke-dasharray="${c} ${c}" stroke-linecap="round"/>
       </svg>
       <div class="badge${over?' hot':''}"${exp!=null?` data-exp="${exp}"`:''}>${badgeTxt}</div>
-      <div class="pilot" title="${row.character}">${initials(row.character)}</div>
+      <div class="pilot" title="${row.character}">${initials(row.character)}${avatarImg(charIdOf(row.character))}</div>
     </div>`;
   }
   const peak=Math.max(row.cpu_percent,row.pg_percent);
@@ -1132,13 +1145,11 @@ function colonyCardHTML(p){
   const subExtra=p.isReal
     ? `<span class="synced">${t('syncedColony')}${p.upgrade_level?` · CC${p.upgrade_level}`:''} · ${pl(p.num_pins,'pPin')}</span>`
     : `<span class="num">${nloc(Math.round(p.planet_radius_km))} ${t('km')}</span>`;
-  const detailsBtn = p.isReal
-    ? (p.matchId?`<button class="details-btn" onclick="openColony('${p.matchId}')">${t('details')}</button>`:'')
-    : `<button class="details-btn" onclick="openColony('${p.id}')">${t('details')}</button>`;
+  const detailsBtn = `<button class="details-btn" onclick="openColony('${p.isReal?p.matchId:p.id}')">${t('details')}</button>`;
   return `<div class="colony">
     <div class="colony-head">
       ${orb(p,54)}
-      <div class="pilot-lg" title="${p.character}">${initials(p.character)}</div>
+      <div class="pilot-lg" title="${p.character}">${initials(p.character)}${avatarImg(charIdOf(p.character))}</div>
       <div>
         <div class="pilot-name">${p.character}</div>
         <div class="sub">
@@ -1174,7 +1185,7 @@ function renderDash(){
     box.innerHTML=Object.entries(byPilot).map(([name,items])=>`
       <div class="pilot-row">
         <div class="who">
-          <div class="pilot-lg" style="margin-bottom:4px">${initials(name)}</div>
+          <div class="pilot-lg" style="margin-bottom:4px">${initials(name)}${avatarImg(charIdOf(name))}</div>
           <div class="pilot-name" style="font-size:12px">${name}</div>
           <div class="sub" style="font-size:11px">${pl(items.length,'pColony')}</div>
         </div>
@@ -1472,8 +1483,15 @@ function realRows(){
     const kinds=(c.structures||[]).map(sd=>sd.kind);
     const role_key=kinds.includes('extractor_control_unit') ? 'mine'
       : kinds.some(k=>k.endsWith('industry_facility')) ? 'proc' : null;
+    const match=matchPlanRow(c);
+    // «Детали» должна открываться у ЛЮБОЙ реальной колонии, не только у
+    // совпавшей со строкой плана: matchId ведёт в панель плана (там есть
+    // CPU/PG), синтетический real:char:planet — в openRealColonyDetail()
+    // (там их честно нет — ESI не отдаёт радиус планеты, без него линки
+    // не посчитать, а показывать оценку без них — как раз то самое
+    // «правдоподобное, но ложное число», которое правило 1 запрещает).
     return {
-      isReal:true, matchId:(matchPlanRow(c)||{}).id||null,
+      isReal:true, matchId:match?match.id:`real:${c.character_id}:${c.planet_id}`,
       character:c.character, system:c.system_name, planet:String(c.planet_index),
       planet_type:ptype, role_key, role_tier:null,
       structures_detail:c.structures||[],
@@ -1513,7 +1531,7 @@ function renderColonies(){
     body=Object.entries(byPilot).map(([name,items])=>`
       <div class="pilot-row">
         <div class="who">
-          <div class="pilot-lg" style="margin-bottom:4px">${initials(name)}</div>
+          <div class="pilot-lg" style="margin-bottom:4px">${initials(name)}${avatarImg(charIdOf(name))}</div>
           <div class="pilot-name" style="font-size:12px">${name}</div>
           <div class="sub" style="font-size:11px">${pl(items.length,'pColony')}</div>
         </div>
@@ -1621,84 +1639,111 @@ async function exportPlan(){
 
 /* ── Панель колонии: разбор по структурам, как в игре ─────────── */
 let currentColony=null;
+
+/* Поля правой панели одной структуры. ctx.hasLoad=false — у факта из
+   игры без совпавшего плана нет CPU/PG (ESI не отдаёт радиус планеты,
+   без него линки не посчитать — оценка без них была бы «правдоподобным,
+   но ложным» числом, правило 1) и нет данных о том, что производит
+   фабрика/что извлекает экстрактор без совпадения с планом. Честное
+   noData вместо этого — не хуже, чем цикл фабрик, которого ESI вообще
+   не отдаёт ни для плана, ни для факта. */
+function structureUnitFields(kind, ctx){
+  const isStore=kind==='launchpad'||kind==='storage_facility';
+  const isECU=kind==='extractor_control_unit';
+  const isFactory=kind.includes('industry_facility');
+
+  if(kind==='command_center'){
+    if(!ctx.hasLoad){
+      return `<div class="cols2">
+        <div><div class="lbl">CPU</div>
+          <div class="meter"><i class="cpu" style="width:0%"></i></div>
+          <div class="meta">${t('noData')}</div></div>
+        <div><div class="lbl">Power</div>
+          <div class="meter"><i class="pg" style="width:0%"></i></div>
+          <div class="meta">${t('noData')}</div></div>
+      </div>`;
+    }
+    const pgb=ctx.pgb||{};
+    return `<div class="cols2">
+      <div><div class="lbl">CPU: ${ctx.cpu.toFixed(1)}%</div>
+        <div class="meter"><i class="cpu" style="width:${Math.min(ctx.cpu,100)}%"></i></div></div>
+      <div><div class="lbl">Power: ${ctx.pg.toFixed(1)}%</div>
+        <div class="meter"><i class="pg${ctx.pg<90?' ok':''}" style="width:${Math.min(ctx.pg,100)}%"></i></div></div>
+    </div>
+    <div class="meta" style="margin-top:6px">
+      ${t('pgFrom')}: ${t('sStruct')} ${pgb.structures||0}% · ${t('sHeads')} ${pgb.heads||0}% · ${t('sLinks')} ${pgb.links||0}%</div>`;
+  }
+  if(isStore){
+    return `<div class="cols2">
+      <div><div class="lbl">${t('capCap')}</div>
+        <div class="meter"><i class="ok" style="width:0%;background:var(--ring-infra)"></i></div>
+        <div class="val">0 / ${kind==='launchpad'?'10 000':'12 000'} m³</div></div>
+      <div><div class="lbl">${t('capContent')}</div><div class="meta">${t('noData')}</div></div>
+    </div>`;
+  }
+  if(isECU){
+    const cyc = ctx.expMs!=null
+      ? `<div class="val extractor-left" data-exp="${ctx.expMs}">${fmtLeft(ctx.expMs-Date.now())}</div>
+         <div class="meta">${t('progEnds')}</div>`
+      : ctx.real
+        ? `<div class="meta">${t('cycIdle')}</div>`
+        : `<div class="meta">${t('cycNone')}</div>`;
+    return `<div class="cols2">
+      <div><div class="lbl">${t('cycNow')}</div>
+        <div class="meter"><i style="width:0%;background:var(--ring-extract)"></i></div>
+        ${cyc}</div>
+      <div><div class="lbl">${t('extractsW')}</div>
+        <div class="val">${ctx.resIn||'—'}</div>
+        <div class="meta">${t('heads10')}</div></div>
+    </div>`;
+  }
+  if(isFactory){
+    const inputs=(ctx.resIn||'').split(',').map(x=>x.trim()).filter(Boolean);
+    return `<div class="cols2">
+      <div><div class="state-wait">${t('cycUnknown')}</div>
+        <div class="meter"><i style="width:0%"></i></div>
+        <div class="meta">${ctx.real||!ctx.hasLoad?t('cycNoFactory'):t('afterGame')}</div></div>
+      <div><div class="lbl">${t('producesW')}</div>
+        <div class="val">${ctx.resOut||'—'}</div>
+        ${inputs.length?`<div class="lbl" style="margin-top:5px">${t('inputW')}</div>
+        <div class="inputs">${inputs.map(n=>ids[n]
+          ?`<span class="have" title="${n}"><img src="${ICON(ids[n])}" alt=""></span>`
+          :`<span title="${n}">·</span>`).join('')}</div>`:''}</div>
+    </div>`;
+  }
+  return '';
+}
+
+/* Полоса структур панели — общая для плана и факта из игры. */
+function structureUnitsHTML(structuresDetail, planetType, ctx){
+  const units=[];
+  (structuresDetail||[]).forEach(sd=>{ for(let i=0;i<sd.count;i++) units.push(sd.kind); });
+  return units.map((kind,i)=>{
+    const isCC=kind==='command_center';
+    const code=`${String.fromCharCode(65+(i%26))}${i}-${ctx.planetLabel}`;
+    return `<div class="unit">
+      ${structOrb(kind,1,planetType,isCC&&ctx.hasLoad?{cpu:ctx.cpu,pg:ctx.pg,size:52}:{size:52})}
+      <div class="panel">
+        <div class="title">${sname(kind)} <span class="code">${code}</span></div>
+        ${structureUnitFields(kind,ctx)}
+      </div>
+    </div>`;
+  }).join('');
+}
+
 function openColony(id){
+  if(String(id).startsWith('real:')) return openRealColonyDetail(id);
   const p=plan.find(x=>x.id===id); if(!p)return;
   currentColony=id;
-  const pgb=p.pg_breakdown||{};
   const planetId=ids['planet:'+p.planet_type];
   const real=matchColony(p);                        // реальная колония из ESI или null
   const char=crew.find(c=>c.name===p.character);    // синхронизированные скиллы персонажа
   const expMs=real&&real.nearest_expiry?Date.parse(real.nearest_expiry):null;
 
-  // Разворачиваем состав в отдельные строки: в игре каждая структура —
-  // своя строка со своими показателями, а не одна плашка с числом.
-  const units=[];
-  (p.structures_detail||[]).forEach(sd=>{
-    for(let i=0;i<sd.count;i++) units.push(sd.kind);
+  const body=structureUnitsHTML(p.structures_detail, p.planet_type, {
+    hasLoad:true, cpu:p.cpu_percent, pg:p.pg_percent, pgb:p.pg_breakdown||{},
+    resIn:p.res_in, resOut:p.res_out, real, expMs, planetLabel:p.planet,
   });
-
-  const body=units.map((kind,i)=>{
-    const isFactory=kind.includes('industry_facility');
-    const isCC=kind==='command_center';
-    const isECU=kind==='extractor_control_unit';
-    const isStore=kind==='launchpad'||kind==='storage_facility';
-    const code=`${String.fromCharCode(65+(i%26))}${i}-${p.planet}`;
-
-    let fields='';
-    if(isCC){
-      fields=`<div class="cols2">
-        <div><div class="lbl">CPU: ${p.cpu_percent.toFixed(1)}%</div>
-          <div class="meter"><i class="cpu" style="width:${Math.min(p.cpu_percent,100)}%"></i></div></div>
-        <div><div class="lbl">Power: ${p.pg_percent.toFixed(1)}%</div>
-          <div class="meter"><i class="pg${p.pg_percent<90?' ok':''}" style="width:${Math.min(p.pg_percent,100)}%"></i></div></div>
-      </div>
-      <div class="meta" style="margin-top:6px">
-        ${t('pgFrom')}: ${t('sStruct')} ${pgb.structures||0}% · ${t('sHeads')} ${pgb.heads||0}% · ${t('sLinks')} ${pgb.links||0}%</div>`;
-    } else if(isStore){
-      fields=`<div class="cols2">
-        <div><div class="lbl">${t('capCap')}</div>
-          <div class="meter"><i class="ok" style="width:0%;background:var(--ring-infra)"></i></div>
-          <div class="val">0 / ${kind==='launchpad'?'10 000':'12 000'} m³</div></div>
-        <div><div class="lbl">${t('capContent')}</div><div class="meta">${t('noData')}</div></div>
-      </div>`;
-    } else if(isECU){
-      const cyc = expMs!=null
-        ? `<div class="val extractor-left" data-exp="${expMs}">${fmtLeft(expMs-Date.now())}</div>
-           <div class="meta">${t('progEnds')}</div>`
-        : real
-          ? `<div class="meta">${t('cycIdle')}</div>`
-          : `<div class="meta">${t('cycNone')}</div>`;
-      fields=`<div class="cols2">
-        <div><div class="lbl">${t('cycNow')}</div>
-          <div class="meter"><i style="width:0%;background:var(--ring-extract)"></i></div>
-          ${cyc}</div>
-        <div><div class="lbl">${t('extractsW')}</div>
-          <div class="val">${p.res_in||'—'}</div>
-          <div class="meta">${t('heads10')}</div></div>
-      </div>`;
-    } else if(isFactory){
-      const inputs=(p.res_in||'').split(',').map(x=>x.trim()).filter(Boolean);
-      fields=`<div class="cols2">
-        <div><div class="state-wait">${t('cycUnknown')}</div>
-          <div class="meter"><i style="width:0%"></i></div>
-          <div class="meta">${real?t('cycNoFactory'):t('afterGame')}</div></div>
-        <div><div class="lbl">${t('producesW')}</div>
-          <div class="val">${p.res_out}</div>
-          <div class="lbl" style="margin-top:5px">${t('inputW')}</div>
-          <div class="inputs">${inputs.map(n=>ids[n]
-            ?`<span class="have" title="${n}"><img src="${ICON(ids[n])}" alt=""></span>`
-            :`<span title="${n}">·</span>`).join('')}</div></div>
-      </div>`;
-    }
-
-    return `<div class="unit">
-      ${structOrb(kind,1,p.planet_type,isCC?{cpu:p.cpu_percent,pg:p.pg_percent,size:52}:{size:52})}
-      <div class="panel">
-        <div class="title">${sname(kind)} <span class="code">${code}</span></div>
-        ${fields}
-      </div>
-    </div>`;
-  }).join('');
 
   document.getElementById('colonyPage').innerHTML=`
     <div class="cp-head">
@@ -1717,6 +1762,48 @@ function openColony(id){
     </div>
     ${(p.shared_extraction_count||1)>1?`<div class="msg" style="margin:0 16px 8px">
       ${t('sharedExtract').replace('{n}',p.shared_extraction_count)}</div>`:''}
+    ${body}`;
+
+  document.getElementById('dashBody').style.display='none';
+  document.getElementById('shopping').style.display='none';
+  document.querySelector('#page-dash .tools').style.display='none';
+  document.getElementById('colonyPage').classList.add('on');
+}
+
+/* Та же панель для реальной колонии без пары в плане — id вида
+   «real:character_id:planet_id» (см. realRows()). Честно без CPU/PG
+   (см. structureUnitFields) и без «производит/извлекает» — этого без
+   совпадения с планом взять неоткуда, а не выдумываем. */
+function openRealColonyDetail(id){
+  const [, charId, planetId]=id.split(':');
+  const c=coloniesData.find(x=>String(x.character_id)===charId && String(x.planet_id)===planetId);
+  if(!c) return;
+  currentColony=id;
+  const ptype=c.planet_type?c.planet_type[0].toUpperCase()+c.planet_type.slice(1):'';
+  const expMs=c.nearest_expiry?Date.parse(c.nearest_expiry):null;
+  const row={isReal:true, character:c.character, system:c.system_name,
+    planet:String(c.planet_index), planet_type:ptype, nearest_expiry:c.nearest_expiry,
+    role_key:(c.structures||[]).some(s=>s.kind==='extractor_control_unit')?'mine':
+      (c.structures||[]).some(s=>s.kind.endsWith('industry_facility'))?'proc':null};
+  const char=crew.find(x=>x.name===c.character);
+
+  const body=structureUnitsHTML(c.structures, ptype, {
+    hasLoad:false, real:c, expMs, planetLabel:c.planet_index,
+  });
+
+  document.getElementById('colonyPage').innerHTML=`
+    <div class="cp-head">
+      ${orb(row,58)}
+      <div>
+        <div class="pilot-name">${c.character}${char?` <span class="skills">CCU ${char.ccu} · IC ${char.ic}</span>`:''}</div>
+        <div class="sub">
+          <span class="sysbadge">${c.system_name} ${c.planet_index}</span>
+          <span class="sec" style="color:${secColor(ptype)}">${ptype}</span>
+          <span class="synced">${t('syncedColony')}${c.upgrade_level?` · CC${c.upgrade_level}`:''} · ${pl(c.num_pins,'pPin')}</span>
+        </div>
+      </div>
+      <button class="back" onclick="closeColony()">${t('back')}</button>
+    </div>
     ${body}`;
 
   document.getElementById('dashBody').style.display='none';
@@ -1874,10 +1961,15 @@ const DOC={
    двух часов) подсвечивается. Карточка колонии выглядит так же, как у
    расчётного плана: та же полоса иконок структур, только состав берётся не
    из шаблона застройки, а из настоящих пинов на планете — колония в игре не
-   обязана совпадать ни с одним из игровых шаблонов. Тот же таймер виден в
-   панели конкретной колонии, если она совпала со строкой плана по персонажу,
-   системе и номеру планеты — тогда у карточки есть кнопка «Детали».
-   Обратный отсчёт браузер считает сам; данные обновляются в фоне.</p>
+   обязана совпадать ни с одним из игровых шаблонов. Портрет персонажа —
+   настоящий, с серверов CCP; пока он не загрузился или персонаж
+   тестовый — показываются инициалы. У каждой карточки есть кнопка
+   «Детали»: если колония совпала со строкой плана по персонажу, системе
+   и номеру планеты — открывается полная панель плана с настоящей
+   загрузкой CPU/Power; если нет — панель с тем же составом структур, но
+   честно без загрузки: ESI не отдаёт радиус планеты, без него линки
+   между постройками не посчитать, а оценка без них была бы обманчивым
+   числом. Обратный отсчёт браузер считает сам; данные обновляются в фоне.</p>
 
    <h3>Чего программа пока не знает</h3>
    <p>Состояния циклов фабрик и остатков на складах: ESI отдаёт таймеры только
@@ -2016,10 +2108,14 @@ const DOC={
    snapshot from the game — a planet whose program is nearly done (under two hours) is
    highlighted. A colony card looks the same as a plan colony — the same strip of structure
    icons — except the composition comes from the real pins on the planet, not a building
-   template: an in-game colony need not match any of the game templates. The same timer
-   shows in a colony's detail panel when it matches a plan row by character, system and
-   planet number — that card also gets a Details button. The browser runs the countdown
-   itself; the data refreshes in the background.</p>
+   template: an in-game colony need not match any of the game templates. The portrait is
+   real, served from CCP's own servers; until it loads, or for a test character, initials
+   show instead. Every card has a Details button: if the colony matches a plan row by
+   character, system and planet number, it opens the full plan panel with real CPU/Power
+   load; otherwise it opens a panel with the same structures but honestly without load —
+   ESI does not expose planet radius, so the links between buildings can't be computed,
+   and an estimate without them would be a misleading number. The browser runs the
+   countdown itself; the data refreshes in the background.</p>
 
    <h3>What the program does not know yet</h3>
    <p>Factory cycle state and storage contents: ESI only exposes timers for extractors.
@@ -2137,6 +2233,10 @@ async function loadCrew(){
     crew=d.characters||[];
   }catch(e){ crew=[]; }
   renderCrew(); loadThresholds();
+  // loadColonies() бежит независимо и может успеть раньше — тогда
+  // аватары (charIdOf смотрит в crew) отрисовались бы без портретов.
+  // Перерисовать план и факт, раз crew уже есть.
+  renderDash(); renderColonies();
 }
 
 async function startLogin(){
@@ -2333,7 +2433,7 @@ function renderCrew(){
     const sys=spread?` · ${plural(spread.system_count,t('sysOne'),t('sysFew'),t('sysMany'))}`:'';
     return `<div title="CCU ${c.ccu} · IC ${c.ic} · ${c.planet_slots} ${t('planetSlots')}${
       spread?' · '+spread.systems.join(', '):''}">
-      <div class="pilot-lg" style="width:22px;height:22px;font-size:9px">${initials(c.name)}</div>
+      <div class="pilot-lg" style="width:22px;height:22px;font-size:9px">${initials(c.name)}${avatarImg(c.character_id)}</div>
       <span>${c.name}</span>
       <span class="lv">${used}/${c.planet_slots}${sys}</span></div>`;
   }).join('')

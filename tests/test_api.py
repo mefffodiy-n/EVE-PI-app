@@ -237,6 +237,7 @@ class TestColonies:
         rows = client.get("/api/colonies").get_json()["colonies"]
         assert [r["planet_name"] for r in rows] == ["B III", "B II", "B IV"]
         assert rows[0]["character"] == "Pilot"
+        assert rows[0]["character_id"] == 1
         assert (rows[0]["system_name"], rows[0]["planet_index"]) == ("B", 3)
         assert rows[2]["nearest_expiry"] is None
         # B II — вторая по сортировке (soonest first), structures задан у неё.
