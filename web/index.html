@@ -203,6 +203,10 @@ button { font-family:inherit; }
 /* Внутреннее кольцо — ход производственного цикла. */
 .orb .ring .cycle { stroke:var(--bright); stroke-width:2; }
 .orb .ring .cycle.none { stroke:var(--orb-track); stroke-dasharray:2 4; }
+/* Фабрика простаивает (цикл кончился, новый не начался) — то же белое
+   кольцо, что и в работе, но целиком и мигает, а не крутится дугой. */
+.orb .ring .cycle.idle { animation:cycle-blink 1.1s ease-in-out infinite; }
+@keyframes cycle-blink { 0%,100%{opacity:1} 50%{opacity:.2} }
 .orb.busy .outer { filter:drop-shadow(0 0 3px currentColor); }
 
 .orb .badge { position:absolute; top:-3px; left:-2px; z-index:3;
@@ -1227,18 +1231,27 @@ function structOrb(kind,count,planetType,opts){
              stroke="var(${RING[kind]})" stroke-dasharray="${cOut} ${cOut}" stroke-width="2.5"/>`;
   }
 
-  // Внутреннее кольцо — ход производственного цикла. Данных о нём у нас
-  // пока нет, поэтому по умолчанию оно пунктирное: «неизвестно».
-  // Когда sync_colony_status начнёт отдавать таймеры, сюда придёт число,
-  // и то же кольцо станет показывать реальный прогресс.
+  // Внутреннее кольцо — ход производственного цикла настоящей фабрики
+  // (opts.cycle, 0-100, из last_cycle_start+cycle_minutes, см. orb()/
+  // pinCycleInfo()). opts.idle — тот же факт, только цикл уже кончился, а
+  // новый не начался (ждёт сырья): кольцо не пунктирное «неизвестно», а
+  // полное белое и мигает — это и есть сигнал «требует внимания». Пунктир
+  // остаётся для структур, у которых понятия цикла вообще нет (причал,
+  // склад, командный центр, экстрактор) и для плана, где opts.cycle не
+  // считается вовсе.
   const cyc = opts.cycle;
-  const inner = cyc==null
-    ? `<circle class="cycle none" cx="${size/2}" cy="${size/2}" r="${r2}" stroke-dasharray="2 4"/>`
-    : `<circle class="cycle" cx="${size/2}" cy="${size/2}" r="${r2}"
+  let inner;
+  if(opts.idle){
+    inner = `<circle class="cycle idle" cx="${size/2}" cy="${size/2}" r="${r2}" stroke-dasharray="${cIn} ${cIn}"/>`;
+  } else if(cyc==null){
+    inner = `<circle class="cycle none" cx="${size/2}" cy="${size/2}" r="${r2}" stroke-dasharray="2 4"/>`;
+  } else {
+    inner = `<circle class="cycle" cx="${size/2}" cy="${size/2}" r="${r2}"
          stroke-dasharray="${cIn*cyc/100} ${cIn}" stroke-linecap="round"/>`;
+  }
 
-  return `<div class="orb${cyc!=null?' busy':''}" style="--orb:${size}px;cursor:default"
-       title="${sname(kind)}${count>1?' ×'+count:''}${kind==='command_center'?' ('+planetType+')':''}">
+  return `<div class="orb${(cyc!=null&&!opts.idle)?' busy':''}" style="--orb:${size}px;cursor:default"
+       title="${sname(kind)}${count>1?' ×'+count:''}${kind==='command_center'?' ('+planetType+')':''}${opts.idle?' · '+t('cycIdleSince'):''}">
     <div class="disc">${id?`<img src="${ICON(id)}" style="width:58%;height:58%;object-fit:contain">`:''}</div>
     <svg class="ring" viewBox="0 0 ${size} ${size}">
       <circle class="track" cx="${size/2}" cy="${size/2}" r="${R}"/>
@@ -1254,6 +1267,50 @@ function expandStructures(p){
   const out=[];
   (p.structures_detail||[]).forEach(s=>{ for(let i=0;i<s.count;i++) out.push(s.kind); });
   return out;
+}
+
+/* Прогресс цикла ОДНОЙ настоящей фабрики — те же поля ESI, что и в
+   панели колонии (structureUnitFields, isFactory): last_cycle_start +
+   cycle_minutes у самой схемы производства (schematic_info), не выдумка.
+   {cycle:null} — нет данных о цикле вовсе (ещё не пересинхронизировано);
+   {idle:true} — данные есть, но цикл уже кончился, новый не начался. */
+function pinCycleInfo(pin){
+  if(!pin.kind || !pin.kind.endsWith('industry_facility')) return {cycle:null, idle:false};
+  const end=(pin.last_cycle_start&&pin.cycle_minutes)
+    ? Date.parse(pin.last_cycle_start)+pin.cycle_minutes*60000 : null;
+  if(end==null) return {cycle:null, idle:false};
+  const now=Date.now();
+  if(now<end){
+    const total=pin.cycle_minutes*60000;
+    return {cycle:100*(total-(end-now))/total, idle:false};
+  }
+  return {cycle:null, idle:true};
+}
+
+/* Полоса иконок структур под карточкой колонии (colonyCardHTML). У
+   настоящей колонии с пересинхронизированными пинами (p.pins) — каждый
+   пин своим кругом с настоящим циклом (см. pinCycleInfo) и настоящей
+   загрузкой командного центра (p.cpu_percent/pg_percent, см. realRows());
+   иначе (план, ещё не пересинхронизированный факт) — прежний агрегат
+   structures_detail без прогресса. */
+function structOrbsForRow(p){
+  if(p.isReal && p.pins && p.pins.length){
+    return p.pins.map(pin=>{
+      const info=pinCycleInfo(pin);
+      const opts={cycle:info.cycle, idle:info.idle};
+      if(pin.kind==='command_center' && p.cpu_percent!=null){
+        opts.cpu=p.cpu_percent; opts.pg=p.pg_percent;
+      }
+      return structOrb(pin.kind,1,p.planet_type,opts);
+    }).join('');
+  }
+  return expandStructures(p).map(kind=>{
+    if(kind==='command_center'){
+      if(!p.isReal) return structOrb(kind,1,p.planet_type,{cpu:p.cpu_percent,pg:p.pg_percent});
+      if(p.cpu_percent!=null) return structOrb(kind,1,p.planet_type,{cpu:p.cpu_percent,pg:p.pg_percent});
+    }
+    return structOrb(kind,1,p.planet_type,{});
+  }).join('');
 }
 
 function secColor(t){ // цвет статуса безопасности как в игре
@@ -1320,8 +1377,7 @@ function colonyCardHTML(p){
       </div>
       ${detailsBtn}
     </div>
-    <div class="strip">${expandStructures(p).map(kind=>structOrb(kind,1,p.planet_type,
-          (!p.isReal&&kind==="command_center")?{cpu:p.cpu_percent,pg:p.pg_percent}:{})).join('')}</div>
+    <div class="strip">${structOrbsForRow(p)}</div>
   </div>`;
 }
 
@@ -1663,15 +1719,17 @@ function realRows(){
     const match=matchPlanRow(c);
     // «Детали» должна открываться у ЛЮБОЙ реальной колонии, не только у
     // совпавшей со строкой плана: matchId ведёт в панель плана (там есть
-    // CPU/PG), синтетический real:char:planet — в openRealColonyDetail()
-    // (там их честно нет — ESI не отдаёт радиус планеты, без него линки
-    // не посчитать, а показывать оценку без них — как раз то самое
-    // «правдоподобное, но ложное число», которое правило 1 запрещает).
+    // CPU/PG), синтетический real:char:planet — в openRealColonyDetail().
+    // cpu_percent/pg_percent теперь считает сам сервер по НАСТОЯЩИМ данным
+    // (структуры+линки+головы из ESI, радиус — из planet_industry.csv, см.
+    // scripts/sync_colony_status.py::real_colony_load()) — null, если
+    // планеты нет в этом файле (не весь New Eden, только регион плана).
     return {
       isReal:true, matchId:match?match.id:`real:${c.character_id}:${c.planet_id}`,
       character:c.character, system:c.system_name, planet:String(c.planet_index),
       planet_type:ptype, role_key, role_tier:null,
       structures_detail:c.structures||[], pins:c.pins||[],
+      cpu_percent:c.cpu_percent, pg_percent:c.pg_percent,
       nearest_expiry:c.nearest_expiry,
       upgrade_level:c.upgrade_level, num_pins:c.num_pins,
     };
@@ -1887,15 +1945,20 @@ function structureUnitFields(kind, ctx){
           <div class="meta">${t('noData')}</div></div>
       </div>`;
     }
-    const pgb=ctx.pgb||{};
+    // pgb — разбивка «из чего сложилась загрузка» (структуры/головы/линки
+    // в процентах) есть только у расчётного плана (planner.py считает её
+    // заодно с самим процентом). У настоящей колонии свой источник радиуса
+    // (planet_industry.csv, а не шаблон) и разбивки не считает — сама
+    // загрузка от этого не менее настоящая, просто без деталей «из чего».
+    const pgb=ctx.pgb;
     return `<div class="cols2">
       <div><div class="lbl">CPU: ${ctx.cpu.toFixed(1)}%</div>
         <div class="meter"><i class="cpu" style="width:${Math.min(ctx.cpu,100)}%"></i></div></div>
       <div><div class="lbl">Power: ${ctx.pg.toFixed(1)}%</div>
         <div class="meter"><i class="pg${ctx.pg<90?' ok':''}" style="width:${Math.min(ctx.pg,100)}%"></i></div></div>
     </div>
-    <div class="meta" style="margin-top:6px">
-      ${t('pgFrom')}: ${t('sStruct')} ${pgb.structures||0}% · ${t('sHeads')} ${pgb.heads||0}% · ${t('sLinks')} ${pgb.links||0}%</div>`;
+    ${pgb?`<div class="meta" style="margin-top:6px">
+      ${t('pgFrom')}: ${t('sStruct')} ${pgb.structures||0}% · ${t('sHeads')} ${pgb.heads||0}% · ${t('sLinks')} ${pgb.links||0}%</div>`:''}`;
   }
 
   if(isStore){
@@ -2031,15 +2094,24 @@ function structureUnitsHTML(structuresDetail, planetType, ctx){
 
 /* Одна строка — один настоящий пин (в отличие от structureUnitsHTML,
    где пины одного вида схлопнуты в count). Только для факта из игры,
-   когда колония пересинхронизирована с pins (см. Colony.pins). */
-function pinUnitsHTML(pins, planetType, planetLabel){
+   когда колония пересинхронизирована с pins (см. Colony.pins).
+
+   load — {cpu,pg} настоящей загрузки командного центра этой колонии
+   (realRows()/c.cpu_percent, см. scripts/sync_colony_status.py::
+   real_colony_load()), либо null, если планеты нет в planet_industry.csv
+   — тогда честное «нет данных», как и раньше. Фабрики заодно получают
+   настоящий прогресс цикла (pinCycleInfo) вместо статичного пунктира. */
+function pinUnitsHTML(pins, planetType, planetLabel, load){
   return pins.map((pin,i)=>{
     const code=`${String.fromCharCode(65+(i%26))}${i}-${planetLabel}`;
+    const info=pinCycleInfo(pin);
+    const opts={size:52, cycle:info.cycle, idle:info.idle};
+    if(pin.kind==='command_center' && load){ opts.cpu=load.cpu; opts.pg=load.pg; }
     return `<div class="unit">
-      ${structOrb(pin.kind,1,planetType,{size:52})}
+      ${structOrb(pin.kind,1,planetType,opts)}
       <div class="panel">
         <div class="title">${sname(pin.kind)} <span class="code">${code}</span></div>
-        ${structureUnitFields(pin.kind,{hasLoad:false, pin})}
+        ${structureUnitFields(pin.kind,{hasLoad:!!load, cpu:load&&load.cpu, pg:load&&load.pg, pin})}
       </div>
     </div>`;
   }).join('');
@@ -2088,11 +2160,14 @@ function openColony(id){
 }
 
 /* Та же панель для реальной колонии без пары в плане — id вида
-   «real:character_id:planet_id» (см. realRows()). Честно без CPU/PG
-   (см. structureUnitFields) — этого без радиуса планеты (ESI его не
-   отдаёт) не посчитать. Остальное — реальные поштучные данные каждого
-   пина (pinUnitsHTML), когда колония пересинхронизирована новым кодом
-   (Colony.pins); до первой такой синхронизации — прежний агрегат. */
+   «real:character_id:planet_id» (см. realRows()). CPU/Power командного
+   центра считает сервер по настоящим данным (structures+links+heads из
+   ESI, радиус — из planet_industry.csv), см. scripts/sync_colony_status.py
+   ::real_colony_load(); null, если планеты нет в этом файле — тогда
+   честное «нет данных», как и раньше. Остальное — реальные поштучные
+   данные каждого пина (pinUnitsHTML), когда колония пересинхронизирована
+   новым кодом (Colony.pins); до первой такой синхронизации — прежний
+   агрегат. */
 function openRealColonyDetail(id){
   const [, charId, planetId]=id.split(':');
   const c=coloniesData.find(x=>String(x.character_id)===charId && String(x.planet_id)===planetId);
@@ -2105,10 +2180,12 @@ function openRealColonyDetail(id){
     role_key:(c.structures||[]).some(s=>s.kind==='extractor_control_unit')?'mine':
       (c.structures||[]).some(s=>s.kind.endsWith('industry_facility'))?'proc':null};
   const char=crew.find(x=>x.name===c.character);
+  const load=c.cpu_percent!=null?{cpu:c.cpu_percent, pg:c.pg_percent}:null;
 
   const body=(c.pins&&c.pins.length)
-    ? pinUnitsHTML(c.pins, ptype, c.planet_index)
-    : structureUnitsHTML(c.structures, ptype, {hasLoad:false, real:c, expMs, planetLabel:c.planet_index});
+    ? pinUnitsHTML(c.pins, ptype, c.planet_index, load)
+    : structureUnitsHTML(c.structures, ptype, {hasLoad:!!load, cpu:load&&load.cpu, pg:load&&load.pg,
+        real:c, expMs, planetLabel:c.planet_index});
 
   document.getElementById('colonyPage').innerHTML=`
     <div class="cp-head">
@@ -2297,10 +2374,13 @@ const DOC={
    тестовый — показываются инициалы. У каждой карточки есть кнопка
    «Детали»: если колония совпала со строкой плана по персонажу, системе
    и номеру планеты — открывается полная панель плана с настоящей
-   загрузкой CPU/Power; если нет — панель с тем же составом структур, но
-   честно без загрузки: ESI не отдаёт радиус планеты, без него линки
-   между постройками не посчитать, а оценка без них была бы обманчивым
-   числом. Обратный отсчёт браузер считает сам; данные обновляются в фоне.</p>
+   загрузкой CPU/Power; если нет — своя панель с тем же составом структур,
+   и загрузка CPU/Power там тоже настоящая, если планета есть в нашем файле
+   планет региона (ESI её радиус не отдаёт, а у нас, в отличие от ESI, он
+   есть — состав структур, число линков и голов экстрактора берутся из
+   той же самой ESI, честный расчёт, а не оценка). Планета вне
+   загруженного региона — как и раньше, «нет данных», а не выдуманный
+   процент. Обратный отсчёт браузер считает сам; данные обновляются в фоне.</p>
    <p>В панели каждая структура показывает настоящее состояние: причал и
    склад — что реально лежит внутри (или честное «пусто») и сколько это
    в процентах от вместимости (10 000 м³ у причала, 12 000 м³ у склада —
@@ -2310,15 +2390,19 @@ const DOC={
    конца) или простаивает в ожидании сырья («Простаивает» — сколько
    времени, вплоть до нескольких дней). Длительность цикла фабрики
    берётся у самой ESI (справочник схем производства), а не подгоняется
-   под предположение. В сетке и списке «Моих колоний» те же данные —
-   иконка добываемого сырья или конечного продукта переработки поверх
-   текстуры планеты, голубое кольцо — заполненность причала, плашка —
-   время до конца программы экстрактора (часы или минуты, как в игре).</p>
+   под предположение. Компактная полоса иконок под карточкой колонии
+   показывает то же самое покруговому: белое кольцо каждой фабрики крутится
+   дугой во время цикла и мигает целиком, когда фабрика простаивает, а
+   кольцо командного центра — та же настоящая загрузка CPU/Power. В сетке
+   и списке «Моих колоний» — иконка добываемого сырья или конечного
+   продукта переработки поверх текстуры планеты, голубое кольцо —
+   заполненность причала, плашка — время до конца программы экстрактора
+   (часы или минуты, как в игре).</p>
 
    <h3>Чего программа пока не знает</h3>
-   <p>У ESI нет радиуса планеты, поэтому загрузка CPU/Power командного центра
-   для колонии без пары в расчётном плане не считается: без радиуса не
-   восстановить длину линков между постройками, а оценка без них была бы
+   <p>Загрузка CPU/Power командного центра колонии за пределами загруженного
+   региона (нет строки в файле планет — ESI радиус тоже не отдаёт, взять
+   неоткуда) не считается: оценка без настоящего радиуса была бы
    обманчивым числом. Вместо выдуманного процента — «нет данных».</p>
    <p>Плотность сырья берётся из статического файла и считается постоянной. В игре
    месторождения истощаются, но живых данных об этом нет ни у кого, кроме самой игры.</p>`},
@@ -2466,9 +2550,12 @@ const DOC={
    real, served from CCP's own servers; until it loads, or for a test character, initials
    show instead. Every card has a Details button: if the colony matches a plan row by
    character, system and planet number, it opens the full plan panel with real CPU/Power
-   load; otherwise it opens a panel with the same structures but honestly without load —
-   ESI does not expose planet radius, so the links between buildings can't be computed,
-   and an estimate without them would be a misleading number. The browser runs the
+   load; otherwise it opens its own panel with the same structures, and the CPU/Power load
+   there is real too, as long as the planet is in our regional planet file — ESI doesn't
+   expose a planet's radius, but unlike ESI, that file has it, and the structure list,
+   link count and extractor head count all come from ESI itself, so it's a real
+   calculation, not a guess. A planet outside the loaded region still honestly says
+   "no data" instead of an invented percentage. The browser runs the
    countdown itself; the data refreshes in the background.</p>
    <p>Inside the panel every structure shows its real state: launchpad and storage show
    what's actually stored (or an honest "empty") and how full that is as a percentage of
@@ -2477,17 +2564,20 @@ const DOC={
    pulling, and basic/advanced/high-tech facilities show what they produce and whether a
    cycle is running ("In production" with a countdown) or idle waiting for input ("Idle" —
    for however long, up to several days). The factory cycle length itself comes straight
-   from ESI's own production-schematic catalogue, not a guess. The grid and list views of
+   from ESI's own production-schematic catalogue, not a guess. The compact strip under a
+   colony card shows the same thing as circles: each factory's white ring sweeps an arc
+   during a cycle and blinks whole when idle, and the command centre's ring is the same
+   real CPU/Power load. The grid and list views of
    "My colonies in the game" show the same data: the icon over the planet texture is the
    raw resource being extracted or the processing chain's final product, the ring is
    launchpad fullness (blue normally, blinking red once it's full), and the chip is time
    left on the extractor program (hours or minutes, same as in the game).</p>
 
    <h3>What the program does not know yet</h3>
-   <p>ESI doesn't expose a planet's radius, so CPU/Power load for a colony with no
-   matching plan row isn't computed at all: without the radius there's no way to recover
-   the length of the links between buildings, and an estimate without them would be a
-   misleading number. Instead of an invented percentage you see "no data".</p>
+   <p>CPU/Power load for a colony outside the loaded region (no row in the planet file —
+   ESI doesn't expose the radius either, so there's nowhere left to get it) isn't computed
+   at all: an estimate without a real radius would be a misleading number. Instead of an
+   invented percentage you see "no data".</p>
    <p>Resource density comes from a static file and is treated as constant. Deposits do
    deplete in game, but nobody outside the game has live data on that.</p>`}},
 
