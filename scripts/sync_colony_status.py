@@ -150,6 +150,47 @@ def structures_detail(pins: list[dict]) -> list[dict]:
     ]
 
 
+def real_colony_load(
+    structures: list[dict], raw_pins: list[dict], link_count: int,
+    system: str, planet_index_: int, ccu_level: int,
+) -> tuple[float | None, float | None]:
+    """
+    Загрузка CPU/Power командного центра настоящей колонии — из
+    НАСТОЯЩИХ данных, а не оценка: состав структур и число линков ESI
+    отдаёт напрямую в ответе на этот же запрос, число голов экстрактора —
+    из extractor_details тех же пинов, а радиус планеты (единственное,
+    чего ESI не даёт) берём из data/planet_industry.csv — того же файла,
+    что использует сам расчётный план (domain/planets.py).
+
+    (None, None), если планеты нет в этом файле (он покрывает только
+    загруженный регион, не весь New Eden) — честный пробел вместо
+    «правдоподобного, но ложного» числа (правило 1), а не выдумка.
+    """
+    from domain.capacity import UnsupportedSetup, calculate_real_colony_load
+    from domain.planets import load_planets
+
+    radius = load_planets().radius_km(system, planet_index_)
+    if radius is None:
+        return None, None
+
+    heads = sum(
+        len((pin.get("extractor_details") or {}).get("heads") or [])
+        for pin in raw_pins
+    )
+    struct_counts = {s["kind"]: s["count"] for s in structures if s["kind"] != "command_center"}
+
+    try:
+        load = calculate_real_colony_load(
+            structures=struct_counts, link_count=link_count,
+            extractor_head_count=heads, planet_radius_km=radius, ccu_level=ccu_level,
+        )
+    except UnsupportedSetup:
+        # Неизвестный уровень CC (ESI отдал не 0..5) — теоретически не
+        # должно случиться, но лучше честный пробел, чем падение сборщика.
+        return None, None
+    return load.cpu_percent, load.pg_percent
+
+
 @lru_cache(maxsize=1)
 def _name_by_type_id() -> dict[int, str]:
     """
@@ -444,20 +485,26 @@ def sync_one(client, session, character) -> str:
 
             name = _planet_name(client, planet_id)
             system = _system_name(client, int(entry.get("solar_system_id", 0)), system_cache)
+            idx = planet_index(name, system)
+            ccu_level = int(entry.get("upgrade_level", 0))
 
             row = session.get(Colony, (cid, planet_id))
             fields = dict(
                 planet_name=name,
                 system_name=system,
-                planet_index=planet_index(name, system),
+                planet_index=idx,
                 planet_type=str(entry.get("planet_type", "")),
-                upgrade_level=int(entry.get("upgrade_level", 0)),
+                upgrade_level=ccu_level,
                 num_pins=int(entry.get("num_pins", 0)),
             )
             if not detail.from_cache:
                 fields["nearest_expiry"] = expiry
                 fields["structures"] = structures
                 fields["pins"] = pins
+                link_count = len((detail.data or {}).get("links") or [])
+                fields["cpu_percent"], fields["pg_percent"] = real_colony_load(
+                    structures or [], raw_pins, link_count, system, idx, ccu_level,
+                )
             if row is None:
                 session.add(Colony(character_id=cid, planet_id=planet_id, **fields))
             else:

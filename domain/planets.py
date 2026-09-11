@@ -127,6 +127,24 @@ class PlanetBook:
         """Все планеты системы."""
         return self._df[self._df["System"] == system]
 
+    def radius_km(self, system: str, planet_number: float | int | str) -> float | None:
+        """
+        Радиус конкретной планеты по системе и номеру — для расчёта
+        загрузки командного центра НАСТОЯЩЕЙ колонии из игры (ESI радиус
+        не отдаёт, а тут он есть). None, если планеты нет в этом файле:
+        он покрывает только загруженный регион (968 планет), а не весь
+        New Eden — у колонии за его пределами радиуса просто нет источника.
+        """
+        try:
+            number = float(planet_number)
+        except (TypeError, ValueError):
+            return None
+        subset = self._df[(self._df["System"] == system) & (self._df["Planet"] == number)]
+        if subset.empty:
+            return None
+        value = subset.iloc[0][RADIUS_COLUMN]
+        return None if pd.isna(value) else float(value)
+
     def factory_candidates(self, system: str, preferred_only: bool = False) -> pd.DataFrame:
         """
         Планеты системы под перерабатывающие шаблоны, отсортированные

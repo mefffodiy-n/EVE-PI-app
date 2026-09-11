@@ -15,6 +15,7 @@ from domain.capacity import (
     UnsupportedSetup,
     available_templates_for,
     calculate_colony_load,
+    calculate_real_colony_load,
     command_center_capacity,
     extractor_heads_load,
     link_load,
@@ -154,3 +155,42 @@ def test_launchpad_x2_assumption_is_conservative():
     one = structures_load(load_templates()["p4_1factory"].structures)
     assert two.cpu == 2 * one.cpu, "ожидается ровно удвоение состава одиночного шаблона"
     assert two.cpu == 24800
+
+
+class TestRealColonyLoad:
+    """
+    calculate_real_colony_load() — тот же расчёт, что и
+    calculate_colony_load(), но по поштучным реальным данным колонии
+    (структуры/линки/головы из самой ESI), а не по game-шаблону: настоящая
+    колония не обязана совпадать ни с одним из 68 шаблонов.
+    """
+
+    def test_matches_template_based_calculation_for_equivalent_input(self):
+        tpl = load_templates()["p4_1factory"]
+        real = calculate_real_colony_load(
+            structures=dict(tpl.structures),
+            link_count=tpl.link_count,
+            extractor_head_count=tpl.extractor_heads,
+            planet_radius_km=2500,
+            ccu_level=5,
+        )
+        via_template = calculate_colony_load("p4_1factory", 5, 2500)
+        assert real.used.cpu == via_template.used.cpu
+        assert real.used.pg == via_template.used.pg
+        assert real.cpu_percent == via_template.cpu_percent
+        assert real.pg_percent == via_template.pg_percent
+
+    def test_command_center_excluded_from_structures_consumption(self):
+        """
+        Командный центр в structures_load() не участвует (его в каталоге
+        pi_reference.json нет вовсе — он даёт ёмкость, а не потребляет её).
+        Вызывающий код (real_colony_load() в sync_colony_status.py) обязан
+        отфильтровать его до передачи сюда — здесь фиксируется, что
+        передача неизвестного ключа схемы падает, а не тихо игнорируется.
+        """
+        with pytest.raises(UnsupportedSetup):
+            calculate_real_colony_load(
+                structures={"command_center": 1},
+                link_count=0, extractor_head_count=0,
+                planet_radius_km=2500, ccu_level=5,
+            )

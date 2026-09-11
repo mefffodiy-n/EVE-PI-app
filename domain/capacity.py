@@ -212,6 +212,38 @@ def calculate_colony_load(
     )
 
 
+def calculate_real_colony_load(
+    structures: dict[str, int],
+    link_count: int,
+    extractor_head_count: int,
+    planet_radius_km: float,
+    ccu_level: int,
+) -> ColonyLoad:
+    """
+    То же разложение «структуры + головы + линки», что и
+    calculate_colony_load(), но без привязки к game-шаблону — для
+    настоящей колонии из игры, чей состав ESI отдаёт поштучно и который
+    не обязан совпадать ни с одним из 68 шаблонов. Все аргументы —
+    настоящие данные (см. scripts/sync_colony_status.py::real_colony_load()):
+    structures/link_count/extractor_head_count/ccu_level — из самой ESI,
+    planet_radius_km — из data/planet_industry.csv (domain/planets.py).
+
+    Command Center Upgrades сюда приходит уровнем командного центра
+    КОЛОНИИ (upgrade_level из ESI), а не максимальным скиллом персонажа:
+    это фактическая ёмкость прямо сейчас, а не потолок, до которого
+    персонаж мог бы прокачаться.
+    """
+    return ColonyLoad(
+        template_key="real",
+        planet_radius_km=planet_radius_km,
+        ccu_level=ccu_level,
+        structures=structures_load(structures),
+        extractor_heads=extractor_heads_load(extractor_head_count),
+        links=link_load(link_count, planet_radius_km),
+        capacity=command_center_capacity(ccu_level),
+    )
+
+
 def max_planet_radius_that_fits(
     template_key: str,
     ccu_level: int,
