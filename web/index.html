@@ -181,6 +181,11 @@ button { font-family:inherit; }
 .orb svg.ring { position:absolute; inset:0; transform:rotate(-90deg); }
 .orb .ring circle { fill:none; stroke-width:2.5; }
 .orb .ring .track { stroke:var(--orb-track); }
+/* Причал забит — кольцо мигает тревожным красным вместо ровного синего
+   (тот же смысл, что .badge.hot у истекающего таймера: сама по себе
+   заполненность не мигает, только полная). */
+.orb .ring.full circle:not(.track) { animation:ring-blink 1.1s ease-in-out infinite; }
+@keyframes ring-blink { 0%,100%{opacity:1} 50%{opacity:.25} }
 /* Стрелки направлений медленно проступают поверх планеты — так в игре
    обозначается, что по колонии можно кликнуть. Чисто декоративный
    элемент, никаких данных не несёт. */
@@ -864,6 +869,7 @@ const T={
   ssoUnavailable:'Вход недоступен',
   notJson:'{api} вернул не JSON. Запустите «python run.py» и откройте {flask}/',
   pPlanetN:['планета','планеты','планет'],coloniesIdle:'простаивает',coloniesAttention:'требуют внимания',
+  launchpadFull:'причал заполнен',
   themeTitle:'Тема',viewList:'Список по персонажам',viewGrid:'Сетка',sortTitle:'Сортировка',loadLbl:'Загрузка',
   inGameColonies:'Мои колонии в игре',cycOver:'программа завершена',cycIdle:'программа не запущена',
   hUnit:'ч',minUnit:'мин',dUnit:'д',pPin:['пин','пина','пинов'],
@@ -908,6 +914,7 @@ const T={
   ssoUnavailable:'Login unavailable',
   notJson:'{api} returned non-JSON. Run “python run.py” and open {flask}/',
   pPlanetN:['planet','planets','planets'],coloniesIdle:'idle',coloniesAttention:'need attention',
+  launchpadFull:'launchpad full',
   themeTitle:'Theme',viewList:'By character',viewGrid:'Grid',sortTitle:'Sort',loadLbl:'Load',
   inGameColonies:'My in-game colonies',cycOver:'program ended',cycIdle:'no program running',
   hUnit:'h',minUnit:'min',dUnit:'d',pPin:['pin','pins','pins'],
@@ -1054,6 +1061,16 @@ function launchpadFillPct(row){
   return pin?Math.min(100,100*pin.used_m3/pin.capacity_m3):null;
 }
 
+// 99%, не 100: объём считается из объёма-на-единицу с округлением (ESI
+// отдаёт его как есть, мы ничего не подгоняем), и почти забитый причал
+// практически всегда означает «добывать больше некуда» так же, как
+// ровно полный — ждать точного 100% ради индикатора не нужно.
+const LAUNCHPAD_FULL_PCT=99;
+function isLaunchpadFull(row){
+  const pct=launchpadFillPct(row);
+  return pct!=null&&pct>=LAUNCHPAD_FULL_PCT;
+}
+
 /* ── Круг колонии ───────────────────────────────────────────────
    Кольцо показывает загрузку по узкому ресурсу, а не таймер цикла:
    таймеров у нас пока нет, и рисовать вымышленное число нельзя.
@@ -1081,13 +1098,18 @@ function orb(row,size){
     const badgeTxt=exp!=null?fmtBadgeLeft(left):t('cycIdle');
     const activityId=producedIconId(row);
     const fillPct=launchpadFillPct(row);
+    // Причал забит под завязку — добыче дальше складывать некуда, это
+    // требует внимания не меньше, чем истекающая программа (см. attnN в
+    // renderColonies()). Кольцо переключается с синего «заполненность» на
+    // мигающее красное — тот же сигнал, что и .badge.hot у таймера.
+    const full=isLaunchpadFull(row);
     return `<div class="orb real" style="--orb:${size}px"
               onclick="openColony('${row.matchId}')"
-              title="${row.character} · ${row.system} ${row.planet}">
+              title="${row.character} · ${row.system} ${row.planet}${full?' · '+t('launchpadFull'):''}">
       <div class="disc">${planetId?`<img src="${ICON(planetId,128)}" alt="">`:''}</div>
-      ${fillPct!=null?`<svg class="ring" viewBox="0 0 ${size} ${size}">
+      ${fillPct!=null?`<svg class="ring${full?' full':''}" viewBox="0 0 ${size} ${size}">
         <circle class="track" cx="${size/2}" cy="${size/2}" r="${r}"/>
-        <circle cx="${size/2}" cy="${size/2}" r="${r}" stroke="var(--ring-infra)"
+        <circle cx="${size/2}" cy="${size/2}" r="${r}" stroke="var(${full?'--alarm':'--ring-infra'})"
           stroke-dasharray="${c*fillPct/100} ${c}" stroke-linecap="round"/>
       </svg>`:''}
       ${activityId?`<img class="cargo" src="${ICON(activityId)}" alt="">`:''}
@@ -1632,12 +1654,16 @@ function renderColonies(){
   // Простаивает — добывающая колония без запущенной программы (роль
   // «переработка» тут не считается: фабрика может идти циклом, которого
   // мы для сводки не проверяли построчно). Требует внимания — программа
-  // экстрактора кончилась или кончается меньше чем через 2 ч. Оба честно
-  // из тех же полей, что и остальной блок, не выдумка.
+  // экстрактора кончилась или кончается меньше чем через 2 ч, ЛИБО причал
+  // заполнен под завязку (см. launchpadFillPct/isLaunchpadFull — та же
+  // добыча дальше складывать некуда, экстрактор фактически простаивает,
+  // даже если таймер программы ещё идёт). Оба честно из тех же полей,
+  // что и остальной блок, не выдумка.
   const idleN=rows.filter(p=>p.role_key==='mine'&&!p.nearest_expiry).length;
   const attnN=rows.filter(p=>{
-    if(p.role_key!=='mine'||!p.nearest_expiry) return false;
-    return Date.parse(p.nearest_expiry)-Date.now()<7200000;
+    const soon=p.role_key==='mine'&&p.nearest_expiry
+      &&Date.parse(p.nearest_expiry)-Date.now()<7200000;
+    return soon||isLaunchpadFull(p);
   }).length;
   const summary=`${pl(rows.length,'pPlanetN')} · ${idleN} ${t('coloniesIdle')} · ${attnN} ${t('coloniesAttention')}`;
   box.innerHTML=`<div class="colonies"><h3>${t('inGameColonies')} <span class="colsum">${summary}</span></h3>${body}</div>`;
@@ -1651,7 +1677,13 @@ setInterval(()=>{
   const now=Date.now();
   document.querySelectorAll('[data-exp]').forEach(el=>{
     const left=+el.dataset.exp-now;
-    el.textContent=fmtLeft(left);
+    // Плашка на круге колонии (.orb .badge) — короткий формат в одну
+    // единицу (см. fmtBadgeLeft); везде ещё, где есть data-exp (панель
+    // колонии, .tail .val) — обычный многоединичный fmtLeft(). Раньше
+    // тут везде стоял один fmtLeft() — плашка правильно рисовалась при
+    // первом renderColonies(), но на следующем тике таймера (раз в
+    // минуту) сбивалась обратно на «21 ч 59 мин».
+    el.textContent=el.classList.contains('badge')?fmtBadgeLeft(left):fmtLeft(left);
     el.classList.toggle('soon', left>0 && left<7200000);
     el.classList.toggle('over', left<=0);
     el.classList.toggle('hot', left<=0);
@@ -2174,8 +2206,12 @@ const DOC={
    <p>Отдельный блок на дашборде: что у персонажей действительно построено и
    сколько осталось до конца программы экстрактора на каждой планете. Это не
    расчётный план, а снимок из игры — планета с программой на исходе (меньше
-   двух часов) подсвечивается. Карточка колонии выглядит так же, как у
-   расчётного плана: та же полоса иконок структур, только состав берётся не
+   двух часов) подсвечивается, как и планета с забитым под завязку причалом
+   (кольцо заполненности мигает красным вместо ровного синего — складывать
+   добычу больше некуда, даже если таймер программы ещё идёт). Сводная строка
+   над блоком считает оба случая в «требуют внимания». Карточка колонии
+   выглядит так же, как у расчётного плана: та же полоса иконок структур,
+   только состав берётся не
    из шаблона застройки, а из настоящих пинов на планете — колония в игре не
    обязана совпадать ни с одним из игровых шаблонов. Портрет персонажа —
    настоящий, с серверов CCP; пока он не загрузился или персонаж
@@ -2336,7 +2372,10 @@ const DOC={
    <p>A separate dashboard panel: what your characters have actually built and how long
    until the extraction program ends on each planet. This is not the computed plan but a
    snapshot from the game — a planet whose program is nearly done (under two hours) is
-   highlighted. A colony card looks the same as a plan colony — the same strip of structure
+   highlighted, and so is a planet whose launchpad is full to the brim (the fill ring
+   blinks red instead of a steady blue — nowhere left to store more, even if the program
+   timer is still running). The summary line above the panel counts both cases as
+   "need attention". A colony card looks the same as a plan colony — the same strip of structure
    icons — except the composition comes from the real pins on the planet, not a building
    template: an in-game colony need not match any of the game templates. The portrait is
    real, served from CCP's own servers; until it loads, or for a test character, initials
@@ -2355,9 +2394,9 @@ const DOC={
    for however long, up to several days). The factory cycle length itself comes straight
    from ESI's own production-schematic catalogue, not a guess. The grid and list views of
    "My colonies in the game" show the same data: the icon over the planet texture is the
-   raw resource being extracted or the processing chain's final product, the blue ring is
-   launchpad fullness, and the chip is time left on the extractor program (hours or
-   minutes, same as in the game).</p>
+   raw resource being extracted or the processing chain's final product, the ring is
+   launchpad fullness (blue normally, blinking red once it's full), and the chip is time
+   left on the extractor program (hours or minutes, same as in the game).</p>
 
    <h3>What the program does not know yet</h3>
    <p>ESI doesn't expose a planet's radius, so CPU/Power load for a colony with no
