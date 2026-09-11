@@ -161,3 +161,32 @@ class Colony(Base):
     synced_at: Mapped[datetime] = mapped_column(
         UtcDateTime, default=_utcnow, onupdate=_utcnow
     )
+
+
+class ExtractionSample(Base):
+    """
+    Один снимок расчётной скорости добычи ОДНОГО экстрактора — копится
+    при каждой синхронизации (scripts/sync_colony_status.py), а не
+    перезаписывается: история нужна для честного «Avg. Per hour» и
+    графика в панели колонии (Фаза 7, roadmap.md — «порог просадки не
+    выдумывать, вывести из истории самой колонии»). ESI сама историю не
+    хранит, отдаёт только текущий снимок (qty_per_cycle/cycle_time) —
+    копим сами, с нуля, начиная с 11.09.2026.
+
+    pin_id — потому что на одной планете может быть несколько
+    экстракторов (разное сырьё), считать их вместе было бы смешиванием
+    двух независимых ресурсов.
+    """
+
+    __tablename__ = "extraction_samples"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    character_id: Mapped[int] = mapped_column(Integer, index=True)
+    planet_id: Mapped[int] = mapped_column(Integer, index=True)
+    pin_id: Mapped[int] = mapped_column(Integer)
+
+    product_type_id: Mapped[int | None] = mapped_column(nullable=True)
+    qty_per_cycle: Mapped[int | None] = mapped_column(nullable=True)
+    cycle_seconds: Mapped[int | None] = mapped_column(nullable=True)
+
+    sampled_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow, index=True)

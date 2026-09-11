@@ -857,7 +857,7 @@ const charIdOf=name=>{ const c=crew.find(x=>x.name===name); return c?c.character
 const avatarImg=characterId=>characterId
   ? `<img src="${PORTRAIT(characterId)}" alt="" onerror="this.remove()">` : '';
 
-let ids={}, plan=[], staffing={}, view='details', sortBy='load';
+let ids={}, recipeInputs={}, plan=[], staffing={}, view='details', sortBy='load';
 let lang='ru', crew=[], meta={};
 let regions={}, systemCounts={}, allProducts=[], allConstellations=[];
 let dataCounts=null;  // {bases, products} — для чипа data, перерисовывается при смене языка
@@ -898,6 +898,9 @@ const T={
   pgFrom:'Из чего сложилось (Power)',sStruct:'структуры',sHeads:'головы',sLinks:'линки',
   capCap:'Вместимость',capContent:'Содержимое',cycNow:'Текущий цикл',cycNone:'данных о цикле нет',
   extractsW:'Добывает',heads10:'10 голов',cycUnknown:'Состояние цикла неизвестно',
+  extrRateNow:'Сейчас',extrRateAvg:'В среднем',extrRateUnit:'ед./ч',
+  extrHistoryBuilding:'копим историю',
+  extrDeficit:'дефицит — нужна дополнительная добыча',
   afterGame:'появится после подключения к игре',producesW:'Производит',inputW:'Вход',
   pHead:['голова','головы','голов'],emptyStorage:'пусто',
   inProduction:'В производстве',cycIdleSince:'Простаивает',
@@ -945,6 +948,9 @@ const T={
   pgFrom:'Power breakdown',sStruct:'structures',sHeads:'heads',sLinks:'links',
   capCap:'Capacity',capContent:'Contents',cycNow:'Current cycle',cycNone:'no cycle data',
   extractsW:'Extracts',heads10:'10 heads',cycUnknown:'Cycle state unknown',
+  extrRateNow:'Now',extrRateAvg:'Average',extrRateUnit:'units/h',
+  extrHistoryBuilding:'building up history',
+  extrDeficit:'deficit — needs extra extraction',
   afterGame:'appears once connected to the game',producesW:'Produces',inputW:'Input',
   pHead:['head','heads','heads'],emptyStorage:'empty',
   inProduction:'In production',cycIdleSince:'Idle',
@@ -1124,6 +1130,85 @@ function isLaunchpadFull(row){
   return pct!=null&&pct>=LAUNCHPAD_FULL_PCT;
 }
 
+// Порог дефицита добычи — фиксированная величина по прямому решению
+// пользователя (11.09.2026): колония, добывающая меньше, уже дефицитна
+// для всей цепочки сама по себе, независимо от истории конкретной
+// планеты (плотность месторождения у каждой своя, но 48 000/ч — тот
+// минимум, ниже которого ресурс всё равно приходится дублировать
+// добычей). Осознанное отступление от общего принципа «порог — из
+// истории колонии, не норматив» (см. roadmap.md, Фаза 7).
+const DEFICIT_UNITS_PER_HOUR=48000;
+
+// Расчётная скорость добычи ОДНОГО экстрактора прямо сейчас — реальные
+// qty_per_cycle/cycle_seconds с ESI (extractor_details), пересчитанные
+// в «единиц в час». Не «средняя за день» — то, что ESI знает на данный
+// момент (те же оговорки о свежести, что и у остального пина).
+function extractorRatePerHour(pin){
+  if(pin.qty_per_cycle==null||!pin.cycle_seconds) return null;
+  return pin.qty_per_cycle*3600/pin.cycle_seconds;
+}
+
+// Средняя скорость по накопленной истории (extraction_history — копится
+// sync_colony_status.py при каждой синхронизации, начиная с 11.09.2026;
+// ESI сама историю не хранит). null, если снимков ещё нет — «копим
+// историю», а не выдуманное число за несуществующий период.
+function extractorAvgRatePerHour(pin){
+  const hist=pin.extraction_history||[];
+  const rates=hist.map(s=>s.qty_per_cycle!=null&&s.cycle_seconds
+    ?s.qty_per_cycle*3600/s.cycle_seconds:null).filter(r=>r!=null);
+  if(!rates.length) return null;
+  return rates.reduce((a,b)=>a+b,0)/rates.length;
+}
+
+/* Простой столбчатый график скорости добычи по накопленной истории —
+   без библиотек, только то, что реально накоплено (rates уже в
+   единицах/час, см. extractorAvgRatePerHour). */
+function extractorRateChartSVG(rates){
+  const w=240,h=36,max=Math.max(...rates,1);
+  const bw=w/rates.length;
+  const bars=rates.map((r,i)=>{
+    const bh=Math.max(1,h*r/max);
+    return `<rect x="${i*bw}" y="${h-bh}" width="${Math.max(1,bw-1)}" height="${bh}" fill="var(--ring-extract)"/>`;
+  }).join('');
+  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;max-width:240px;height:36px;margin-top:6px;display:block">${bars}</svg>`;
+}
+
+/* Блок «Сейчас/В среднем» под экстрактором — текущая расчётная скорость
+   (extractorRatePerHour, всегда доступна, если запущена программа),
+   средняя по накопленной истории (extractorAvgRatePerHour, null, пока
+   снимков нет) и предупреждение о дефиците (см. DEFICIT_UNITS_PER_HOUR). */
+/* Колония в дефиците добычи — хотя бы один её экстрактор прямо сейчас
+   даёт меньше DEFICIT_UNITS_PER_HOUR (extractorRatePerHour, реальные
+   qty_per_cycle/cycle_seconds). Тот же сигнал «требует внимания», что и
+   истекающий таймер/забитый причал — ресурс всё равно приходится
+   дублировать добычей (решение пользователя 11.09.2026). */
+function isColonyDeficient(row){
+  if(row.role_key!=='mine') return false;
+  return (row.pins||[]).some(p=>{
+    if(p.kind!=='extractor_control_unit') return false;
+    const rate=extractorRatePerHour(p);
+    return rate!=null && rate<DEFICIT_UNITS_PER_HOUR;
+  });
+}
+
+function extractorRateHTML(pin){
+  const now=extractorRatePerHour(pin);
+  if(now==null) return '';
+  const avg=extractorAvgRatePerHour(pin);
+  const deficit=now<DEFICIT_UNITS_PER_HOUR;
+  const hist=pin.extraction_history||[];
+  const rates=hist.map(s=>s.qty_per_cycle!=null&&s.cycle_seconds
+    ?s.qty_per_cycle*3600/s.cycle_seconds:null).filter(r=>r!=null);
+  return `<div class="meta" style="margin-top:8px">
+    <div style="display:flex;gap:16px;flex-wrap:wrap">
+      <span>${t('extrRateNow')}: <b style="color:${deficit?'var(--alarm)':'var(--read)'}">${nloc(Math.round(now))} ${t('extrRateUnit')}</b></span>
+      <span>${t('extrRateAvg')}: <b>${avg!=null?`${nloc(Math.round(avg))} ${t('extrRateUnit')}`:t('extrHistoryBuilding')}</b></span>
+    </div>
+    ${deficit?`<div style="color:var(--alarm);margin-top:4px">⚠ ${t('extrDeficit')}</div>`:''}
+    ${rates.length>1?extractorRateChartSVG(rates):''}
+  </div>`;
+}
+
 /* ── Круг колонии ───────────────────────────────────────────────
    Кольцо показывает загрузку по узкому ресурсу, а не таймер цикла:
    таймеров у нас пока нет, и рисовать вымышленное число нельзя.
@@ -1167,12 +1252,14 @@ function orb(row,size,showPilot=true){
     // в этом случае уступает место красному «запрету» — как в игре;
     // это своя иконка (UI-состояние, не тип предмета из игры), поэтому
     // рисуется SVG, а не берётся с images.evetech.net.
-    const attention=over||full;
+    const deficient=isColonyDeficient(row);
+    const attention=over||full||deficient;
     const noEntry=`<svg class="cargo alert" viewBox="0 0 24 24">
         <circle cx="12" cy="12" r="9.5"/><line x1="5.3" y1="18.7" x2="18.7" y2="5.3"/>
       </svg>`;
     const tip=`<div class="tip">
       ${attention?`<div class="tip-head">${t('needsAttention')}</div>`:''}
+      ${deficient?`<div class="tip-meta" style="color:var(--alarm)">⚠ ${t('extrDeficit')}</div>`:''}
       ${info.name?`<div class="tip-row">${info.iconId?`<img src="${ICON(info.iconId)}" alt="">`:''}
         <span><b>${row.role_key==='mine'?t('extractsW'):t('producesW')}</b><br>${info.name}</span></div>`:''}
       ${pin?`<div class="tip-label">${sname(pin.kind)}</div>
@@ -1856,7 +1943,7 @@ function renderColonies(){
   const attnN=rows.filter(p=>{
     const soon=p.role_key==='mine'&&p.nearest_expiry
       &&Date.parse(p.nearest_expiry)-Date.now()<7200000;
-    return soon||isLaunchpadFull(p);
+    return soon||isLaunchpadFull(p)||isColonyDeficient(p);
   }).length;
   const summary=`${pl(rows.length,'pPlanetN')} · ${idleN} ${t('coloniesIdle')} · ${attnN} ${t('coloniesAttention')}`;
   box.innerHTML=`<div class="colonies"><h3>${t('inGameColonies')} <span class="colsum">${summary}</span></h3>${body}</div>`;
@@ -2066,7 +2153,7 @@ function structureUnitFields(kind, ctx){
           <div><div class="lbl">${t('extractsW')}</div>
             <div class="val">${pin.product||'—'}</div>
             <div class="meta">${pin.heads?pl(pin.heads,'pHead'):t('heads10')}</div></div>
-        </div>`;
+        </div>${extractorRateHTML(pin)}`;
       }
       const expMs=Date.parse(pin.expiry_time);
       return `<div class="cols2">
@@ -2077,7 +2164,7 @@ function structureUnitFields(kind, ctx){
         <div><div class="lbl">${t('extractsW')}</div>
           <div class="val">${ids[pin.product]?`<img src="${ICON(ids[pin.product])}" alt="" style="width:14px;height:14px;vertical-align:-3px;margin-right:3px">`:''}${pin.product||'—'}</div>
           <div class="meta">${pin.heads?pl(pin.heads,'pHead'):t('heads10')}</div></div>
-      </div>`;
+      </div>${extractorRateHTML(pin)}`;
     }
     const cyc = ctx.expMs!=null
       ? `<div class="val extractor-left" data-exp="${ctx.expMs}">${fmtLeft(ctx.expMs-Date.now())}</div>
@@ -2125,12 +2212,20 @@ function structureUnitFields(kind, ctx){
           <div class="meter"><i style="width:${pct}%;background:var(--ring-adv)"></i></div>
           <div class="meta">${fmtLeft(cycleMs-phase)}${projected?` · ${t('cycProjectedHint')}`:''}</div>`;
       }
+      // Вход — recipeInputs (data/recipes.json, проверено по источникам,
+      // правило 2): ESI отдаёт, что фабрика производит, но не что
+      // потребляет, а это уже известно и без ESI.
+      const realInputs=recipeInputs[pin.product]||[];
       return `<div class="cols2">
         <div>${state}</div>
         <div><div class="lbl">${t('producesW')}</div>
           <div class="val">${pin.product
             ?`${ids[pin.product]?`<img src="${ICON(ids[pin.product])}" alt="" style="width:14px;height:14px;vertical-align:-3px;margin-right:3px">`:''}${pin.product}`
             :'—'}</div>
+          ${realInputs.length?`<div class="lbl" style="margin-top:5px">${t('inputW')}</div>
+          <div class="inputs">${realInputs.map(n=>ids[n]
+            ?`<span class="have" title="${n}"><img src="${ICON(ids[n])}" alt=""></span>`
+            :`<span title="${n}">·</span>`).join('')}</div>`:''}
           <div class="lbl" style="margin-top:5px">${t('capContent')}</div>
           ${contentsHTML(pin.contents)}</div>
       </div>`;
@@ -2498,7 +2593,19 @@ const DOC={
    и списке «Моих колоний» — иконка добываемого сырья или конечного
    продукта переработки поверх текстуры планеты, голубое кольцо —
    заполненность причала, плашка — время до конца программы экстрактора
-   (часы или минуты, как в игре).</p>
+   (часы или минуты, как в игре). У фабрики рядом с «Производит» — «Вход»:
+   иконки сырья, которое она потребляет (справочник рецептов, ESI это не
+   отдаёт, только что фабрика производит).</p>
+   <p>Экстрактор в панели показывает не только время до конца программы, но
+   и скорость добычи: «Сейчас» — расчёт по текущим данным ESI о количестве
+   за цикл и длительности цикла, «В среднем» — по накопленной истории (снимок при каждой
+   синхронизации; истории может не быть — «копим историю», а не выдуманное
+   число за несуществующий период). Колония с добычей ниже 48 000 ед./ч
+   помечается как дефицитная — фиксированный порог по решению пользователя
+   (не история самой колонии): при такой скорости ресурса всё равно не
+   хватит на всю цепочку, значит его придётся дублировать дополнительной
+   добычей. Дефицит — тот же сигнал «требует внимания», что истекающий
+   таймер и забитый причал.</p>
 
    <h3>Чего программа пока не знает</h3>
    <p>Загрузка CPU/Power командного центра колонии за пределами загруженного
@@ -2684,7 +2791,17 @@ const DOC={
    "My colonies in the game" show the same data: the icon over the planet texture is the
    raw resource being extracted or the processing chain's final product, the ring is
    launchpad fullness (blue normally, blinking red once it's full), and the chip is time
-   left on the extractor program (hours or minutes, same as in the game).</p>
+   left on the extractor program (hours or minutes, same as in the game). A factory panel
+   shows "Input" next to "Produces" — icons for what it consumes (the recipe catalogue;
+   ESI only reports what a factory produces, not what it consumes).</p>
+   <p>The extractor panel shows more than time left on the program: extraction rate too.
+   "Now" is computed from ESI's current per-cycle quantity and cycle length; "Average" comes
+   from history accumulated at each sync — there may be none yet ("building up history"
+   instead of inventing a number for a period that doesn't exist). A colony extracting
+   under 48,000 units/hour is flagged as in deficit — a fixed threshold by the user's own
+   decision, not derived from that colony's own history: at that rate the resource won't
+   cover the whole chain regardless, so it needs duplicating with extra extraction.
+   Deficit is the same "needs attention" signal as an expiring timer or a full launchpad.</p>
 
    <h3>What the program does not know yet</h3>
    <p>CPU/Power load for a colony outside the loaded region (no row in the planet file —
@@ -2824,6 +2941,7 @@ async function boot(){
       throw new Error(t('notJson').replace('{api}',API).replace('{flask}',FLASK));
     const d=await res.json();
     ids=d.product_ids||{};
+    recipeInputs=d.recipe_inputs||{};
     allConstellations=d.bases||[];
     allProducts=d.products||[];
     regions=d.regions||{};
