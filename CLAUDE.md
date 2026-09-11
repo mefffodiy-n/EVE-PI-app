@@ -261,10 +261,12 @@ nginx, оба процесса — службами. Пошагово — `deplo
 планеты). **Не работает только без `client_id`** от developers.eveonline.com
 — это единственный оставшийся шаг фазы.
 
-**Фаза 6 — развёртывание.** Готово: `scripts/serve.py` (waitress),
-журналирование в файл (`infra/logging.py`), `scripts/backup.py` (копия БД
-раз в сутки), `deploy/` (службы Windows через NSSM, nginx, задание бэкапа).
-Осталось поставить всё это на конкретный сервер по `deploy/README.md`.
+**Фаза 6 — развёртывание.** Готово и развёрнуто: `scripts/serve.py`
+(waitress), журналирование в файл (`infra/logging.py`), `scripts/backup.py`
+(копия БД раз в сутки), `deploy/` (службы Windows через NSSM и systemd на
+Linux, nginx, задание бэкапа). Приложение реально стоит на Ubuntu VPS —
+systemd, nginx + Let's Encrypt, бесплатный домен DuckDNS, SSH-hardening,
+`ufw`/`fail2ban`, swap на 1 ГБ RAM (пошагово — `deploy/README.md` раздел 7).
 
 **Осталось от Фазы 1:** проверить в игре расхождение по второму причалу.
 
