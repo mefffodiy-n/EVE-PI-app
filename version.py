@@ -16,10 +16,12 @@ VERSION = "0.9.0"
 # реализованное от запланированного и не обещать лишнего. Двуязычно:
 # окно «О проекте» есть на обоих языках.
 PHASE = {
-    "ru": ("Фазы 3–6 по коду закрыты: EVE SSO, синхронизация скиллов и колоний, "
-           "служба и бэкапы. Осталось получить client_id от CCP и развернуть."),
-    "en": ("Phases 3–6 are code-complete: EVE SSO, skill and colony sync, "
-           "service and backups. Left: get a client_id from CCP and deploy."),
+    "ru": ("Фазы 3–6 закрыты и развёрнуты: EVE SSO, синхронизация скиллов и "
+           "колоний, служба и бэкапы работают на сервере. Осталось получить "
+           "client_id от CCP, чтобы включить настоящий вход."),
+    "en": ("Phases 3–6 are done and deployed: EVE SSO, skill and colony sync, "
+           "service and backups are running on the server. Left: get a "
+           "client_id from CCP to enable real login."),
 }
 
 
