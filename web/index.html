@@ -1339,6 +1339,22 @@ function isColonyIdle(p){
   return false;
 }
 
+/* Порядок пинов в детальном виде факта из игры: командный центр,
+   экстрактор (если есть), причал, хранилище (если есть), фабрики —
+   по просьбе пользователя, отдельно от STRUCTURE_ORDER расчётного плана
+   (там порядок другой, менять не просили). Сортировка устойчивая: пины
+   одного вида (несколько фабрик) сохраняют исходный порядок ESI между
+   собой — реальный порядок циклов ни на что не влияет, важна только
+   группировка по виду. */
+const REAL_PIN_ORDER=['command_center','extractor_control_unit','launchpad','storage_facility',
+  'basic_industry_facility','advanced_industry_facility','high_tech_industry_facility'];
+function sortPinsForDisplay(pins){
+  return pins.map((pin,i)=>({pin,i})).sort((a,b)=>{
+    const ra=REAL_PIN_ORDER.indexOf(a.pin.kind), rb=REAL_PIN_ORDER.indexOf(b.pin.kind);
+    return (ra<0?REAL_PIN_ORDER.length:ra)-(rb<0?REAL_PIN_ORDER.length:rb) || a.i-b.i;
+  }).map(x=>x.pin);
+}
+
 /* Полоса иконок структур под карточкой колонии (colonyCardHTML). У
    настоящей колонии с пересинхронизированными пинами (p.pins) — каждый
    пин своим кругом с настоящим циклом (см. pinCycleInfo) и настоящей
@@ -1347,7 +1363,7 @@ function isColonyIdle(p){
    structures_detail без прогресса. */
 function structOrbsForRow(p){
   if(p.isReal && p.pins && p.pins.length){
-    return p.pins.map(pin=>{
+    return sortPinsForDisplay(p.pins).map(pin=>{
       const info=pinCycleInfo(pin);
       const opts={cycle:info.cycle, idle:info.idle};
       if(pin.kind==='command_center' && p.cpu_percent!=null){
@@ -2153,7 +2169,7 @@ function structureUnitsHTML(structuresDetail, planetType, ctx){
    — тогда честное «нет данных», как и раньше. Фабрики заодно получают
    настоящий прогресс цикла (pinCycleInfo) вместо статичного пунктира. */
 function pinUnitsHTML(pins, planetType, planetLabel, load){
-  return pins.map((pin,i)=>{
+  return sortPinsForDisplay(pins).map((pin,i)=>{
     const code=`${String.fromCharCode(65+(i%26))}${i}-${planetLabel}`;
     const info=pinCycleInfo(pin);
     const opts={size:52, cycle:info.cycle, idle:info.idle};
