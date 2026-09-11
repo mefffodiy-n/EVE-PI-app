@@ -64,6 +64,14 @@ ESI_SCOPES = os.environ.get(
 # Сгенерировать: python -c "from infra.crypto import generate_key; print(generate_key())"
 TOKEN_ENCRYPTION_KEY = os.environ.get("PI_TOKEN_KEY") or None
 
+# Ключ подписи cookie сессии (Flask/itsdangerous) — отдельный от
+# TOKEN_ENCRYPTION_KEY: разные назначения (тот шифрует токены ESI в БД,
+# этот подписывает браузерную cookie, определяющую, ЧЕЙ это визит).
+# Без постоянного значения api/__init__.py сгенерирует одноразовый ключ
+# на процесс — все войдут заново после каждого перезапуска/деплоя.
+# Сгенерировать: python -c "import secrets; print(secrets.token_hex(32))"
+SESSION_SECRET_KEY = os.environ.get("PI_SESSION_KEY") or None
+
 
 def sso_configured() -> bool:
     """Готов ли auth-слой к работе (есть client_id и ключ шифрования)."""

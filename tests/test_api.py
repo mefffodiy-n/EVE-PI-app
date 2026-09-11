@@ -162,6 +162,95 @@ SAMPLE_PLAN_ROW = {
 }
 
 
+class TestPlansIsolation:
+    """
+    Найдено 11.09.2026: /api/plans отдавал сохранённые планы кому угодно
+    без учёта того, кто вошёл — та же ошибка, что и с /api/characters
+    (см. TestLoad.test_prod_loads_real_rows_of_matching_account_only в
+    tests/test_db.py), только на уровне HTTP, а не domain-функции
+    напрямую: проверяем, что сама сессия (api/session.py) действительно
+    разделяет запросы, а не только что domain/plan_storage.py умеет
+    фильтровать при вызове с нужным account_id.
+    """
+
+    def _login_as(self, client, account_id: str) -> None:
+        with client.session_transaction() as sess:
+            sess["account_id"] = account_id
+
+    def _save(self, client, name: str = "План"):
+        return client.post("/api/plans", json={"name": name, "rows": [SAMPLE_PLAN_ROW]})
+
+    def test_two_accounts_do_not_see_each_others_plans(self, client, monkeypatch):
+        from infra import config
+
+        monkeypatch.setattr(config, "IS_DEV", False)
+
+        self._login_as(client, "acct-a")
+        saved = self._save(client, "План A")
+        assert saved.status_code == 200
+        plan_id = saved.get_json()["plan"]["id"]
+
+        listed = client.get("/api/plans").get_json()["plans"]
+        assert [p["name"] for p in listed] == ["План A"]
+
+        self._login_as(client, "acct-b")
+        assert client.get("/api/plans").get_json()["plans"] == []
+        assert client.get(f"/api/plans/{plan_id}").status_code == 404
+        assert client.delete(f"/api/plans/{plan_id}").status_code == 404
+
+        self._login_as(client, "acct-a")
+        assert client.get(f"/api/plans/{plan_id}").status_code == 200
+
+    def test_anonymous_prod_visit_cannot_save_or_list(self, client, monkeypatch):
+        from infra import config
+
+        monkeypatch.setattr(config, "IS_DEV", False)
+
+        assert self._save(client).status_code == 400
+        assert client.get("/api/plans").get_json()["plans"] == []
+
+    def test_calculate_cache_does_not_leak_between_accounts(self, client, monkeypatch):
+        """
+        cache_key() теперь включает account_id (см. api/blueprints/plans.py) —
+        до 11.09.2026 два разных пользователя с одинаковыми параметрами
+        запроса могли получить план ОДНОГО из них из общего кэша, потому
+        что ключ строился только из параметров расчёта, не из того, кто
+        спрашивает. Только acct-a имеет персонажа — если бы кэш не различал
+        аккаунты, второй (пустой) запрос от acct-a мог бы «прилипнуть» к
+        acct-b и наоборот при повторных вызовах.
+        """
+        from infra import config
+        from infra.db import session_scope
+        from infra.models import Character
+
+        with session_scope() as session:
+            session.add(Character(
+                character_id=95001, name="Only Acct A",
+                command_center_upgrades_level=5, interplanetary_consolidation_level=5,
+                source="esi", account_id="acct-a",
+            ))
+
+        monkeypatch.setattr(config, "IS_DEV", False)
+        payload = {
+            "constellations": ["ALPHA"], "factory_sys": "HOME",
+            "target_products": ["Biocells"],
+        }
+
+        self._login_as(client, "acct-a")
+        with_char = client.post("/api/calculate", json=payload).get_json()
+        assert "Нет персонажей" not in (with_char.get("warning") or "")
+
+        self._login_as(client, "acct-b")
+        without_char = client.post("/api/calculate", json=payload).get_json()
+        assert without_char.get("warning") and "Нет персонажей" in without_char["warning"]
+
+        # Повторный запрос acct-a не должен вернуть закэшированный
+        # результат acct-b (пустой план из-за отсутствия персонажей).
+        self._login_as(client, "acct-a")
+        with_char_again = client.post("/api/calculate", json=payload).get_json()
+        assert "Нет персонажей" not in (with_char_again.get("warning") or "")
+
+
 class TestExport:
     def test_export_rejects_empty_plan(self, client):
         assert client.post("/api/export", json={"plan_data": []}).status_code == 400

@@ -69,16 +69,51 @@ class TestLoad:
         monkeypatch.setattr(config, "IS_DEV", False)
         assert load_characters() == []
 
-    def test_prod_still_loads_real_rows(self, monkeypatch):
+    def test_prod_loads_real_rows_of_matching_account_only(self, monkeypatch):
+        """
+        Найдено 11.09.2026: разные пользователи, вошедшие через SSO,
+        видели персонажей друг друга — load_characters() отдавала ВСЕ
+        esi-строки без учёта того, кто спрашивает. Теперь нужен
+        совпадающий account_id.
+        """
         with db.session_scope() as s:
             s.add(Character(
                 character_id=1001, name="Real Pilot",
                 command_center_upgrades_level=5, interplanetary_consolidation_level=5,
-                source="esi",
+                source="esi", account_id="acct-a",
+            ))
+            s.add(Character(
+                character_id=1002, name="Someone Else",
+                command_center_upgrades_level=5, interplanetary_consolidation_level=5,
+                source="esi", account_id="acct-b",
             ))
         monkeypatch.setattr(config, "IS_DEV", False)
-        loaded = load_characters()
-        assert [c.name for c in loaded] == ["Real Pilot"]
+        assert [c.name for c in load_characters(account_id="acct-a")] == ["Real Pilot"]
+        assert [c.name for c in load_characters(account_id="acct-b")] == ["Someone Else"]
+
+    def test_prod_without_account_id_sees_nothing(self, monkeypatch):
+        """Анонимный визит (ещё не входил через SSO) — честно пусто, не «всё»."""
+        with db.session_scope() as s:
+            s.add(Character(
+                character_id=1001, name="Real Pilot",
+                command_center_upgrades_level=5, interplanetary_consolidation_level=5,
+                source="esi", account_id="acct-a",
+            ))
+        monkeypatch.setattr(config, "IS_DEV", False)
+        assert load_characters() == []
+        assert load_characters(account_id=None) == []
+
+    def test_dev_ignores_account_id(self, monkeypatch):
+        """Локальная разработка однопользовательская — account_id тут ни на что не влияет."""
+        with db.session_scope() as s:
+            s.add(Character(
+                character_id=1001, name="Real Pilot",
+                command_center_upgrades_level=5, interplanetary_consolidation_level=5,
+                source="esi", account_id=None,
+            ))
+        assert config.IS_DEV
+        assert any(c.name == "Real Pilot" for c in load_characters(account_id="does-not-matter"))
+        assert any(c.name == "Real Pilot" for c in load_characters())
 
     def test_fields_map_to_character_slot(self):
         seed()
