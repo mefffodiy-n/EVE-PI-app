@@ -235,6 +235,113 @@ class TestFirstSyncOne:
         auth_module._first_sync_one(999999999, client=EsiClient(opener=self._opener()))
 
 
+class TestUnlink:
+    """
+    «Отвязать персонажа» (roadmap.md, Фаза 3) — честная замена настоящему
+    отзыву на стороне CCP (недоступен публичному PKCE-клиенту без
+    client_secret, см. infra/credentials.py::delete_tokens). Здесь
+    проверяется только наш собственный эффект: токен стёрт, персонаж
+    откреплён от визита (account_id=None) — не запрос к login.eveonline.com,
+    его тут нет и быть не может.
+    """
+
+    def _login_as(self, client, account_id):
+        with client.session_transaction() as sess:
+            sess["account_id"] = account_id
+
+    def _add_character(self, cid, account_id, source="esi"):
+        from infra.credentials import save_tokens
+
+        with session_scope() as s:
+            s.add(Character(character_id=cid, name="Pilot",
+                            command_center_upgrades_level=5,
+                            interplanetary_consolidation_level=4,
+                            source=source, account_id=account_id))
+            if source == "esi":
+                save_tokens(s, cid, {"access_token": "a", "refresh_token": "r",
+                                     "expires_in": 3600}, ["esi-skills.read_skills.v1"])
+
+    def test_unlink_deletes_token_and_clears_account_id(self, client, monkeypatch):
+        from infra import config, crypto
+
+        monkeypatch.setattr(config, "TOKEN_ENCRYPTION_KEY", crypto.generate_key())
+        self._add_character(95538921, "acct-a")
+        self._login_as(client, "acct-a")
+
+        r = client.post("/api/auth/unlink/95538921")
+        assert r.status_code == 200
+        assert r.get_json()["unlinked"] == 95538921
+
+        with session_scope() as s:
+            char = s.get(Character, 95538921)
+            assert char is not None and char.account_id is None
+            assert s.get(Credential, 95538921) is None
+
+    def test_cannot_unlink_someone_elses_character(self, client, monkeypatch):
+        from infra import config, crypto
+
+        monkeypatch.setattr(config, "TOKEN_ENCRYPTION_KEY", crypto.generate_key())
+        self._add_character(95538921, "acct-a")
+        self._login_as(client, "acct-b")
+
+        r = client.post("/api/auth/unlink/95538921")
+        assert r.status_code == 404
+
+        with session_scope() as s:
+            char = s.get(Character, 95538921)
+            assert char.account_id == "acct-a"  # не тронут
+            assert s.get(Credential, 95538921) is not None
+
+    def test_anonymous_visit_cannot_unlink(self, client, monkeypatch):
+        from infra import config, crypto
+
+        monkeypatch.setattr(config, "TOKEN_ENCRYPTION_KEY", crypto.generate_key())
+        self._add_character(95538921, "acct-a")
+
+        r = client.post("/api/auth/unlink/95538921")
+        assert r.status_code == 404
+
+    def test_dev_stub_cannot_be_unlinked(self, client, monkeypatch):
+        from infra import config, crypto
+
+        monkeypatch.setattr(config, "TOKEN_ENCRYPTION_KEY", crypto.generate_key())
+        self._add_character(90001, "acct-a", source="dev")
+        self._login_as(client, "acct-a")
+
+        r = client.post("/api/auth/unlink/90001")
+        assert r.status_code == 400
+
+        with session_scope() as s:
+            assert s.get(Character, 90001).account_id == "acct-a"  # не тронут
+
+    def test_unknown_character_reports_the_same_not_found(self, client, monkeypatch):
+        from infra import config, crypto
+
+        monkeypatch.setattr(config, "TOKEN_ENCRYPTION_KEY", crypto.generate_key())
+        self._login_as(client, "acct-a")
+
+        r = client.post("/api/auth/unlink/1")
+        assert r.status_code == 404
+
+    def test_characters_endpoint_flags_esi_linked_for_the_unlink_button(self, client, monkeypatch):
+        """
+        /api/characters — источник esi_linked, по которому фронт решает,
+        показывать ли кнопку «Отвязать персонажа» (не всё персонажу можно
+        отвязать — см. test_dev_stub_cannot_be_unlinked).
+        """
+        from infra import config, crypto
+
+        monkeypatch.setattr(config, "TOKEN_ENCRYPTION_KEY", crypto.generate_key())
+        self._add_character(95538921, "acct-a", source="esi")
+        self._add_character(90001, "acct-a", source="dev")
+        self._login_as(client, "acct-a")
+
+        body = client.get("/api/characters").get_json()
+        by_id = {c["character_id"]: c for c in body["characters"]}
+        assert by_id[95538921]["esi_linked"] is True
+        assert by_id[90001]["esi_linked"] is False
+
+
 def test_verify_rejects_missing_eve_online_audience(sso_env, _rsa_key, monkeypatch):
     from scripts.esi_sso import SsoError, verify_access_token
 
