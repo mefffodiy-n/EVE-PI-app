@@ -698,6 +698,10 @@ details.msgs[open] > summary::before { content:'▾ '; }
 .chosen b { cursor:pointer; color:var(--dim); font-weight:400; }
 .chosen b:hover { color:var(--alarm); }
 .chosen .none { color:var(--dim); border:none; background:none; padding:2px 0; }
+/* Подсказка про персонажей — как «ничего не выбрано» у .chosen: отдельным
+   блоком под списком, а не последней строкой внутри него (иначе она
+   прокручивалась бы вместе со списком и то появлялась, то пряталась). */
+.crew-hint { padding:6px 8px; border-top:1px solid var(--seam); color:var(--dim); font-size:11px; }
 
 /* Шаг 5 (roadmap.md): декоративный HUD-уголок из макета Claude Design —
    тонкая золотая скоба сверху-слева и снизу-справа поверх рамки
@@ -1028,6 +1032,7 @@ body.light .rolebadge.excess { background:rgba(154,107,18,.12); }
           <div class="crew" id="crew"><div style="color:var(--dim);font-size:12px" data-i18n="crewPre">
             Появятся после расчёта: планировщик сам распределяет персонажей
             по планетам с учётом их прокачки.</div></div>
+          <div class="crew-hint" id="crewHint" data-i18n="crewHint">Персонажи хранятся на сервере и не пропадают при перезаходе.</div>
         </div>
       </div>
     </div>
@@ -3604,8 +3609,7 @@ function renderCrew(){
       ${c.esi_linked?`<button class="mini" style="padding:1px 6px;font-size:10px;margin-left:6px"
         title="${t('unlinkHint')}" onclick="unlinkCharacter(${c.character_id})"
         data-i18n="unlink">${t('unlink')}</button>`:''}</div>`;
-  }).join('')
-  + `<div style="color:var(--dim);font-size:11px;margin-top:8px">${t('crewHint')}</div>`;
+  }).join('');
   fitStepFills();
 }
 
