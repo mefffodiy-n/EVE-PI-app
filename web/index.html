@@ -1183,25 +1183,72 @@ function isLaunchpadFull(row){
 // истории колонии, не норматив» (см. roadmap.md, Фаза 7).
 const DEFICIT_UNITS_PER_HOUR=48000;
 
-// Расчётная скорость добычи ОДНОГО экстрактора прямо сейчас — реальные
-// qty_per_cycle/cycle_seconds с ESI (extractor_details), пересчитанные
-// в «единиц в час». Не «средняя за день» — то, что ESI знает на данный
-// момент (те же оговорки о свежести, что и у остального пина).
+// ESI отдаёт qty_per_cycle как БАЗОВОЕ значение программы экстрактора
+// (задаётся один раз при установке, не меняется само по себе) — не
+// текущий фактический объём цикла. Реальная добыча затухает от этого
+// значения по игровой механике (кривая с шумовой модуляцией) на
+// протяжении всей программы, что подтверждено скриншотом игрового
+// клиента пользователя (13.09.2026): игра — 17 030 ед./ч, наш прежний
+// расчёт «в лоб» (qty_per_cycle×циклов/час) — 21 868–22 061, разница
+// ~28% на давно идущей программе. Формула затухания не задокументирована
+// CCP официально, но воспроизведена независимо двумя сторонними PI-
+// инструментами (RIFT Intel Fusion Tool — эталон для нас,
+// PlanetaryIndustryRepository.kt/simulation/ExtractionSimulation.kt;
+// и «Planets in Space», по их же чейнджлогу) — правило 2 (сверка
+// нескольких источников) соблюдено. Ошибка была тем более значима,
+// что искажала DEFICIT_UNITS_PER_HOUR: заниженный дефицит выглядел
+// как «всё в порядке».
+function extractorDecayedQty(baseValue, installTimeIso, cycleSeconds, atMs){
+  if(baseValue==null||!installTimeIso||!cycleSeconds) return null;
+  const startS=Date.parse(installTimeIso)/1000;
+  const timeDiff=atMs/1000-startS;
+  if(!(timeDiff>=0)) return null;
+  const cycleNum=Math.max(Math.floor((timeDiff+1)/cycleSeconds)-1,0);
+  const barWidth=cycleSeconds/900;
+  const t=(cycleNum+0.5)*barWidth;
+  const decayValue=baseValue/(1+t*0.012);
+  const phaseShift=Math.pow(baseValue,0.7);
+  const sinStuff=Math.max(0,(Math.cos(phaseShift+t/12)+Math.cos(phaseShift/2+t/5)+Math.cos(t/2))/3);
+  const barHeight=decayValue*(1+0.8*sinStuff);
+  return Math.floor(barWidth*barHeight);
+}
+
+// Расчётная скорость добычи ОДНОГО экстрактора прямо сейчас — затухшее
+// значение (см. extractorDecayedQty) на текущий момент, пересчитанное
+// в «единиц в час».
 function extractorRatePerHour(pin){
-  if(pin.qty_per_cycle==null||!pin.cycle_seconds) return null;
-  return pin.qty_per_cycle*3600/pin.cycle_seconds;
+  const qty=extractorDecayedQty(pin.qty_per_cycle, pin.install_time, pin.cycle_seconds, Date.now());
+  if(qty==null) return null;
+  return qty*3600/pin.cycle_seconds;
 }
 
 // Средняя скорость по накопленной истории (extraction_history — копится
 // sync_colony_status.py при каждой синхронизации, начиная с 11.09.2026;
-// ESI сама историю не хранит). null, если снимков ещё нет — «копим
+// ESI сама историю не хранит). Каждый снимок пересчитан затуханием НА
+// МОМЕНТ этого снимка (install_time считается неизменным — программа не
+// перезапускалась; если экстрактор переустановили, старые снимки этого
+// не знают, honest edge case). null, если снимков ещё нет — «копим
 // историю», а не выдуманное число за несуществующий период.
 function extractorAvgRatePerHour(pin){
   const hist=pin.extraction_history||[];
-  const rates=hist.map(s=>s.qty_per_cycle!=null&&s.cycle_seconds
-    ?s.qty_per_cycle*3600/s.cycle_seconds:null).filter(r=>r!=null);
+  if(!pin.install_time) return null;
+  const rates=hist.map(s=>{
+    const qty=extractorDecayedQty(s.qty_per_cycle, pin.install_time, s.cycle_seconds, Date.parse(s.sampled_at));
+    return qty!=null&&s.cycle_seconds?qty*3600/s.cycle_seconds:null;
+  }).filter(r=>r!=null);
   if(!rates.length) return null;
   return rates.reduce((a,b)=>a+b,0)/rates.length;
+}
+
+// Точки для графика (extractorRateChartSVG) — та же затухшая скорость,
+// вычисленная на момент каждого снимка истории (см. extractorAvgRatePerHour).
+function extractorRateHistoryPoints(pin){
+  const hist=pin.extraction_history||[];
+  if(!pin.install_time) return [];
+  return hist.map(s=>{
+    const qty=extractorDecayedQty(s.qty_per_cycle, pin.install_time, s.cycle_seconds, Date.parse(s.sampled_at));
+    return qty!=null&&s.cycle_seconds?qty*3600/s.cycle_seconds:null;
+  }).filter(r=>r!=null);
 }
 
 /* Простой столбчатый график скорости добычи по накопленной истории —
@@ -1285,9 +1332,7 @@ function extractorRateHTML(pin){
   if(now==null) return '';
   const avg=extractorAvgRatePerHour(pin);
   const info=pinDeficitInfo(pin);
-  const hist=pin.extraction_history||[];
-  const rates=hist.map(s=>s.qty_per_cycle!=null&&s.cycle_seconds
-    ?s.qty_per_cycle*3600/s.cycle_seconds:null).filter(r=>r!=null);
+  const rates=extractorRateHistoryPoints(pin);
   return `<div class="meta" style="margin-top:8px">
     <div style="display:flex;gap:16px;flex-wrap:wrap">
       <span>${t('extrRateNow')}: <b style="color:${info.deficient?'var(--alarm)':'var(--read)'}">${nloc(Math.round(now))} ${t('extrRateUnit')}</b></span>
