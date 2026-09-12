@@ -411,6 +411,7 @@ details.msgs[open] > summary::before { content:'▾ '; }
 
 /* Широкий ноутбук: убираем возраст справочных данных — он нужен редко. */
 @media (max-width:1400px) { #chipData { display:none; } }
+@media (max-width:1200px) { #chipJobs { display:none; } }
 
 /* Узкий ноутбук: подпись бренда и версия уходят. */
 @media (max-width:1150px) {
@@ -467,6 +468,7 @@ details.msgs[open] > summary::before { content:'▾ '; }
 .chip .dot { width:7px; height:7px; border-radius:50%; background:var(--dim); flex:0 0 auto; }
 .chip .dot.live { background:var(--calm); box-shadow:0 0 6px var(--calm); }
 .chip .dot.stale { background:var(--amber); }
+.chip .dot.failing { background:var(--alarm); }
 .tbtn { background:none; border:1px solid var(--seam); color:var(--read); padding:5px 12px;
         cursor:pointer; font-size:12px; white-space:nowrap; }
 .tbtn:hover { border-color:var(--flux); color:var(--flux); }
@@ -706,6 +708,7 @@ body.light .rolebadge.excess { background:rgba(154,107,18,.12); }
 
   <div class="info">
     <span class="chip" id="chipEsi" title=""><span class="dot"></span><span>ESI</span><b id="esiPlayers">—</b></span>
+    <span class="chip" id="chipJobs" title=""><span class="dot"></span><span data-i18n="chipJobs">сборщики</span><b id="jobsStatus">—</b></span>
     <span class="chip" id="chipData"><span data-i18n="chipData">данные</span><b id="dataStatus">—</b></span>
     <span class="chip" id="chipVer">v<b id="appVersion">—</b></span>
   </div>
@@ -907,6 +910,8 @@ const T={
   cProc:'переработка',cMine:'добыча',crewHint:'Персонажи хранятся на сервере и не пропадают при перезаходе.',
   unlink:'Отвязать',unlinkHint:'Стереть токен на нашей стороне — планировщик перестанет видеть персонажа до повторного входа. Доступ на стороне CCP отдельно отзывается на eveonline.com/account/third_party_apps.',
   unlinkFail:'Не удалось отвязать персонажа',
+  chipJobs:'сборщики',jobsOk:'ок',jobsStale:'застряли',jobsFailing:'падают',
+  jobsNever:'ни разу не запускался',jobsFailingCount:'падает {n}-й раз подряд',
   unlinkedRevoked:'Персонаж отвязан, доступ отозван и на стороне CCP',
   unlinkedLocalOnly:'Персонаж отвязан на нашей стороне (секрет приложения не задан — настоящий отзыв недоступен)',
   planetSlots:'слотов планет',wholeRegion:'Весь регион',clearAll:'Снять всё',nothingChosen:'ничего не выбрано',systems:'систем',selectAll:'Выбрать все',pickProducts:'Выберите хотя бы один продукт',pickConst:'Выберите хотя бы одно созвездие',export:'Экспорт в Excel',jumpPlan:'↑ План',jumpColonies:'↓ Мои колонии',jumpShopping:'↓ Список закупки',shopping:'Список закупки: командные центры',shopTotal:'Всего командных центров',exportEmpty:'Сначала постройте план',exportFail:'Не удалось выгрузить файл',profitTitle:'Что выгоднее производить',collectedAgo:'снимок собран',minutesAgo:'мин назад',stale:'устарел',colProduct:'Продукт',colColonies:'Планет',colPerColony:'ISK / колония-час',colPerHour:'ISK / час',colPrice:'Цена за единицу',noPrice:'нет цены',noSnapshot:'Снимок цен не собран',advDeficit:'Персонажей не хватает на эту цепочку',advSurplus:'Персонажей больше, чем нужно',advDeficitLead:'Полный цикл требует {need} колоний, а в пуле {have} слотов. Вот что поместится целиком:',advSurplusLead:'Выбранное занимает {need} колоний из {have}. Свободно {spare} — можно добавить:',advTake:'Взять',advIgnoreDeficit:'Строить как есть',advIgnoreSurplus:'Занять свободных добычей',advIgnoreDeficitHint:'план будет с дефицитом сырья',advIgnoreSurplusHint:'добыча сырья той же цепочки, по убыванию дефицитности',colonies3:'колоний',excess:'Добыча (избыток)',directP2:'Делать P2 прямо на добывающих планетах',directP2Hint:'где есть оба вида сырья — не нужно возить P1',mSpread:'Разброс по системам',logi:'всего задействовано',systemsAvg:'систем на персонажа',sysOne:'система',sysFew:'системы',sysMany:'систем',logiGood:'колонии собраны компактно',logiPoor:'урожай придётся собирать в разъездах',mColonies:'Колоний в плане',mChars:'Персонажей занято',mPeak:'Самая нагруженная',mShort:'Не хватает персонажей',planClosed:'план закрыт',fitsUpTo:'двойной шаблон помещается на планеты до',km:'км',suitableHere:'подходящих планет в системе',ofThem:'из них',decisionTitle:'План упёрся в размер планет',decisionText:'В выбранной домашней системе двойной шаблон не помещается ни на одну планету. Выберите, как поступить.',chooseOther:'Выбрать другую систему',useSingle:'Ставить по одному шаблону',singleNote:'планет и персонажей потребуется вдвое больше',savedPlans:'Сохранённые планы',save:'Сохранить',load:'Открыть',del:'Удалить',compare:'Сравнить',noSaved:'Пока ничего не сохранено',saveFirst:'Сначала постройте план',pickTwo:'Отметьте два плана для сравнения',cmpTitle:'Разница',colonies2:'колоний',chars2:'персонажей',peak2:'пиковая загрузка',onlyLeft:'Только в первом',onlyRight:'Только во втором',same:'Совпало',
@@ -963,6 +968,8 @@ const T={
   cProc:'processing',cMine:'extraction',crewHint:'Characters live on the server and survive a reload.',
   unlink:'Unlink',unlinkHint:'Erases the token on our side — the planner stops seeing this character until you log in again. Access on the CCP side is revoked separately at eveonline.com/account/third_party_apps.',
   unlinkFail:'Could not unlink the character',
+  chipJobs:'jobs',jobsOk:'ok',jobsStale:'stuck',jobsFailing:'failing',
+  jobsNever:'never ran',jobsFailingCount:'failing {n} time(s) in a row',
   unlinkedRevoked:'Character unlinked — access revoked on CCP’s side too',
   unlinkedLocalOnly:'Character unlinked on our side (no app secret configured — real revocation unavailable)',
   planetSlots:'planet slots',wholeRegion:'Whole region',clearAll:'Clear all',nothingChosen:'nothing selected',systems:'systems',selectAll:'Select all',pickProducts:'Select at least one product',pickConst:'Select at least one constellation',export:'Export to Excel',jumpPlan:'↑ Plan',jumpColonies:'↓ My colonies',jumpShopping:'↓ Shopping list',shopping:'Shopping list: command centres',shopTotal:'Command centres in total',exportEmpty:'Build a plan first',exportFail:'Export failed',profitTitle:'What is most profitable to produce',collectedAgo:'snapshot taken',minutesAgo:'min ago',stale:'stale',colProduct:'Product',colColonies:'Planets',colPerColony:'ISK / colony-hour',colPerHour:'ISK / hour',colPrice:'Unit price',noPrice:'no price',noSnapshot:'No price snapshot yet',advDeficit:'Not enough characters for this chain',advSurplus:'More characters than needed',advDeficitLead:'A full cycle needs {need} colonies, the pool has {have} slots. These fit entirely:',advSurplusLead:'Your choice takes {need} of {have} colonies. {spare} free — you could add:',advTake:'Take',advIgnoreDeficit:'Build as is',advIgnoreSurplus:'Put spare on extraction',advIgnoreDeficitHint:'the plan will report a raw material shortage',advIgnoreSurplusHint:'extraction of the same chain, scarcest first',colonies3:'colonies',excess:'Extraction (surplus)',directP2:'Make P2 right on the extraction planets',directP2Hint:'where both raw materials occur — no P1 hauling',mSpread:'Systems per character',logi:'systems used in total',systemsAvg:'systems each',sysOne:'system',sysFew:'systems',sysMany:'systems',logiGood:'colonies are compact',logiPoor:'harvesting will need travel',mColonies:'Colonies in the plan',mChars:'Characters used',mPeak:'Most loaded',mShort:'Characters missing',planClosed:'plan is complete',fitsUpTo:'a double template fits planets up to',km:'km',suitableHere:'suitable planets in this system',ofThem:'of them',decisionTitle:'The plan hit planet size limits',decisionText:'No planet in the chosen home system fits a double template. Pick how to proceed.',chooseOther:'Pick another system',useSingle:'Use single templates',singleNote:'twice as many planets and characters will be needed',savedPlans:'Saved plans',save:'Save',load:'Open',del:'Delete',compare:'Compare',noSaved:'Nothing saved yet',saveFirst:'Build a plan first',pickTwo:'Tick two plans to compare',cmpTitle:'Difference',colonies2:'colonies',chars2:'characters',peak2:'peak load',onlyLeft:'Only in the first',onlyRight:'Only in the second',same:'Unchanged',
@@ -2653,6 +2660,19 @@ const DOC={
    Линия, приносящая больше всех в час, но занимающая вдвое больше планет, хуже.</p>
    <p>Налог POCO, доставка и биржевые сборы не учтены, поэтому числа — верхняя оценка.</p>
 
+   <h3>Индикаторы вверху</h3>
+   <p>Плашка «ESI» — число игроков онлайн из снимка сервера; жёлтая точка значит,
+   что снимок давно не обновлялся (сборщик мог не запуститься), при наведении
+   видно, сколько минут назад он был собран.</p>
+   <p>Плашка «сборщики» — здоровье фоновых задач, которые собирают все данные
+   приложения по расписанию (правило проекта: сама страница в сеть не ходит).
+   Зелёная точка — все идут по расписанию; жёлтая — какая-то не запускалась
+   дольше двух своих интервалов (планировщик мог остановиться); красная —
+   какая-то падает несколько раз подряд. При наведении — список задач с
+   временем последнего запуска и числом сбоев для тех, что падают. Плашка
+   пропадает на узких окнах вместе с плашкой «данные» — это диагностика для
+   владельца, а не то, что нужно каждому посетителю.</p>
+
    <h3>Тема и язык</h3>
    <p>В верхней панели переключаются светлая и тёмная тема, а также русский
    и английский язык. Выбор запоминается в браузере: это предпочтения отображения,
@@ -2884,6 +2904,18 @@ const DOC={
    earns most per hour but occupies twice the planets is worse.</p>
    <p>POCO tax, hauling and broker fees are not included, so the figures are an upper bound.</p>
 
+   <h3>Top bar indicators</h3>
+   <p>The "ESI" chip shows online players from a server snapshot; an amber dot means the
+   snapshot hasn't updated in a while (the collector may not be running) — hover to see
+   how many minutes old it is.</p>
+   <p>The "jobs" chip shows the health of the background jobs that collect all of the
+   app's data on a schedule (project rule: the page itself never reaches out to the
+   network). Green — everything runs on schedule; amber — something hasn't run in over
+   twice its own interval (the scheduler may have stopped); red — something is failing
+   repeatedly. Hovering lists every job with when it last ran and, for failing ones, how
+   many times in a row. The chip disappears on narrow windows along with the "data" chip
+   — this is diagnostics for the app's owner, not something every visitor needs.</p>
+
    <h3>Theme and language</h3>
    <p>The top bar switches between light and dark theme and between Russian and English
    language. The choice is remembered in your browser: these are display preferences and
@@ -3086,6 +3118,39 @@ function renderMeta(){
     document.getElementById('esiPlayers').textContent=t('noData');
     chip.title=sv.hint||'';
   }
+  renderJobsChip();
+}
+
+/* Статус фоновых сборщиков (scripts/scheduler.py) — отдельный процесс
+   от веба, поэтому /api/meta отдаёт снимок, который планировщик пишет
+   сам после каждого запуска джоба (api/blueprints/meta.py::_job_status).
+   Подсказка при наведении перечисляет каждый джоб — когда запускался в
+   последний раз и сколько раз подряд падает, а не просто «что-то не
+   так»: агрегированный «худший» статус красит одну точку, но без
+   разбивки непонятно, чинить ли вообще что-то прямо сейчас. */
+function renderJobsChip(){
+  const chip=document.getElementById('chipJobs'); if(!chip) return;
+  const dot=chip.querySelector('.dot');
+  const js=meta.jobs||{};
+  const label=document.getElementById('jobsStatus');
+  if(!js.available){
+    dot.className='dot';
+    label.textContent=t('noData');
+    chip.title='';
+    return;
+  }
+  dot.className='dot'+(js.worst==='failing'?' failing':js.worst==='stale'?' stale':' live');
+  label.textContent=js.worst==='ok'?t('jobsOk'):js.worst==='stale'?t('jobsStale'):t('jobsFailing');
+  chip.title=(js.jobs||[]).map(j=>{
+    const age=j.age_minutes!=null?`${j.age_minutes} ${t('minutesAgo')}`:t('jobsNever');
+    const fail=j.status==='failing'?` — ${fmtPlain(t('jobsFailingCount'),{n:j.failures})}`:'';
+    return `${j.name}: ${age}${fail}`;
+  }).join('\n');
+}
+
+/* Тот же {ключ}-шаблон, что и fmt(), но без <b> — для title (plain text). */
+function fmtPlain(template,values){
+  return Object.entries(values).reduce((s,[k,v])=>s.replace(`{${k}}`,v),template);
 }
 
 async function loadCrew(){

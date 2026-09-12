@@ -62,6 +62,68 @@ def _server_status() -> dict:
     }
 
 
+JOB_STATUS_SNAPSHOT = ROOT / "data" / "cache" / "scheduler_status.json"
+
+# Джоб считается устаревшим, если не запускался дольше двух своих
+# интервалов — с запасом на то, что планировщик мог быть занят другим
+# джобом или временно недоступен, не поднимая ложную тревогу на ровном
+# месте (интервалы у джобов разные, от 10 минут до суток).
+STALE_INTERVAL_MULTIPLIER = 2
+
+
+def _job_status() -> dict:
+    """
+    Статус фоновых сборщиков (scripts/scheduler.py) — из снимка, который
+    планировщик пишет сам после каждого запуска джоба
+    (scheduler.py::_write_status_snapshot). Веб-процесс и планировщик —
+    РАЗНЫЕ процессы (deploy/README.md), их общее состояние живёт только
+    в памяти планировщика; читать готовый файл — не «ходить наружу»
+    (правило 3), это то же самое чтение снимка, что и у _server_status().
+    """
+    if not JOB_STATUS_SNAPSHOT.is_file():
+        return {"available": False, "reason": "no_snapshot"}
+
+    try:
+        snapshot = json.loads(JOB_STATUS_SNAPSHOT.read_text(encoding="utf-8"))
+    except Exception:
+        return {"available": False, "reason": "unreadable"}
+
+    now = datetime.now(timezone.utc)
+    jobs = []
+    for job in snapshot.get("jobs", []):
+        last_run = job.get("last_run")
+        every_minutes = job.get("every_minutes") or 60
+        age_minutes = None
+        overdue = True  # ни разу не запускался — тоже устарел, не «ок» по умолчанию
+        if last_run:
+            try:
+                moment = datetime.fromisoformat(last_run)
+                age_minutes = int((now - moment).total_seconds() // 60)
+                overdue = age_minutes > every_minutes * STALE_INTERVAL_MULTIPLIER
+            except ValueError:
+                pass
+
+        failures = job.get("failures", 0)
+        # Сбои — самостоятельный признак: джоб мог отработать совсем
+        # недавно (задержка перед повтором сама по себе укладывается в
+        # every_minutes) и всё равно быть не «ок», раз реально падает.
+        status = "failing" if failures else ("stale" if overdue else "ok")
+        jobs.append({
+            "name": job.get("name"),
+            "age_minutes": age_minutes,
+            "failures": failures,
+            "status": status,
+        })
+
+    worst = "ok"
+    if any(j["status"] == "failing" for j in jobs):
+        worst = "failing"
+    elif any(j["status"] == "stale" for j in jobs):
+        worst = "stale"
+
+    return {"available": True, "worst": worst, "jobs": jobs}
+
+
 def _auth_status() -> dict:
     """
     Готова ли настоящая авторизация через EVE SSO.
@@ -85,6 +147,7 @@ def meta():
         phase=PHASE,           # {ru, en} — фронт берёт по языку интерфейса
         server=_server_status(),
         auth=_auth_status(),
+        jobs=_job_status(),
     )
 
 
