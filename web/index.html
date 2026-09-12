@@ -938,6 +938,7 @@ const T={
   afterGame:'появится после подключения к игре',producesW:'Производит',inputW:'Вход',
   pHead:['голова','головы','голов'],emptyStorage:'пусто',
   inProduction:'В производстве',cycIdleSince:'Простаивает',
+  cycProjectedHint:'подтверждено на момент последнего захода в колонию, дальше — неизвестно',
   cycNeverStarted:'Ещё ни разу не запускалась',
   sharedExtract:'На этой планете {n} наших экстрактора на одном сырье — выработка каждого будет ниже расчётной.',
   onPlan:'к плану',onPlanets:'на',
@@ -996,6 +997,7 @@ const T={
   afterGame:'appears once connected to the game',producesW:'Produces',inputW:'Input',
   pHead:['head','heads','heads'],emptyStorage:'empty',
   inProduction:'In production',cycIdleSince:'Idle',
+  cycProjectedHint:'confirmed as of the last time the colony was opened in-game, unknown since',
   cycNeverStarted:'Never started yet',
   sharedExtract:'This planet has {n} of our extractors on the same resource — each will yield below the estimate.',
   onPlan:'on the plan',onPlanets:'across',
@@ -1468,40 +1470,69 @@ function expandStructures(p){
 /* Прогресс цикла ОДНОЙ настоящей фабрики — last_cycle_start+cycle_minutes,
    те же поля ESI, что и в панели колонии (structureUnitFields, isFactory).
 
-   История вопроса (12.09.2026, поправлено 13.09.2026). Первая версия
-   досчитывала фазу цикла вперёд ПО МОДУЛЮ (now-last_cycle_start) mod
-   cycle_minutes — предполагая, что фабрика крутится бесконечно, пока не
-   доказано обратное. Это давало «В производстве» ДАЖЕ когда сырьё
-   кончилось много циклов назад: остаток от деления на cycle_minutes
-   всегда попадает в диапазон 0-100%, независимо от того, сколько на
-   самом деле прошло времени.
+   История вопроса. Первая версия (12.09.2026) досчитывала фазу цикла
+   вперёд ПО МОДУЛЮ (now-last_cycle_start) mod cycle_minutes —
+   предполагая, что фабрика крутится бесконечно. Это давало
+   «В производстве» ДАЖЕ когда сырьё кончилось много циклов назад:
+   остаток от деления всегда попадает в 0-100%, сколько бы времени ни
+   прошло. Вторая версия (13.09.2026) убрала перенос по модулю, но
+   сравнивала last_cycle_start с ТЕКУЩИМ временем (Date.now()) — и
+   ошиблась в другую сторону: ESI пересчитывает last_cycle_start только
+   при заходе в колонию в игровом клиенте (esi-issues #654, подтверждено
+   исходниками RIFT — сторонний intel-инструмент, эталон для этой
+   области, gitlab.com/rift-intel-fusion-tool), поэтому у ЛЮБОЙ колонии,
+   которую давно не открывали, elapsed относительно «сейчас» почти
+   всегда превышает cycle_minutes — простаивающими показывались
+   практически все фабрики поголовно, включая настоящие работающие.
 
-   Пользователь показал скриншот RIFT (сторонний intel-инструмент) с
-   РЕАЛЬНЫМ разделением: часть фабрик «In production» с честным
-   прогресс-баром первого цикла, часть — «Waiting for resources, Idle
-   for 1d 5h 47m» с РАЗНЫМ временем простоя у каждой. Это прямо
-   противоречит модульной проекции (при бесконечном прокручивании все
-   фабрики выглядели бы одинаково «в цикле», а не с разным простоем) и
-   показывает: last_cycle_start у ESI можно доверять напрямую — если с
-   его начала прошло больше cycle_minutes, а НОВОГО last_cycle_start ESI
-   не прислала, значит следующий цикл не начался (кончилось сырьё), а не
-   «клиент давно не открывали». Один цикл — это всё, что можно честно
-   подтвердить; дальше — не проекция, а простой.
+   Третья версия сравнивает last_cycle_start с `gameLastUpdate` —
+   временем, когда ИГРА (не мы) в последний раз пересчитала эту колонию
+   (ESI-поле last_update у /characters/{id}/planets/, Colony.
+   game_last_update, см. sync_colony_status.py) — то же, что делает
+   RIFT при разборе снимка (PlanetaryIndustryRepository.getPin():
+   `activityState = lastCycleAgo < cycleTime`, где lastCycleAgo считается
+   от `lastUpdate`, а не от текущего времени). Сама RIFT после этого ещё
+   и симулирует колонию вперёд по маршрутам и буферам каждой фабрики
+   (ColonySimulation.kt) — то, чего мы пока не делаем: у нас нет ни
+   маршрутов между пинами, ни проверенных объёмов входа схемы. Поэтому
+   вместо уверенного прогноза вперёд — честное третье состояние
+   «неизвестно, в последний раз (при заходе в игру) работала».
 
    Состояния:
-     cycle: 0-100 — фаза ПЕРВОГО (и единственного подтверждённого) цикла
-            от last_cycle_start, без переноса по модулю.
-     idle: true, idleMs — цикл длиной cycle_minutes истёк, новый не
-           начался: простаивает уже idleMs (для «никогда не запускалась»
-           — last_cycle_start нет вовсе, idleMs не считается). */
-function pinCycleInfo(pin){
+     cycle: 0-100, idle:false — на момент gameLastUpdate цикл ещё не
+            истёк, и с тех пор прошло меньше cycle_minutes — с высокой
+            уверенностью всё ещё в цикле, прогресс от last_cycle_start
+            до сейчас.
+     idle:true, idleMs — на момент gameLastUpdate цикл УЖЕ истёк, новый
+            не начался: это подтверждённый факт (не проекция), простаивает
+            idleMs = сейчас - (last_cycle_start+cycle_minutes).
+     idle:false, unknownSince — на момент gameLastUpdate цикл ещё шёл, но
+            с тех пор прошло больше cycle_minutes реального времени —
+            дальше неизвестно, работает или встала (симуляции у нас нет).
+     neverStarted:true — last_cycle_start нет вовсе. */
+function pinCycleInfo(pin, gameLastUpdate){
   if(!pin.kind || !pin.kind.endsWith('industry_facility')) return {cycle:null, idle:false};
   if(!pin.cycle_minutes) return {cycle:null, idle:false, unknown:true};
   if(!pin.last_cycle_start) return {cycle:null, idle:true, neverStarted:true};
   const cycleMs=pin.cycle_minutes*60000;
-  const elapsed=Math.max(0, Date.now()-Date.parse(pin.last_cycle_start));
-  if(elapsed>=cycleMs) return {cycle:null, idle:true, idleMs:elapsed-cycleMs};
-  return {cycle:100*elapsed/cycleMs, idle:false, remainingMs:cycleMs-elapsed};
+  const startMs=Date.parse(pin.last_cycle_start);
+  const refMs=gameLastUpdate?Date.parse(gameLastUpdate):Date.now();
+  const elapsedAtSnapshot=Math.max(0, refMs-startMs);
+  if(elapsedAtSnapshot>=cycleMs){
+    // Подтверждено на момент снимка: цикл истёк, новый не начался.
+    // Не «протухнет» обратно без нового last_cycle_start — можно смело
+    // мерить простой от сейчас, а не от снимка.
+    const idleMs=Math.max(0, Date.now()-(startMs+cycleMs));
+    return {cycle:null, idle:true, idleMs};
+  }
+  const sinceSnapshot=Math.max(0, Date.now()-refMs);
+  if(gameLastUpdate && sinceSnapshot>=cycleMs){
+    // На снимке всё ещё шёл, но снимок сам уже старше одного цикла —
+    // дальше без симуляции маршрутов/буферов честно не знаем.
+    return {cycle:null, idle:false, unknownSince:gameLastUpdate};
+  }
+  const elapsedNow=Math.max(0, Date.now()-startMs);
+  return {cycle:100*Math.min(elapsedNow,cycleMs)/cycleMs, idle:false, remainingMs:cycleMs-elapsedNow};
 }
 
 /* Колония простаивает — общее определение для сводки «N простаивает»
@@ -1515,7 +1546,7 @@ function isColonyIdle(p){
   if(p.role_key==='mine') return !p.nearest_expiry;
   if(p.role_key==='proc'){
     const factories=(p.pins||[]).filter(pin=>pin.kind&&pin.kind.endsWith('industry_facility'));
-    return factories.length>0 && factories.every(pin=>pinCycleInfo(pin).idle);
+    return factories.length>0 && factories.every(pin=>pinCycleInfo(pin,p.game_last_update).idle);
   }
   return false;
 }
@@ -1545,7 +1576,7 @@ function sortPinsForDisplay(pins){
 function structOrbsForRow(p){
   if(p.isReal && p.pins && p.pins.length){
     return sortPinsForDisplay(p.pins).map(pin=>{
-      const info=pinCycleInfo(pin);
+      const info=pinCycleInfo(pin,p.game_last_update);
       const opts={cycle:info.cycle, idle:info.idle};
       if(pin.kind==='command_center' && p.cpu_percent!=null){
         opts.cpu=p.cpu_percent; opts.pg=p.pg_percent;
@@ -1995,7 +2026,7 @@ function realRows(){
       cpu_percent:c.cpu_percent, pg_percent:c.pg_percent,
       cpu_used:c.cpu_used, cpu_capacity:c.cpu_capacity,
       pg_used:c.pg_used, pg_capacity:c.pg_capacity,
-      nearest_expiry:c.nearest_expiry,
+      nearest_expiry:c.nearest_expiry, game_last_update:c.game_last_update,
       upgrade_level:c.upgrade_level, num_pins:c.num_pins,
     };
   });
@@ -2319,7 +2350,7 @@ function structureUnitFields(kind, ctx){
     // переноса по модулю (см. её докстринг: почему модуль был неверен —
     // скриншот RIFT с разным простоем у разных фабрик).
     if(pin){
-      const info=pinCycleInfo(pin);
+      const info=pinCycleInfo(pin,ctx.gameLastUpdate);
       let state;
       if(info.unknown){
         state=`<div class="state-wait">${t('cycUnknown')}</div>
@@ -2332,6 +2363,10 @@ function structureUnitFields(kind, ctx){
         state=`<div class="lbl" style="color:var(--alarm)">${t('cycIdleSince')}</div>
           <div class="meter"><i style="width:100%;background:var(--alarm)"></i></div>
           <div class="meta">${fmtDuration(info.idleMs)}</div>`;
+      } else if(info.unknownSince){
+        state=`<div class="state-wait">${t('inProduction')}</div>
+          <div class="meter"><i style="width:100%;background:var(--ring-adv)"></i></div>
+          <div class="meta">${t('cycProjectedHint')}</div>`;
       } else {
         state=`<div class="lbl" style="color:var(--ring-adv)">${t('inProduction')}</div>
           <div class="meter"><i style="width:${Math.round(info.cycle)}%;background:var(--ring-adv)"></i></div>
@@ -2410,10 +2445,10 @@ function structureUnitsHTML(structuresDetail, planetType, ctx){
    real_colony_load()), либо null, если планеты нет в planet_industry.csv
    — тогда честное «нет данных», как и раньше. Фабрики заодно получают
    настоящий прогресс цикла (pinCycleInfo) вместо статичного пунктира. */
-function pinUnitsHTML(pins, planetType, planetLabel, load){
+function pinUnitsHTML(pins, planetType, planetLabel, load, gameLastUpdate){
   return sortPinsForDisplay(pins).map((pin,i)=>{
     const code=`${String.fromCharCode(65+(i%26))}${i}-${planetLabel}`;
-    const info=pinCycleInfo(pin);
+    const info=pinCycleInfo(pin,gameLastUpdate);
     const opts={size:52, cycle:info.cycle, idle:info.idle};
     if(pin.kind==='command_center' && load){ opts.cpu=load.cpu; opts.pg=load.pg; }
     return `<div class="unit">
@@ -2421,7 +2456,8 @@ function pinUnitsHTML(pins, planetType, planetLabel, load){
       <div class="panel">
         <div class="title">${sname(pin.kind)} <span class="code">${code}</span></div>
         ${structureUnitFields(pin.kind,{hasLoad:!!load, cpu:load&&load.cpu, pg:load&&load.pg,
-          cpuUsed:load&&load.cpuUsed, cpuCap:load&&load.cpuCap, pgUsed:load&&load.pgUsed, pgCap:load&&load.pgCap, pin})}
+          cpuUsed:load&&load.cpuUsed, cpuCap:load&&load.cpuCap, pgUsed:load&&load.pgUsed, pgCap:load&&load.pgCap,
+          pin, gameLastUpdate})}
       </div>
     </div>`;
   }).join('');
@@ -2495,7 +2531,7 @@ function openRealColonyDetail(id){
     cpuUsed:c.cpu_used, cpuCap:c.cpu_capacity, pgUsed:c.pg_used, pgCap:c.pg_capacity}:null;
 
   const body=(c.pins&&c.pins.length)
-    ? pinUnitsHTML(c.pins, ptype, c.planet_index, load)
+    ? pinUnitsHTML(c.pins, ptype, c.planet_index, load, c.game_last_update)
     : structureUnitsHTML(c.structures, ptype, {hasLoad:!!load, cpu:load&&load.cpu, pg:load&&load.pg,
         real:c, expMs, planetLabel:c.planet_index});
 
