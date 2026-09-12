@@ -72,7 +72,12 @@ body.light {
 }
 
 * { box-sizing:border-box; }
-body { margin:0; background:var(--void); color:var(--read);
+/* 500px — минимальная поддерживаемая ширина окна: приложение не
+   адаптируется под мобильные экраны (решение пользователя), ниже этой
+   ширины страница целиком прокручивается по горизонтали, а не пытается
+   сжаться дальше — так честнее, чем ломать вёрстку в узкой полосе. */
+html { min-width:500px; }
+body { margin:0; background:var(--void); color:var(--read); min-width:500px;
        font-family:'IBM Plex Sans',system-ui,sans-serif; font-size:13px; line-height:1.45; }
 .num { font-family:'IBM Plex Mono',monospace; font-variant-numeric:tabular-nums; }
 button { font-family:inherit; }
@@ -425,22 +430,23 @@ details.msgs[open] > summary::before { content:'▾ '; }
    второстепенные колонки таблицы, и только в последнюю очередь
    меняется структура. Кнопки не прячутся никогда. */
 
-/* Широкий ноутбук: убираем возраст справочных данных — он нужен редко. */
-@media (max-width:1400px) { #chipData { display:none; } }
-@media (max-width:1200px) { #chipJobs { display:none; } }
+/* Чипы-индикаторы и подпись бренда прячутся не по фиксированным
+   порогам ширины (были — держались, пока не оказалось, что содержимое
+   чипов разной длины: число игроков, перевод на EN, а с Saira Condensed
+   шага 8 вкладки и кнопки стали шире прежнего — переносы находились
+   заново при каждой такой правке, см. fitTopbar() в JS ниже). Вместо
+   этого JS меряет, перенеслась ли .topbar на вторую строку по факту,
+   и прячет по одному в порядке важности, пока не перестанет. Класс
+   .js-hidden — то же, что использовали фиксированные правила, просто
+   выставляется скриптом, а не медиа-запросом. Кнопки по-прежнему не
+   прячутся никогда — этот механизм их не трогает. */
+.js-hidden { display:none !important; }
 
-/* Узкий ноутбук: подпись бренда и версия уходят. */
+/* Модалки на узком ноутбуке — не связано с переносом шапки. */
 @media (max-width:1150px) {
-  .brand small { display:none; }
-  #chipVer { display:none; }
   .modal-body .rows, .modal-body dl { grid-template-columns:1fr; }
   .modal-body .rows > div:nth-child(odd) { padding-bottom:0; border-bottom:none; }
 }
-/* Планшет в альбомной ориентации: уходит последний чип-индикатор
-   (ESI) — Saira Condensed с прописными буквами и трекингом (Фаза 8)
-   занимает больше места, чем прежний шрифт вкладок/кнопок, порог
-   пришлось сдвинуть. Кнопки по-прежнему не прячутся никогда. */
-@media (max-width:980px) { #chipEsi { display:none; } }
 
 /* Планшет: рейка настроек становится верхней панелью, таблица
    прокручивается горизонтально внутри своей области. */
@@ -456,9 +462,20 @@ details.msgs[open] > summary::before { content:'▾ '; }
    строка колонии выстраивается в столбец. */
 @media (max-width:680px) {
   body { font-size:12px; }
-  .topbar { padding:6px 10px; }
-  .brand { margin-right:8px; }
-  .tab { padding:9px 10px; }
+  .topbar { padding:6px 8px; gap:3px; }
+  .brand { margin-right:2px; }
+  /* Чисто визуальное уплотнение — не прячет вкладки (правило «кнопки и
+     вкладки не прячутся никогда» см. у #moreBtn), только сокращает
+     трекинг и отступы Saira Condensed из Шага 3, который на такой
+     ширине занимает больше места, чем на десктопе. Запас в несколько
+     лишних пикселей — не впритык, чтобы не зависеть от округления
+     суб-пиксельных ширин в конкретном браузере. */
+  .tab { padding:9px 4px; letter-spacing:.02em; font-size:12px; }
+  /* .topbar .sso (2 класса), а не голое .sso — иначе более позднее по
+     каскаду безусловное правило .sso{padding:5px 14px} (та же
+     специфичность, но позже в файле) перебивало бы этот отступ на любой
+     ширине, и сужение окна визуально ничего бы не меняло. */
+  .topbar .sso { padding:4px 6px; font-size:10px; letter-spacing:.04em; }
   .answers { grid-template-columns:1fr 1fr; }
   .answer { border-right:none; border-bottom:1px solid var(--seam); }
   .colony { padding:10px; }
@@ -474,14 +491,46 @@ details.msgs[open] > summary::before { content:'▾ '; }
   .modal-box { max-height:100vh; width:100%; }
 }
 
-@media (max-width:460px) {
-  .answers { grid-template-columns:1fr; }
-  .sso { padding:5px 9px; }
-}
-
 /* ── Верхняя панель: индикаторы и кнопки ─────────────────────── */
 .topbar .info { display:flex; gap:6px; align-items:center; margin-left:18px; flex:0 0 auto; }
 .topbar .right { margin-left:auto; display:flex; gap:6px; align-items:center; flex:0 0 auto; }
+/* Кнопка «Ещё» — только на мобильной ширине (медиа-запрос ниже), где
+   fitTopbar() (JS) к этому моменту уже спрятал все чипы-индикаторы по
+   одному (правило «кнопки не прячутся никогда» на них не
+   распространяется — это диагностика, не действие). Открывает те же
+   чипы выпадающим списком, а не дублирует их значения отдельной
+   разметкой: один источник правды, один JS-рендер
+   (renderMeta/renderJobsChip). Правило до медиа-запроса — иначе более
+   позднее по каскаду и той же специфичности «display:none» отсюда
+   перебивало бы «показать на мобильном» из-за порядка, а не смысла. */
+#moreBtn { display:none; }
+/* Кнопка «Ещё» показывается не по ширине экрана, а по факту: fitTopbar()
+   (JS) отмечает .topbar классом has-hidden, когда что-то реально спрятано
+   (чипы или, при совсем плотной панели, кнопки Справка/О проекте —
+   см. TOPBAR_HIDE_PRIORITY). Кнопки Справка/О проекте на это время JS
+   физически переносит внутрь #infoChips, чтобы попасть в тот же
+   выпадающий список — иначе спрятанное было бы недоступно совсем. */
+.topbar.has-hidden #moreBtn { display:inline-grid; }
+/* Раскрытый список — всегда одна и та же попап-панель, независимо от
+   ширины: то же самое переполнение может случиться и на ноутбучной
+   ширине, если чипы+кнопки в сумме не влезли. */
+#infoChips.open {
+  position:absolute; top:100%; right:8px; margin-top:6px;
+  flex-direction:column; align-items:stretch; gap:6px; padding:10px;
+  background:var(--hull); border:1px solid var(--seam); z-index:70;
+  box-shadow:0 10px 26px rgba(0,0,0,.45);
+}
+/* Каждый спрятанный элемент отмечен fitTopbar() через .js-hidden — здесь
+   возвращаем видимость только внутри открытого списка; специфичность
+   (id+2 класса) перебивает .js-hidden (1 класс). */
+#infoChips.open .chip { display:inline-flex !important; justify-content:space-between; }
+#infoChips.open .tbtn { display:block !important; width:100%; text-align:left; }
+#infoChips.open #themeBtn { display:grid !important; align-self:flex-start; }
+#infoChips.open #langGroup { display:inline-flex !important; align-self:flex-start; }
+
+@media (max-width:460px) {
+  .answers { grid-template-columns:1fr; }
+}
 .chip { display:inline-flex; align-items:center; gap:7px; padding:4px 10px;
         border:1px solid var(--seam); background:var(--void); font-size:12px;
         color:var(--dim); white-space:nowrap; }
@@ -729,7 +778,8 @@ body.light .rolebadge.excess { background:rgba(154,107,18,.12); }
   <button class="tab on" data-page="dash" data-i18n="tabDash">Дашборд</button>
   <button class="tab" data-page="setup" data-i18n="tabSetup">Настройки</button>
 
-  <div class="info">
+  <button class="icon-btn" id="moreBtn" onclick="toggleMoreMenu()" title="Ещё" data-i18n-title="moreTitle">⋯</button>
+  <div class="info" id="infoChips">
     <span class="chip" id="chipEsi" title=""><span class="dot"></span><span>ESI</span><b id="esiPlayers">—</b></span>
     <span class="chip" id="chipJobs" title=""><span class="dot"></span><span data-i18n="chipJobs">сборщики</span><b id="jobsStatus">—</b></span>
     <span class="chip" id="chipData"><span data-i18n="chipData">данные</span><b id="dataStatus">—</b></span>
@@ -737,9 +787,9 @@ body.light .rolebadge.excess { background:rgba(154,107,18,.12); }
   </div>
 
   <div class="right">
-    <button class="tbtn" onclick="openModal('help')" data-i18n="help">Справка</button>
-    <button class="tbtn" onclick="openModal('about')" data-i18n="about">О проекте</button>
-    <div class="lang">
+    <button class="tbtn" id="helpBtn" onclick="openModal('help')" data-i18n="help">Справка</button>
+    <button class="tbtn" id="aboutBtn" onclick="openModal('about')" data-i18n="about">О проекте</button>
+    <div class="lang" id="langGroup">
       <button data-lang="ru" class="on">RU</button><button data-lang="en">EN</button>
     </div>
     <button class="icon-btn" id="themeBtn" onclick="toggleTheme()" title="Тема" data-i18n-title="themeTitle">
@@ -751,7 +801,7 @@ body.light .rolebadge.excess { background:rgba(154,107,18,.12); }
         <path d="M20.5 14.4A8.6 8.6 0 0 1 9.6 3.5a8.6 8.6 0 1 0 10.9 10.9z"/>
       </svg>
     </button>
-    <button class="sso" onclick="startLogin()" data-i18n="sso">Войти через EVE SSO</button>
+    <button class="sso" id="ssoBtn" onclick="startLogin()" data-i18n="sso">Войти через EVE SSO</button>
   </div>
 </div>
 
@@ -969,7 +1019,7 @@ const T={
   pPlanetN:['планета','планеты','планет'],coloniesIdle:'простаивает',coloniesAttention:'требуют внимания',
   coloniesDeficit:'дефицит добычи',
   launchpadFull:'причал заполнен',needsAttention:'Требует внимания',freeSlot:'свободный слот планеты',
-  themeTitle:'Тема',viewList:'Список по персонажам',viewGrid:'Сетка',sortTitle:'Сортировка',loadLbl:'Загрузка',
+  themeTitle:'Тема',moreTitle:'Ещё',viewList:'Список по персонажам',viewGrid:'Сетка',sortTitle:'Сортировка',loadLbl:'Загрузка',
   inGameColonies:'Мои колонии в игре',cycOver:'программа завершена',cycIdle:'программа не запущена',
   hUnit:'ч',minUnit:'мин',dUnit:'д',pPin:['пин','пина','пинов'],
   progEnds:'до конца программы экстрактора',syncedColony:'колония в игре',
@@ -1027,7 +1077,7 @@ const T={
   pPlanetN:['planet','planets','planets'],coloniesIdle:'idle',coloniesAttention:'need attention',
   coloniesDeficit:'in deficit',
   launchpadFull:'launchpad full',needsAttention:'Needs attention',freeSlot:'free planet slot',
-  themeTitle:'Theme',viewList:'By character',viewGrid:'Grid',sortTitle:'Sort',loadLbl:'Load',
+  themeTitle:'Theme',moreTitle:'More',viewList:'By character',viewGrid:'Grid',sortTitle:'Sort',loadLbl:'Load',
   inGameColonies:'My in-game colonies',cycOver:'program ended',cycIdle:'no program running',
   hUnit:'h',minUnit:'min',dUnit:'d',pPin:['pin','pins','pins'],
   progEnds:'until the extraction program ends',syncedColony:'built in game',
@@ -3477,10 +3527,83 @@ function renderTable(){
     </thead><tbody>${body}</tbody></table>`;
 }
 
+/* Прогрессивное скрытие чипов-индикаторов и подписи бренда — вместо
+   набора фиксированных @media-порогов (были: сначала подобраны на
+   глаз, потом расходились с реальной шириной заново при каждой мелочи
+   — число игроков ESI переменной длины, EN-перевод короче/длиннее RU,
+   а Saira Condensed с прописными буквами Фазы 8 сделал вкладки и кнопки
+   шире прежнего шрифта). Здесь перенос проверяется по факту (сравнение
+   top прямых детей .topbar — flex-wrap:wrap остаётся включённым как
+   защита на случай, если спрятать больше нечего, а не основной
+   механизм) и лечится, а не предугадывается по ширине экрана. Порядок
+   жертв: сначала данные, потом сборщики и версия, потом ESI, потом
+   подпись бренда — и только если этого всё ещё не хватило (очень узкая
+   и при этом длинная панель), кнопки Справка/О проекте и переключатель
+   темы: их не прячем безвозвратно, а физически переносим внутрь
+   #infoChips, чтобы попасть в тот же выпадающий список «Ещё» (см.
+   #moreBtn ниже) — иначе они были бы недоступны совсем, а этого правило
+   проекта не допускает. На совсем узких мобильных ширинах того же
+   недостаточно даже с переключателем темы — тогда туда же уходит и
+   переключатель языка (тоже не теряется, просто раскрывается через
+   «Ещё»). Вход через EVE SSO и вкладки не прячутся никогда — это либо
+   основной сценарий входа, либо структурная навигация. */
+const TOPBAR_HIDE_PRIORITY = ['chipData','chipJobs','chipVer','chipEsi','aboutBtn','helpBtn','themeBtn','langGroup'];
+/* Элементы, которые при скрытии физически переносятся в #infoChips.
+   Порядок здесь — порядок восстановления (не порядок скрытия): каждый
+   вставляется перед своим якорем, поэтому чтобы порядок в .right совпал
+   с исходной разметкой (Справка, О проекте, язык, тема, SSO), сначала
+   возвращаются на место более правые элементы (язык, тема — оба перед
+   SSO), и только потом Справка/О проекте (перед уже вернувшимся языком). */
+const TOPBAR_OVERFLOW = [
+  {id:'langGroup', anchor:'#ssoBtn'},
+  {id:'themeBtn', anchor:'#ssoBtn'},
+  {id:'helpBtn', anchor:'#langGroup'},
+  {id:'aboutBtn', anchor:'#langGroup'},
+];
+
+function topbarWrapped(){
+  const bar=document.querySelector('.topbar'); if(!bar) return false;
+  const b=bar.getBoundingClientRect();
+  const tops=Array.from(bar.children)
+    .map(c=>c.getBoundingClientRect())
+    .filter(r=>r.height>0)
+    .map(r=>Math.round(r.top-b.top));
+  return tops.length>0 && (Math.max(...tops)-Math.min(...tops))>20;
+}
+
+function fitTopbar(){
+  const subtitle=document.querySelector('.brand small');
+  const infoChips=document.getElementById('infoChips');
+  const rightGroup=document.querySelector('.topbar .right');
+
+  TOPBAR_HIDE_PRIORITY.forEach(id=>document.getElementById(id)?.classList.remove('js-hidden'));
+  subtitle?.classList.remove('js-hidden');
+  TOPBAR_OVERFLOW.forEach(({id, anchor})=>{
+    const el=document.getElementById(id);
+    const anchorEl=rightGroup?.querySelector(anchor);
+    if(el && anchorEl) rightGroup.insertBefore(el, anchorEl);
+  });
+
+  const overflowIds=TOPBAR_OVERFLOW.map(o=>o.id);
+  for(const id of TOPBAR_HIDE_PRIORITY){
+    if(!topbarWrapped()) break;
+    const el=document.getElementById(id);
+    if(!el) continue;
+    el.classList.add('js-hidden');
+    if(overflowIds.includes(id)) infoChips?.appendChild(el);
+  }
+  if(topbarWrapped()) subtitle?.classList.add('js-hidden');
+
+  const anyHidden=[...TOPBAR_HIDE_PRIORITY, 'brandSub'].some(id=>
+    id==='brandSub' ? subtitle?.classList.contains('js-hidden') : document.getElementById(id)?.classList.contains('js-hidden'));
+  document.querySelector('.topbar')?.classList.toggle('has-hidden', !!anyHidden);
+}
+
 /* Высота шапки меняется при переносе на вторую строку, поэтому отступ
    для прилипающей панели вида измеряется, а не задаётся числом. */
 function measureTopbar(){
   const bar=document.querySelector('.topbar'); if(!bar) return;
+  fitTopbar();
   document.documentElement.style.setProperty('--topbar-h', bar.offsetHeight+'px');
 }
 if(window.ResizeObserver){
@@ -3518,6 +3641,15 @@ document.querySelectorAll('.tool[data-view]').forEach(t=>t.onclick=()=>{
 });
 document.addEventListener('click',e=>{ if(!e.target.closest('#sortMenu'))
   document.getElementById('sortMenu').classList.remove('open'); });
+
+/* «Ещё» в шапке — те же чипы-индикаторы (ESI/сборщики/данные/версия),
+   которые на мобильной ширине скрыты по одному (см. @media выше),
+   выпадающим списком по клику. Один DOM-узел, один рендер
+   (renderMeta/renderJobsChip/renderDataChip) — список просто открывает
+   доступ к уже существующим элементам, не дублирует их. */
+function toggleMoreMenu(){ document.getElementById('infoChips').classList.toggle('open'); }
+document.addEventListener('click',e=>{ if(!e.target.closest('#infoChips') && !e.target.closest('#moreBtn'))
+  document.getElementById('infoChips').classList.remove('open'); });
 
 document.querySelectorAll('.lang button').forEach(b=>b.onclick=()=>{ lang=b.dataset.lang; applyLang(); });
 document.addEventListener('keydown',e=>{ if(e.key==='Escape')closeModal(); });
