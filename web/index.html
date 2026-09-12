@@ -683,7 +683,7 @@ details.msgs[open] > summary::before { content:'▾ '; }
    на флажки внутри списка — они растягиваются на всю строку и выталкивают
    подпись за её пределы. Сбрасываем ширину явно. */
 .picker-list input[type=checkbox] { width:auto; min-width:0; margin:0;
-                                    accent-color:var(--flux); flex:0 0 auto; }
+                                    accent-color:var(--amber); flex:0 0 auto; }
 .picker-list img { width:20px; height:20px; object-fit:contain; flex:0 0 auto; }
 .picker-list .tier { margin-left:auto; color:var(--dim); font-size:10px;
                      font-family:'IBM Plex Mono',monospace; }
@@ -1011,7 +1011,7 @@ body.light .rolebadge.excess { background:rgba(154,107,18,.12); }
           </div>
           <div class="field">
             <label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer">
-              <input type="checkbox" id="directP2" style="width:auto;margin-top:2px">
+              <input type="checkbox" id="directP2" style="width:auto;margin-top:2px;accent-color:var(--amber)">
               <span><span data-i18n="directP2">Делать P2 прямо на добывающих планетах</span>
                 <small style="display:block;color:var(--dim);font-size:11px" data-i18n="directP2Hint">
                   где есть оба вида сырья — не нужно возить P1</small></span>
