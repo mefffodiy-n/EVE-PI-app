@@ -27,15 +27,25 @@
 from __future__ import annotations
 
 import argparse
+import json
 import signal
 import sys
 import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+
+# Снимок для /api/meta (api/blueprints/meta.py::_job_status) — тот же
+# приём, что у server_status.json (scripts/refresh_server_status.py):
+# веб-процесс и планировщик — РАЗНЫЕ процессы (deploy/README.md), общее
+# состояние Job.last_run/failures живёт только в памяти планировщика и
+# без файла было бы недоступно веб-обработчику, а правило 3 запрещает
+# ему ходить куда-либо, кроме чтения готового.
+STATUS_SNAPSHOT = ROOT / "data" / "cache" / "scheduler_status.json"
 
 
 @dataclass
@@ -108,6 +118,32 @@ BACKOFF_STEPS = [1, 5, 15, 30, 60]
 log = None  # логгер; настраивается в main(), чтобы --once/тесты не плодили файл
 
 
+def _write_status_snapshot() -> None:
+    """
+    Текущее Job.last_run/failures всех джобов — в файл, для /api/meta.
+    Вызывается после КАЖДОГО запуска джоба (успешного или нет), поэтому
+    снимок всегда отражает то, что планировщик знает о себе прямо сейчас,
+    а не отстаёт до следующего полного цикла.
+    """
+    STATUS_SNAPSHOT.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "jobs": [
+            {
+                "name": job.name,
+                "every_minutes": job.every_minutes,
+                "last_run": (
+                    datetime.fromtimestamp(job.last_run, tz=timezone.utc).isoformat(timespec="seconds")
+                    if job.last_run else None
+                ),
+                "failures": job.failures,
+            }
+            for job in JOBS
+        ],
+    }
+    STATUS_SNAPSHOT.write_text(json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
 def run_job(job: Job) -> None:
     log.info("%s: запуск", job.name)
     try:
@@ -127,9 +163,11 @@ def run_job(job: Job) -> None:
         # Сдвигаем время последнего запуска вперёд: следующая попытка
         # произойдёт позже обычного, а не сразу на следующем тике.
         job.last_run = time.time() - job.every_minutes * 60 + delay * 60
+        _write_status_snapshot()
         return
 
     job.last_run = time.time()
+    _write_status_snapshot()
 
 
 def main() -> int:
