@@ -172,6 +172,20 @@ class Colony(Base):
         UtcDateTime, default=_utcnow, onupdate=_utcnow
     )
 
+    # last_update из /characters/{id}/planets/ (список колоний) — когда
+    # ИГРА реально в последний раз пересчитала состояние этой колонии, а
+    # не когда МЫ её опросили (то же самое, что synced_at выше). ESI
+    # обновляет last_cycle_start фабрики только при заходе в колонию в
+    # игровом клиенте (подтверждено сторонними источниками — esi-issues
+    # #654) — значит last_cycle_start можно доверять только НА МОМЕНТ
+    # game_last_update, а не на текущий момент. Раньше это поле не
+    # читалось вовсе, и фронтенд сравнивал last_cycle_start либо с
+    # текущим временем (JS Date.now() — почти всегда даёт ложный вывод
+    # в обе стороны, если колонию давно не открывали), либо не сравнивал
+    # никак. None — колония ни разу не синхронизирована этим полем
+    # (старая запись до этой миграции).
+    game_last_update: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
+
 
 class ExtractionSample(Base):
     """
