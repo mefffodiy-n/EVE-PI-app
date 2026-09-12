@@ -10,18 +10,19 @@
   PATCH — исправления в пределах фазы.
 """
 
-VERSION = "0.9.0"
+VERSION = "0.10.0"
 
 # Что уже работает — показывается в окне «О проекте», чтобы отличать
 # реализованное от запланированного и не обещать лишнего. Двуязычно:
 # окно «О проекте» есть на обоих языках.
 PHASE = {
-    "ru": ("Фазы 3–6 закрыты и развёрнуты: EVE SSO, синхронизация скиллов и "
-           "колоний, служба и бэкапы работают на сервере. Осталось получить "
-           "client_id от CCP, чтобы включить настоящий вход."),
-    "en": ("Phases 3–6 are done and deployed: EVE SSO, skill and colony sync, "
-           "service and backups are running on the server. Left: get a "
-           "client_id from CCP to enable real login."),
+    "ru": ("Фазы 3–7 закрыты и развёрнуты: настоящий вход через EVE SSO, "
+           "синхронизация скиллов и колоний, разделение данных между "
+           "пользователями, мониторинг дефицита добычи — всё работает на "
+           "сервере с реальными персонажами."),
+    "en": ("Phases 3–7 are done and deployed: real EVE SSO login, skill and "
+           "colony sync, per-user data isolation, extraction deficit "
+           "monitoring — all running on the server with real characters."),
 }
 
 
