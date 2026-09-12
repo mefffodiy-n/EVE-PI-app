@@ -3561,14 +3561,20 @@ const TOPBAR_OVERFLOW = [
   {id:'aboutBtn', anchor:'#langGroup'},
 ];
 
+/* Сравнение top у прямых детей .topbar ложно срабатывало на пустых
+   (уже спрятанных) элементах нулевой высоты и было неустойчиво ровно
+   на границе, где контент помещается впритык — при round-trip той же
+   ширины иногда давало то true, то false. scrollWidth с временным
+   flex-wrap:nowrap не зависит ни от того, ни от другого: это прямой
+   вопрос «влезает ли контент в одну строку», а не косвенный вывод по
+   положению элементов после реального переноса. */
 function topbarWrapped(){
   const bar=document.querySelector('.topbar'); if(!bar) return false;
-  const b=bar.getBoundingClientRect();
-  const tops=Array.from(bar.children)
-    .map(c=>c.getBoundingClientRect())
-    .filter(r=>r.height>0)
-    .map(r=>Math.round(r.top-b.top));
-  return tops.length>0 && (Math.max(...tops)-Math.min(...tops))>20;
+  const prevWrap=bar.style.flexWrap;
+  bar.style.flexWrap='nowrap';
+  const overflow=bar.scrollWidth>bar.clientWidth;
+  bar.style.flexWrap=prevWrap;
+  return overflow;
 }
 
 function fitTopbar(){
