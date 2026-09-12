@@ -413,10 +413,27 @@ button { font-family:inherit; }
 .step-title { font-family:'Saira Condensed',sans-serif; font-weight:600; font-size:12px;
               letter-spacing:.18em; text-transform:uppercase; color:var(--bright); }
 .step-count { margin-left:auto; color:var(--amber); font-size:11px; font-family:'IBM Plex Mono',monospace; flex:0 0 auto; }
-.step-body { padding:12px 14px; }
+.step-body { padding:12px 14px; display:flex; flex-direction:column; min-height:0; }
 .step-subhead { font-family:'Saira Condensed',sans-serif; font-weight:600; font-size:10px;
                 letter-spacing:.18em; text-transform:uppercase; color:var(--dim);
                 margin:16px 0 8px; padding-top:13px; border-top:1px solid var(--seam); }
+/* Карточки 01/03 короче 02 по содержимому, но вытянуты до её высоты
+   (align-items:stretch выше) — список продуктов и список персонажей
+   растягиваются вместе с карточкой, а не остаются прижатыми к верху
+   с пустотой снизу. min-height:0 обязателен — иначе flex-элемент не
+   сжимается ниже содержимого и overflow-y:auto перестаёт работать. */
+/* max-height здесь остаётся из базового правила (.picker-list/.crew)
+   как безопасное значение по умолчанию — без него список из 53
+   продуктов посчитал бы себе «естественную» (нескроллящуюся) высоту
+   при определении высоты строки грида, и вся строка раздулась бы до
+   неё (реальная раскрутка при проверке: ~1800px). fitStepFills() (JS,
+   ниже) после отрисовки задаёт карточкам явную высоту через style.height
+   и только тогда снимает max-height инлайном — раскрутки уже не
+   происходит, потому что высота предка на этот момент не auto. */
+.field-fill { flex:1; display:flex; flex-direction:column; min-height:0; }
+.field-fill .picker { flex:1; display:flex; flex-direction:column; min-height:0; }
+.field-fill .picker-list { flex:1; min-height:0; }
+.step-body .crew { flex:1; min-height:0; }
 .action-bar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:13px 16px;
               background:var(--hull); border:1px solid var(--amber);
               background-image:linear-gradient(90deg,var(--accent-bg),transparent 60%); }
@@ -948,7 +965,7 @@ body.light .rolebadge.excess { background:rgba(154,107,18,.12); }
           <span class="step-count" id="prodCount"></span>
         </div>
         <div class="step-body">
-          <div class="field">
+          <div class="field field-fill">
             <label data-i18n="targets">Целевые продукты</label>
             <div class="picker">
               <div class="picker-bar">
@@ -3420,6 +3437,7 @@ function renderProducts(){
   renderChosen('products','productChosen');
   const cnt=document.getElementById('prodCount');
   if(cnt) cnt.textContent=`${chosen.products.size} / ${allProducts.length}`;
+  fitStepFills();
 }
 
 function renderConstellations(){
@@ -3447,6 +3465,7 @@ function renderConstellations(){
   const total=names.length?names.reduce((s,r)=>s+regions[r].length,0):allConstellations.length;
   const cnt=document.getElementById('constCount');
   if(cnt) cnt.textContent=`${chosen.constellations.size} / ${total}`;
+  fitStepFills();
 }
 
 function constRow(c){
@@ -3561,6 +3580,7 @@ function renderCrew(){
   const box=document.getElementById('crew'); if(!box) return;
   if(!crew.length){
     box.innerHTML=`<div style="color:var(--dim);font-size:12px">${t('noData')}</div>`;
+    fitStepFills();
     return;
   }
   // Ключ — имя персонажа: строка плана несёт character (имя), не id
@@ -3586,7 +3606,43 @@ function renderCrew(){
         data-i18n="unlink">${t('unlink')}</button>`:''}</div>`;
   }).join('')
   + `<div style="color:var(--dim);font-size:11px;margin-top:8px">${t('crewHint')}</div>`;
+  fitStepFills();
 }
+
+/* Карточки 01/03 «Что производим»/«Где перерабатываем» должны быть
+   той же высоты, что и 02 «Где добываем» (самая длинная — там список
+   созвездий), и заполнять её вплоть до низа списком продуктов/
+   персонажей, а не оставлять пустоту снизу. Через чистый CSS
+   (align-items:stretch + flex:1 внутри) это не сделать напрямую:
+   .picker-list/.crew — прокручиваемые области, и без max-height их
+   «естественная» (нескроллящаяся) высота участвует в расчёте высоты
+   строки грида — при 53 продуктах без пролистывания строка раздувалась
+   до ~1800px (проверено). Поэтому max-height у них остаётся в CSS как
+   безопасное значение по умолчанию, а здесь после отрисовки высота
+   карточек измеряется по факту и задаётся явно style.height — тогда
+   у .picker-list/.crew появляется предок с определённой (не auto)
+   высотой, и flex:1 у них можно безопасно освободить от max-height:
+   раскручивать больше нечего, снизу их ограничивает уже сама карточка. */
+function fitStepFills(){
+  const cards=document.querySelectorAll('.steps-grid > .step-card');
+  if(cards.length<3) return;
+  const list=document.getElementById('productList');
+  const crewBox=document.getElementById('crew');
+  cards.forEach(c=>{ c.style.height=''; });
+  if(list) list.style.maxHeight='';
+  if(crewBox) crewBox.style.maxHeight='';
+
+  // Узкий экран — карточки уже не в одну строку (auto-fit сам перенёс
+  // их в столбец), выравнивать по высоте нечего.
+  const tops=Array.from(cards).map(c=>c.offsetTop);
+  if(!tops.every(top=>top===tops[0])) return;
+
+  const target=Math.max(...Array.from(cards).map(c=>c.getBoundingClientRect().height));
+  cards.forEach(c=>{ c.style.height=target+'px'; });
+  if(list) list.style.maxHeight='none';
+  if(crewBox) crewBox.style.maxHeight='none';
+}
+window.addEventListener('resize',fitStepFills);
 
 function renderAnswers(){
   const mining=plan.filter(isMining);
@@ -3759,6 +3815,10 @@ if(window.ResizeObserver){
 function show(p){
   document.querySelectorAll('.page').forEach(x=>x.classList.toggle('on',x.id==='page-'+p));
   document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x.dataset.page===p));
+  // Пока страница «Настройки» скрыта (display:none), карточки нулевой
+  // высоты — подогнать высоту можно только после того, как страница
+  // стала видимой.
+  if(p==='setup') fitStepFills();
 }
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>show(t.dataset.page));
 document.querySelectorAll('.tool[data-view]').forEach(t=>t.onclick=()=>{
