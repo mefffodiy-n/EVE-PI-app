@@ -35,6 +35,18 @@
 
 5. ETag. Ответ 304 не тратит трафик и не считается ошибкой. Для данных,
    которые меняются редко, это дешевле повторной выкачки.
+
+6. Expires — проверяется ДО запроса, не только читается после. До
+   12.09.2026 клиент хранил только ETag и получал 304 постфактум: сам
+   запрос всё равно уходил, даже если расписание сборщика случайно
+   совпадало со свежим кэшем ESI (замечено на живой синхронизации
+   11.09.2026 — два ручных прогона sync_colony_status подряд дали бы
+   одинаковый снимок, будь второй раньше Expires). Документация прямо
+   называет это обходом кэша. Теперь Expires хранится вместе с ETag
+   (`_load_etags`/`_save_etags`), и пока локальное время меньше
+   сохранённого — запрос вообще не уходит в сеть, отдаётся тот же
+   EsiResponse(304, from_cache=True), что и от настоящего 304 (вызывающий
+   код на них не различается, см. sync_colony_status.py::sync_one).
 """
 
 from __future__ import annotations
@@ -45,6 +57,7 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -78,6 +91,26 @@ ERROR_LIMIT_FLOOR = 10
 
 class EsiError(RuntimeError):
     """Запрос к ESI не удался."""
+
+
+def _parse_expires(headers: dict) -> str | None:
+    """
+    Заголовок Expires (RFC 7231 HTTP-date, например
+    "Thu, 12 Sep 2026 18:00:00 GMT") — в ISO с явным UTC, чтобы сравнивать
+    без повторного парсинга формата даты при каждой проверке. None, если
+    заголовка нет или формат неожиданный — тогда просто нет локального
+    кэша по времени, поведение как раньше (только ETag).
+    """
+    raw = headers.get("Expires")
+    if not raw:
+        return None
+    try:
+        parsed = parsedate_to_datetime(raw)
+    except (TypeError, ValueError):
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc).isoformat()
 
 
 class EsiRateLimited(EsiError):
@@ -118,20 +151,60 @@ class EsiClient:
         self._errors_remaining: int | None = None
         self._etags = self._load_etags()
 
-    # ── Хранение ETag ────────────────────────────────────────────
+    # ── Хранение ETag + Expires ──────────────────────────────────
     def _load_etags(self) -> dict:
         if not ETAG_STORE.is_file():
             return {}
         try:
-            return json.loads(ETAG_STORE.read_text(encoding="utf-8"))
+            raw = json.loads(ETAG_STORE.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             return {}
+        # Формат до 12.09.2026 — {url: "etag-строка"}. Старый файл не
+        # выбрасывается при обновлении кода: запись оборачивается в тот
+        # же словарь {"etag", "expires"}, просто без Expires — появится
+        # после первого же настоящего ответа по этому url.
+        return {
+            url: entry if isinstance(entry, dict) else {"etag": entry, "expires": None}
+            for url, entry in raw.items()
+        }
 
     def _save_etags(self) -> None:
         ETAG_STORE.parent.mkdir(parents=True, exist_ok=True)
         ETAG_STORE.write_text(
             json.dumps(self._etags, ensure_ascii=False, indent=1), encoding="utf-8"
         )
+
+    def _cache_fresh(self, url: str) -> bool:
+        """
+        Кэш ещё не истёк по Expires — значит, запрос вообще не нужен.
+
+        Без этой проверки клиент раньше честно слал запрос и получал 304
+        (дёшево, но не бесплатно) даже когда сама документация ESI прямо
+        требует не запрашивать раньше Expires — это тоже обход кэша,
+        просто чуть менее явный, чем игнорировать ETag целиком.
+        """
+        entry = self._etags.get(url)
+        if not entry or not entry.get("expires"):
+            return False
+        try:
+            expires_at = datetime.fromisoformat(entry["expires"])
+        except ValueError:
+            return False
+        return datetime.now(timezone.utc) < expires_at
+
+    def _remember(self, url: str, headers: dict) -> None:
+        """Обновить ETag/Expires по свежему ответу (200 или настоящий 304)."""
+        etag = headers.get("ETag")
+        expires = _parse_expires(headers)
+        if etag:
+            self._etags[url] = {"etag": etag, "expires": expires}
+            self._save_etags()
+        elif expires and url in self._etags:
+            # 304 без ETag в заголовках (сам ESI обычно его повторяет, но
+            # полагаться на это не стоит) — Expires всё равно продлевает
+            # локальный кэш для уже известного ETag.
+            self._etags[url]["expires"] = expires
+            self._save_etags()
 
     # ── Состояние лимитов ────────────────────────────────────────
     @property
@@ -170,6 +243,14 @@ class EsiClient:
             )
 
         url = f"{BASE_URL}{path}"
+
+        # Документация ESI требует не запрашивать раньше Expires — это
+        # тоже обход кэша, не только игнорирование ETag (см. докстринг
+        # модуля, пункт 6). Кэш ещё свежий — тот же EsiResponse, что и от
+        # настоящего 304, просто без похода в сеть вообще.
+        if use_etag and self._cache_fresh(url):
+            return EsiResponse(304, None, {}, from_cache=True)
+
         headers = {
             "User-Agent": self.user_agent,
             "X-Compatibility-Date": self.compatibility_date,
@@ -178,7 +259,7 @@ class EsiClient:
         if token:
             headers["Authorization"] = f"Bearer {token}"
         if use_etag and url in self._etags:
-            headers["If-None-Match"] = self._etags[url]
+            headers["If-None-Match"] = self._etags[url]["etag"]
 
         try:
             if self._opener is not None:
@@ -194,6 +275,8 @@ class EsiClient:
             self._note_limits(response_headers)
 
             if exc.code == 304:
+                if use_etag:
+                    self._remember(url, response_headers)
                 return EsiResponse(304, None, response_headers, from_cache=True)
 
             if exc.code in (420, 429):
@@ -212,6 +295,8 @@ class EsiClient:
         self._note_limits(response_headers)
 
         if status == 304:
+            if use_etag:
+                self._remember(url, response_headers)
             return EsiResponse(304, None, response_headers, from_cache=True)
 
         # Путь через opener (тесты) не бросает HTTPError сам — приводим
@@ -226,10 +311,8 @@ class EsiClient:
         if status >= 400:
             raise EsiError(f"HTTP {status} на {path}")
 
-        etag = response_headers.get("ETag")
-        if use_etag and etag:
-            self._etags[url] = etag
-            self._save_etags()
+        if use_etag:
+            self._remember(url, response_headers)
 
         try:
             data = json.loads(body)
