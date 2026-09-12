@@ -95,13 +95,21 @@ button { font-family:inherit; }
           display:flex; align-items:center; gap:4px 6px; padding:6px 14px; min-height:46px;
           border-bottom:1px solid var(--seam); background:var(--hull); flex-wrap:wrap; }
 .topbar > * { flex:0 0 auto; }
-.brand { font-weight:600; color:var(--bright); margin-right:18px; letter-spacing:.02em; }
-.brand small { color:var(--dim); font-weight:400; margin-left:7px; }
+/* Шаг 4 (roadmap.md): лого-аватар + заголовок/подпись в столбик, как в
+   макете Claude Design — вместо однострочного «PI Director текст». */
+.brand { display:flex; align-items:center; gap:11px; margin-right:20px; }
+.brand-avatar { width:30px; height:30px; border-radius:50%; flex:0 0 auto;
+                filter:drop-shadow(0 0 6px var(--glow)); }
+.brand-text { display:flex; flex-direction:column; line-height:1.15; }
+.brand-title { font-family:'Saira Condensed',sans-serif; font-weight:700; font-size:16px;
+               letter-spacing:.12em; text-transform:uppercase; color:var(--bright); }
+.brand small { color:var(--dim); font-weight:400; font-size:10px; letter-spacing:.1em;
+               text-transform:uppercase; }
 .tab { white-space:nowrap; background:none; border:none; border-bottom:2px solid transparent; color:var(--dim);
        padding:12px 14px; cursor:pointer; font-size:13px;
        font-family:'Saira Condensed',sans-serif; font-weight:600; letter-spacing:.14em; text-transform:uppercase; }
 .tab:hover { color:var(--read); }
-.tab.on { color:var(--bright); border-bottom-color:var(--flux); }
+.tab.on { color:var(--bright); border-bottom-color:var(--amber); }
 .topbar .right { margin-left:auto; display:flex; gap:6px; align-items:center; }
 
 /* Полоски статуса: разделены рамками, как приборные показания.
@@ -463,7 +471,14 @@ details.msgs[open] > summary::before { content:'▾ '; }
 @media (max-width:680px) {
   body { font-size:12px; }
   .topbar { padding:6px 8px; gap:3px; }
-  .brand { margin-right:2px; }
+  .brand { margin-right:2px; gap:7px; }
+  /* Лого-аватар и заголовок Шага 4 при полном размере (30px, 16px
+     заглавными с трекингом) занимают заметно больше места, чем прежний
+     однострочный «PI Director» — на узких ширинах их тоже сжимаем, а
+     не только вкладки. */
+  .brand-avatar { width:22px; height:22px; }
+  .brand-title { font-size:12px; letter-spacing:.04em; }
+  .brand small { font-size:9px; letter-spacing:.06em; }
   /* Чисто визуальное уплотнение — не прячет вкладки (правило «кнопки и
      вкладки не прячутся никогда» см. у #moreBtn), только сокращает
      трекинг и отступы Saira Condensed из Шага 3, который на такой
@@ -550,10 +565,13 @@ details.msgs[open] > summary::before { content:'▾ '; }
             display:inline-grid; place-items:center; cursor:pointer; }
 .icon-btn:hover { color:var(--amber); border-color:var(--amber); }
 .icon-btn svg { width:15px; height:15px; }
-.sso { background:none; border:1px solid var(--seam); color:var(--flux); padding:5px 14px;
+/* Шаг 4 (roadmap.md): кнопка входа новым стилем — золотая рамка и
+   градиентная подложка вместо синей заливки по ховеру. */
+.sso { background:linear-gradient(180deg,var(--accent-bg),transparent);
+       border:1px solid var(--amber); color:var(--amber); padding:5px 14px;
        cursor:pointer; font-size:11px; white-space:nowrap;
        font-family:'Saira Condensed',sans-serif; font-weight:600; letter-spacing:.12em; text-transform:uppercase; }
-.sso:hover { background:rgba(79,156,214,.1); }
+.sso:hover { background:var(--amber); color:var(--void); }
 
 /* ── Всплывающие окна ────────────────────────────────────────── */
 .modal { position:fixed; inset:0; background:rgba(4,6,10,.7); display:none;
@@ -774,7 +792,13 @@ body.light .rolebadge.excess { background:rgba(154,107,18,.12); }
 <body>
 
 <div class="topbar">
-  <div class="brand">PI Director<small data-i18n="brandSub">планировщик колоний</small></div>
+  <div class="brand">
+    <img class="brand-avatar" src="logo.png" alt="">
+    <div class="brand-text">
+      <span class="brand-title">PI Director</span>
+      <small data-i18n="brandSub">планировщик колоний</small>
+    </div>
+  </div>
   <button class="tab on" data-page="dash" data-i18n="tabDash">Дашборд</button>
   <button class="tab" data-page="setup" data-i18n="tabSetup">Настройки</button>
 
