@@ -103,6 +103,7 @@ def _metadata() -> dict:
         return {
             "authorization_endpoint": meta["authorization_endpoint"],
             "token_endpoint": meta["token_endpoint"],
+            "revocation_endpoint": meta.get("revocation_endpoint", f"{SSO_BASE}/v2/oauth/revoke"),
             "jwks_uri": meta["jwks_uri"],
             "issuer": meta.get("issuer", SSO_BASE),
         }
@@ -110,6 +111,7 @@ def _metadata() -> dict:
         return {
             "authorization_endpoint": f"{SSO_BASE}/v2/oauth/authorize",
             "token_endpoint": f"{SSO_BASE}/v2/oauth/token",
+            "revocation_endpoint": f"{SSO_BASE}/v2/oauth/revoke",
             "jwks_uri": f"{SSO_BASE}/oauth/jwks",
             "issuer": SSO_BASE,
         }
@@ -163,6 +165,55 @@ def refresh(refresh_token: str) -> dict:
         "grant_type": "refresh_token",
         "refresh_token": refresh_token,
     })
+
+
+# ── Отзыв токена ─────────────────────────────────────────────────────
+def _revoke_request(url: str, data: dict, headers: dict) -> int:
+    """
+    POST на revocation_endpoint — только код статуса, не JSON: по RFC 7009
+    сервер отвечает пустым телом с 200 независимо от того, был ли токен
+    валиден (см. revoke()). Отдельная функция ради инъекции в тестах —
+    тот же приём, что у _post_form.
+    """
+    body = urllib.parse.urlencode(data).encode("ascii")
+    hdrs = {"User-Agent": user_agent(), "Content-Type": "application/x-www-form-urlencoded"}
+    hdrs.update(headers)
+    request = urllib.request.Request(url, data=body, headers=hdrs, method="POST")
+    try:
+        with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
+            return response.status
+    except urllib.error.HTTPError as exc:
+        return exc.code
+
+
+def revoke(token: str, token_type_hint: str = "refresh_token") -> None:
+    """
+    Отозвать токен на стороне CCP — POST revocation_endpoint с
+    client_secret_basic.
+
+    Доступно ТОЛЬКО когда PI_ESI_CLIENT_SECRET задан: revocation_endpoint
+    ESI принимает исключительно client_secret_basic/_post/_jwt (сверено с
+    .well-known/oauth-authorization-server, 12.09.2026, правило 11) — без
+    секрета публичный PKCE-клиент вызвать его не может ни при каких
+    условиях, поэтому это не запасной путь, а отдельная возможность,
+    включаемая явно (см. api/blueprints/auth.py::unlink, где вызов
+    оборачивается в try — локальное удаление своей копии токена не должно
+    зависеть от того, ответит ли CCP).
+    """
+    if not config.ESI_CLIENT_SECRET:
+        raise SsoNotConfigured(
+            "PI_ESI_CLIENT_SECRET не задан — отозвать токен на стороне CCP нельзя."
+        )
+    basic = base64.b64encode(
+        f"{config.ESI_CLIENT_ID}:{config.ESI_CLIENT_SECRET}".encode("ascii")
+    ).decode("ascii")
+    status = _revoke_request(
+        _metadata()["revocation_endpoint"],
+        {"token": token, "token_type_hint": token_type_hint, "client_id": config.ESI_CLIENT_ID},
+        {"Authorization": f"Basic {basic}"},
+    )
+    if status >= 400:
+        raise SsoError(f"SSO revoke вернул HTTP {status}")
 
 
 # ── Проверка access-токена (JWT) ─────────────────────────────────────

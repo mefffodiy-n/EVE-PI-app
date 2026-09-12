@@ -235,6 +235,201 @@ class TestFirstSyncOne:
         auth_module._first_sync_one(999999999, client=EsiClient(opener=self._opener()))
 
 
+class TestUnlink:
+    """
+    «Отвязать персонажа» (roadmap.md, Фаза 3) — честная замена настоящему
+    отзыву на стороне CCP (недоступен публичному PKCE-клиенту без
+    client_secret, см. infra/credentials.py::delete_tokens). Здесь
+    проверяется только наш собственный эффект: токен стёрт, персонаж
+    откреплён от визита (account_id=None) — не запрос к login.eveonline.com,
+    его тут нет и быть не может.
+    """
+
+    def _login_as(self, client, account_id):
+        with client.session_transaction() as sess:
+            sess["account_id"] = account_id
+
+    def _add_character(self, cid, account_id, source="esi"):
+        from infra.credentials import save_tokens
+
+        with session_scope() as s:
+            s.add(Character(character_id=cid, name="Pilot",
+                            command_center_upgrades_level=5,
+                            interplanetary_consolidation_level=4,
+                            source=source, account_id=account_id))
+            if source == "esi":
+                save_tokens(s, cid, {"access_token": "a", "refresh_token": "r",
+                                     "expires_in": 3600}, ["esi-skills.read_skills.v1"])
+
+    def test_unlink_deletes_token_and_clears_account_id(self, client, monkeypatch):
+        from infra import config, crypto
+
+        monkeypatch.setattr(config, "TOKEN_ENCRYPTION_KEY", crypto.generate_key())
+        self._add_character(95538921, "acct-a")
+        self._login_as(client, "acct-a")
+
+        r = client.post("/api/auth/unlink/95538921")
+        assert r.status_code == 200
+        assert r.get_json()["unlinked"] == 95538921
+
+        with session_scope() as s:
+            char = s.get(Character, 95538921)
+            assert char is not None and char.account_id is None
+            assert s.get(Credential, 95538921) is None
+
+    def test_cannot_unlink_someone_elses_character(self, client, monkeypatch):
+        from infra import config, crypto
+
+        monkeypatch.setattr(config, "TOKEN_ENCRYPTION_KEY", crypto.generate_key())
+        self._add_character(95538921, "acct-a")
+        self._login_as(client, "acct-b")
+
+        r = client.post("/api/auth/unlink/95538921")
+        assert r.status_code == 404
+
+        with session_scope() as s:
+            char = s.get(Character, 95538921)
+            assert char.account_id == "acct-a"  # не тронут
+            assert s.get(Credential, 95538921) is not None
+
+    def test_anonymous_visit_cannot_unlink(self, client, monkeypatch):
+        from infra import config, crypto
+
+        monkeypatch.setattr(config, "TOKEN_ENCRYPTION_KEY", crypto.generate_key())
+        self._add_character(95538921, "acct-a")
+
+        r = client.post("/api/auth/unlink/95538921")
+        assert r.status_code == 404
+
+    def test_dev_stub_cannot_be_unlinked(self, client, monkeypatch):
+        from infra import config, crypto
+
+        monkeypatch.setattr(config, "TOKEN_ENCRYPTION_KEY", crypto.generate_key())
+        self._add_character(90001, "acct-a", source="dev")
+        self._login_as(client, "acct-a")
+
+        r = client.post("/api/auth/unlink/90001")
+        assert r.status_code == 400
+
+        with session_scope() as s:
+            assert s.get(Character, 90001).account_id == "acct-a"  # не тронут
+
+    def test_unknown_character_reports_the_same_not_found(self, client, monkeypatch):
+        from infra import config, crypto
+
+        monkeypatch.setattr(config, "TOKEN_ENCRYPTION_KEY", crypto.generate_key())
+        self._login_as(client, "acct-a")
+
+        r = client.post("/api/auth/unlink/1")
+        assert r.status_code == 404
+
+    def test_characters_endpoint_flags_esi_linked_for_the_unlink_button(self, client, monkeypatch):
+        """
+        /api/characters — источник esi_linked, по которому фронт решает,
+        показывать ли кнопку «Отвязать персонажа» (не всё персонажу можно
+        отвязать — см. test_dev_stub_cannot_be_unlinked).
+        """
+        from infra import config, crypto
+
+        monkeypatch.setattr(config, "TOKEN_ENCRYPTION_KEY", crypto.generate_key())
+        self._add_character(95538921, "acct-a", source="esi")
+        self._add_character(90001, "acct-a", source="dev")
+        self._login_as(client, "acct-a")
+
+        body = client.get("/api/characters").get_json()
+        by_id = {c["character_id"]: c for c in body["characters"]}
+        assert by_id[95538921]["esi_linked"] is True
+        assert by_id[90001]["esi_linked"] is False
+
+    def test_unlink_calls_real_revoke_when_secret_configured(self, client, monkeypatch):
+        """
+        PI_ESI_CLIENT_SECRET задан — unlink() обязан не только стереть
+        свою копию, но и попытаться настоящий отзыв на стороне CCP
+        (scripts/esi_sso.py::revoke, POST /v2/oauth/revoke с
+        client_secret_basic — единственный способ аутентификации, который
+        публичный PKCE-клиент без секрета не может использовать вовсе).
+        """
+        from infra import config, crypto
+
+        monkeypatch.setattr(config, "TOKEN_ENCRYPTION_KEY", crypto.generate_key())
+        monkeypatch.setattr(config, "ESI_CLIENT_ID", "test-client-id")
+        monkeypatch.setattr(config, "ESI_CLIENT_SECRET", "test-secret")
+
+        import scripts.esi_sso as sso
+        monkeypatch.setattr(sso, "_metadata", lambda: {
+            "revocation_endpoint": "https://login.eveonline.com/v2/oauth/revoke",
+        })
+        calls = []
+        monkeypatch.setattr(sso, "_revoke_request", lambda url, data, headers: calls.append(
+            (url, data, headers)) or 200)
+
+        self._add_character(95538921, "acct-a")
+        self._login_as(client, "acct-a")
+
+        r = client.post("/api/auth/unlink/95538921")
+        assert r.status_code == 200
+        assert r.get_json()["revoked"] is True
+
+        assert len(calls) == 1
+        url, data, headers = calls[0]
+        assert url == "https://login.eveonline.com/v2/oauth/revoke"
+        assert data["token"] == "r"  # refresh_token из _add_character
+        assert data["token_type_hint"] == "refresh_token"
+        assert headers["Authorization"].startswith("Basic ")
+
+        # Своя копия всё равно стёрта — revoke() не заменяет локальное удаление.
+        with session_scope() as s:
+            assert s.get(Character, 95538921).account_id is None
+            assert s.get(Credential, 95538921) is None
+
+    def test_unlink_succeeds_locally_even_if_ccp_revoke_fails(self, client, monkeypatch):
+        """
+        CCP недоступен/вернул ошибку — локальное удаление токена не
+        должно от этого зависеть: пользователь пришёл отвязать персонажа
+        именно от НАШЕГО приложения, и это должно получиться всегда.
+        """
+        from infra import config, crypto
+
+        monkeypatch.setattr(config, "TOKEN_ENCRYPTION_KEY", crypto.generate_key())
+        monkeypatch.setattr(config, "ESI_CLIENT_ID", "test-client-id")
+        monkeypatch.setattr(config, "ESI_CLIENT_SECRET", "test-secret")
+
+        import scripts.esi_sso as sso
+        monkeypatch.setattr(sso, "_metadata", lambda: {
+            "revocation_endpoint": "https://login.eveonline.com/v2/oauth/revoke",
+        })
+        monkeypatch.setattr(sso, "_revoke_request", lambda url, data, headers: 500)
+
+        self._add_character(95538921, "acct-a")
+        self._login_as(client, "acct-a")
+
+        r = client.post("/api/auth/unlink/95538921")
+        assert r.status_code == 200
+        assert r.get_json()["revoked"] is False
+
+        with session_scope() as s:
+            assert s.get(Character, 95538921).account_id is None
+            assert s.get(Credential, 95538921) is None
+
+    def test_unlink_without_secret_does_not_attempt_revoke(self, client, monkeypatch):
+        """Без секрета — revoked=False и ни одного обращения к CCP."""
+        from infra import config, crypto
+
+        monkeypatch.setattr(config, "TOKEN_ENCRYPTION_KEY", crypto.generate_key())
+        monkeypatch.setattr(config, "ESI_CLIENT_SECRET", None)
+
+        import scripts.esi_sso as sso
+        calls = []
+        monkeypatch.setattr(sso, "_revoke_request", lambda *a, **k: calls.append(1) or 200)
+
+        self._add_character(95538921, "acct-a")
+        self._login_as(client, "acct-a")
+
+        r = client.post("/api/auth/unlink/95538921")
+        assert r.get_json()["revoked"] is False
+        assert calls == []
+
+
 def test_verify_rejects_missing_eve_online_audience(sso_env, _rsa_key, monkeypatch):
     from scripts.esi_sso import SsoError, verify_access_token
 

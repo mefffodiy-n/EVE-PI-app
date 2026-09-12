@@ -198,3 +198,65 @@ def _store(character_id: int, name: str, tokens: dict, claims: dict) -> None:
             char.account_id = account_id
 
         save_tokens(session, character_id, tokens, scopes)
+
+
+@bp.post("/auth/unlink/<int:character_id>")
+def unlink(character_id: int):
+    """
+    «Отвязать персонажа». Всегда стирает свою копию токена и открепляет
+    персонажа от этого визита (account_id=None) — тот же вид, что и до
+    первого входа, планировщик и сборщики его больше не увидят, не
+    дожидаясь ближайшего refresh_tokens. Это гарантировано в любом случае.
+
+    Настоящий отзыв на стороне CCP (POST /v2/oauth/revoke) — ДОПОЛНИТЕЛЬНО,
+    только если задан PI_ESI_CLIENT_SECRET (см. scripts/esi_sso.py::revoke,
+    там разбор — без секрета публичный PKCE-клиент не может аутентифицировать
+    этот запрос вообще, не запасной путь, а отдельная возможность). Сбой
+    вызова к CCP (сеть, уже отозван раньше, секрет не задан) не должен
+    мешать локальному удалению — оно происходит в любом случае, отсюда
+    порядок: сперва пробуем revoke() СО старым токеном, потом стираем.
+    Ответ несёт revoked, чтобы фронт мог честно сказать, что произошло на
+    самом деле, а не что должно было произойти (правило 1).
+
+    Персонаж должен принадлежать текущему визиту — тот же честный «не
+    найден», что и у чужих сохранённых планов (domain/plan_storage.py):
+    не подтверждать самим ответом сам факт существования character_id.
+    Dev-заглушки (source="dev") отвязать нельзя — они не проходили через
+    SSO, отвязывать у них нечего, и в dev это привело бы к путанице ради
+    несуществующего сценария.
+    """
+    from api.session import current_account_id
+    from infra.credentials import delete_tokens, get_refresh_token
+    from infra.db import session_scope
+    from infra.models import Character
+
+    account_id = current_account_id()
+    if account_id is None:
+        return json_error("Персонаж не найден", 404)
+
+    with session_scope() as session:
+        character = session.get(Character, character_id)
+        if character is None or character.account_id != account_id:
+            return json_error("Персонаж не найден", 404)
+        if character.source != "esi":
+            return json_error("Этого персонажа нельзя отвязать")
+
+        revoked = False
+        if config.ESI_CLIENT_SECRET:
+            refresh_token = get_refresh_token(session, character_id)
+            if refresh_token:
+                from scripts.esi_sso import revoke
+
+                try:
+                    revoke(refresh_token)
+                    revoked = True
+                except Exception as exc:  # noqa: BLE001 — сбой CCP не должен мешать локальному удалению
+                    current_app.logger.warning(
+                        "Отзыв токена персонажа %s на стороне CCP не удался: %s",
+                        character_id, exc,
+                    )
+
+        character.account_id = None
+        delete_tokens(session, character_id)
+
+    return json_ok(unlinked=character_id, revoked=revoked)
