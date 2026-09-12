@@ -340,6 +340,35 @@ class TestUnlink:
         by_id = {c["character_id"]: c for c in body["characters"]}
         assert by_id[95538921]["esi_linked"] is True
         assert by_id[90001]["esi_linked"] is False
+        # _add_character() создаёт настоящий credential для source="esi" —
+        # значит needs_reconnect должно быть False, а не просто отсутствовать.
+        assert by_id[95538921]["needs_reconnect"] is False
+        assert by_id[90001]["needs_reconnect"] is False
+
+    def test_characters_endpoint_flags_needs_reconnect_when_credential_is_gone(self, client, monkeypatch):
+        """
+        sync_colony_status.py::sync_one() молча пропускает персонажа без
+        валидного токена (get_access_token() -> None, "skipped" — не
+        ошибка джоба), поэтому чип «Сборщики» остаётся зелёным, даже
+        когда конкретный esi-персонаж не обновляется вовсе. needs_reconnect
+        — единственный видимый сигнал этого в интерфейсе, см. renderCrew()
+        в web/index.html.
+        """
+        from infra import config, crypto
+
+        monkeypatch.setattr(config, "TOKEN_ENCRYPTION_KEY", crypto.generate_key())
+        with session_scope() as s:
+            s.add(Character(character_id=95538921, name="Pilot",
+                             command_center_upgrades_level=5,
+                             interplanetary_consolidation_level=4,
+                             source="esi", account_id="acct-a"))
+        # Ни одного save_tokens() — refresh_tokens.py удалил credential
+        # после invalid_grant (пользователь отозвал доступ/сменил пароль).
+        self._login_as(client, "acct-a")
+
+        body = client.get("/api/characters").get_json()
+        by_id = {c["character_id"]: c for c in body["characters"]}
+        assert by_id[95538921]["needs_reconnect"] is True
 
     def test_unlink_calls_real_revoke_when_secret_configured(self, client, monkeypatch):
         """
