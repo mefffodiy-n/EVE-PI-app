@@ -46,6 +46,26 @@ def save_tokens(session: Session, character_id: int, tokens: dict, scopes: list)
             setattr(cred, key, value)
 
 
+def get_refresh_token(session: Session, character_id: int) -> str | None:
+    """
+    Расшифрованный refresh-токен — только для scripts.esi_sso.revoke()
+    перед удалением строки (api/blueprints/auth.py::unlink). В отличие
+    от get_access_token() без проверки срока: годность для отзыва не
+    совпадает с годностью для запроса к ESI, а сам revoke честно
+    сообщит, если токен уже недействителен.
+    """
+    from infra.crypto import TokenCryptoError, decrypt
+    from infra.models import Credential
+
+    cred = session.get(Credential, character_id)
+    if cred is None:
+        return None
+    try:
+        return decrypt(cred.refresh_token)
+    except TokenCryptoError:
+        return None
+
+
 def delete_tokens(session: Session, character_id: int) -> None:
     """
     Стереть токены персонажа — «Отвязать персонажа» (api/blueprints/auth.py).

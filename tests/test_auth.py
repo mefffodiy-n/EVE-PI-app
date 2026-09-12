@@ -341,6 +341,94 @@ class TestUnlink:
         assert by_id[95538921]["esi_linked"] is True
         assert by_id[90001]["esi_linked"] is False
 
+    def test_unlink_calls_real_revoke_when_secret_configured(self, client, monkeypatch):
+        """
+        PI_ESI_CLIENT_SECRET задан — unlink() обязан не только стереть
+        свою копию, но и попытаться настоящий отзыв на стороне CCP
+        (scripts/esi_sso.py::revoke, POST /v2/oauth/revoke с
+        client_secret_basic — единственный способ аутентификации, который
+        публичный PKCE-клиент без секрета не может использовать вовсе).
+        """
+        from infra import config, crypto
+
+        monkeypatch.setattr(config, "TOKEN_ENCRYPTION_KEY", crypto.generate_key())
+        monkeypatch.setattr(config, "ESI_CLIENT_ID", "test-client-id")
+        monkeypatch.setattr(config, "ESI_CLIENT_SECRET", "test-secret")
+
+        import scripts.esi_sso as sso
+        monkeypatch.setattr(sso, "_metadata", lambda: {
+            "revocation_endpoint": "https://login.eveonline.com/v2/oauth/revoke",
+        })
+        calls = []
+        monkeypatch.setattr(sso, "_revoke_request", lambda url, data, headers: calls.append(
+            (url, data, headers)) or 200)
+
+        self._add_character(95538921, "acct-a")
+        self._login_as(client, "acct-a")
+
+        r = client.post("/api/auth/unlink/95538921")
+        assert r.status_code == 200
+        assert r.get_json()["revoked"] is True
+
+        assert len(calls) == 1
+        url, data, headers = calls[0]
+        assert url == "https://login.eveonline.com/v2/oauth/revoke"
+        assert data["token"] == "r"  # refresh_token из _add_character
+        assert data["token_type_hint"] == "refresh_token"
+        assert headers["Authorization"].startswith("Basic ")
+
+        # Своя копия всё равно стёрта — revoke() не заменяет локальное удаление.
+        with session_scope() as s:
+            assert s.get(Character, 95538921).account_id is None
+            assert s.get(Credential, 95538921) is None
+
+    def test_unlink_succeeds_locally_even_if_ccp_revoke_fails(self, client, monkeypatch):
+        """
+        CCP недоступен/вернул ошибку — локальное удаление токена не
+        должно от этого зависеть: пользователь пришёл отвязать персонажа
+        именно от НАШЕГО приложения, и это должно получиться всегда.
+        """
+        from infra import config, crypto
+
+        monkeypatch.setattr(config, "TOKEN_ENCRYPTION_KEY", crypto.generate_key())
+        monkeypatch.setattr(config, "ESI_CLIENT_ID", "test-client-id")
+        monkeypatch.setattr(config, "ESI_CLIENT_SECRET", "test-secret")
+
+        import scripts.esi_sso as sso
+        monkeypatch.setattr(sso, "_metadata", lambda: {
+            "revocation_endpoint": "https://login.eveonline.com/v2/oauth/revoke",
+        })
+        monkeypatch.setattr(sso, "_revoke_request", lambda url, data, headers: 500)
+
+        self._add_character(95538921, "acct-a")
+        self._login_as(client, "acct-a")
+
+        r = client.post("/api/auth/unlink/95538921")
+        assert r.status_code == 200
+        assert r.get_json()["revoked"] is False
+
+        with session_scope() as s:
+            assert s.get(Character, 95538921).account_id is None
+            assert s.get(Credential, 95538921) is None
+
+    def test_unlink_without_secret_does_not_attempt_revoke(self, client, monkeypatch):
+        """Без секрета — revoked=False и ни одного обращения к CCP."""
+        from infra import config, crypto
+
+        monkeypatch.setattr(config, "TOKEN_ENCRYPTION_KEY", crypto.generate_key())
+        monkeypatch.setattr(config, "ESI_CLIENT_SECRET", None)
+
+        import scripts.esi_sso as sso
+        calls = []
+        monkeypatch.setattr(sso, "_revoke_request", lambda *a, **k: calls.append(1) or 200)
+
+        self._add_character(95538921, "acct-a")
+        self._login_as(client, "acct-a")
+
+        r = client.post("/api/auth/unlink/95538921")
+        assert r.get_json()["revoked"] is False
+        assert calls == []
+
 
 def test_verify_rejects_missing_eve_online_audience(sso_env, _rsa_key, monkeypatch):
     from scripts.esi_sso import SsoError, verify_access_token
