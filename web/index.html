@@ -159,7 +159,7 @@ button { font-family:inherit; }
 .modal-body dl { display:grid; grid-template-columns:170px 1fr; gap:7px 16px; margin:0; }
 .modal-body dt { color:var(--read); font-weight:500; }
 .modal-body dd { margin:0; color:var(--dim); }
-.modal-body a { color:var(--flux); }
+.modal-body a { color:var(--amber); }
 .modal-body .warn { border-left:2px solid var(--amber); background:rgba(212,160,74,.06);
                     padding:8px 12px; margin:12px 0; }
 
@@ -193,7 +193,7 @@ button { font-family:inherit; }
 .menu-pop button { display:flex; gap:8px; width:100%; text-align:left; background:none;
                    border:none; color:var(--read); padding:6px 12px; cursor:pointer; font-size:13px; }
 .menu-pop button:hover { background:var(--hover); }
-.menu-pop button .mark { width:12px; color:var(--flux); }
+.menu-pop button .mark { width:12px; color:var(--amber); }
 
 /* ═══ Круг колонии: планета, кольцо, время, портрет ══════════════ */
 .orb { position:relative; width:var(--orb,58px); height:var(--orb,58px); flex:0 0 auto; cursor:pointer; }
@@ -434,21 +434,36 @@ button { font-family:inherit; }
 .field-fill .picker { flex:1; display:flex; flex-direction:column; min-height:0; }
 .field-fill .picker-list { flex:1; min-height:0; }
 .step-body .crew { flex:1; min-height:0; }
-.action-bar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:13px 16px;
+/* Шаг 9, правка: в макете кнопка «Построить план» и «Сохранённые
+   планы» — одна золотая панель, а не два отдельных блока друг под
+   другом. Сохранённые планы (.saved-row) у нас заметно крупнее
+   макетных чипов (чекбокс сравнения, метрики, кнопки «Открыть»/
+   «Удалить») — не переношу их в один ряд с кнопкой построчно, а даю
+   списку flex-basis:100%, чтобы он с переносом вставал под первую
+   строку внутри той же рамки: одна панель, а не два блока. */
+.action-bar { display:flex; align-items:center; gap:10px 12px; flex-wrap:wrap; padding:13px 16px;
               background:var(--hull); border:1px solid var(--amber);
               background-image:linear-gradient(90deg,var(--accent-bg),transparent 60%); }
-.saved-block { background:var(--hull); border:1px solid var(--seam); padding:14px; }
-.saved-block h2 { margin:0 0 10px; font-size:12px; letter-spacing:.16em; text-transform:uppercase;
-                   color:var(--dim); font-family:'Saira Condensed',sans-serif; font-weight:600; }
+.action-bar .save-inline { display:flex; gap:6px; align-items:center; margin-left:auto; flex-wrap:wrap; }
+.action-bar .save-inline input { background:var(--void); border:1px solid var(--seam); color:var(--read);
+                                  padding:6px 9px; font-size:12px; width:170px; font-family:inherit; }
+.action-bar #savedList { flex-basis:100%; }
+.action-bar #savedList:empty, .action-bar #cmpResult:empty { display:none; }
 .field { margin-bottom:11px; }
 .field label { display:block; font-size:12px; color:var(--dim); margin-bottom:3px; }
 .field select, .field input { width:100%; background:var(--void); border:1px solid var(--seam);
     color:var(--read); padding:6px 8px; font-family:'IBM Plex Mono',monospace; font-size:12px; }
-.field select:focus, .field input:focus { outline:none; border-color:var(--flux); }
-.run { width:100%; margin-top:6px; padding:8px; cursor:pointer; background:transparent;
-       border:1px solid var(--flux); color:var(--flux); font-size:13px; font-weight:700;
-       font-family:'Saira Condensed',sans-serif; letter-spacing:.14em; text-transform:uppercase; }
-.run:hover { background:rgba(79,156,214,.1); }
+.field select:focus, .field input:focus { outline:none; border-color:var(--amber); }
+/* Пропущено при Шаге 9: кнопка осталась прозрачной с синей (--flux)
+   рамкой из-под старой рейки — в макете это сплошная золотая заливка,
+   основной CTA страницы, а не рамка на всю ширину колонки (ширина
+   колонки была фиксированной 270px у прежней .rail, теперь кнопка
+   в одной строке с полем сохранения — width:100% её раздувал бы). */
+.run { padding:10px 26px; cursor:pointer; background:var(--amber);
+       border:1px solid var(--amber); color:var(--void); font-size:13px; font-weight:700;
+       font-family:'Saira Condensed',sans-serif; letter-spacing:.14em; text-transform:uppercase;
+       white-space:nowrap; flex:0 0 auto; }
+.run:hover { background:var(--amber-hi); border-color:var(--amber-hi); }
 .crew { max-height:210px; overflow-y:auto; }
 .crew div { display:flex; gap:8px; align-items:center; padding:4px 0; font-size:12px; }
 .crew .lv { margin-left:auto; color:var(--dim); font-family:'IBM Plex Mono',monospace; font-size:11px; }
@@ -609,7 +624,7 @@ details.msgs[open] > summary::before { content:'▾ '; }
 .chip .dot.failing { background:var(--alarm); }
 .tbtn { background:none; border:1px solid var(--seam); color:var(--read); padding:5px 12px;
         cursor:pointer; font-size:12px; white-space:nowrap; }
-.tbtn:hover { border-color:var(--flux); color:var(--flux); }
+.tbtn:hover { border-color:var(--amber); color:var(--amber); }
 .lang { display:inline-flex; border:1px solid var(--seam); }
 .lang button { background:none; border:none; color:var(--dim); padding:5px 9px; cursor:pointer;
                font-size:12px; font-family:'IBM Plex Mono',monospace; }
@@ -655,7 +670,7 @@ details.msgs[open] > summary::before { content:'▾ '; }
 .modal-body dl { display:grid; grid-template-columns:170px 1fr; gap:8px 18px; margin:0; }
 .modal-body dt { color:var(--read); font-weight:500; }
 .modal-body dd { margin:0; color:var(--dim); }
-.modal-body a { color:var(--flux); }
+.modal-body a { color:var(--amber); }
 .modal-body .rows { display:grid; grid-template-columns:220px 1fr; }
 .modal-body .rows > div { padding:8px 0; border-bottom:1px solid var(--seam); }
 .modal-body .rows > div:nth-child(odd) { color:var(--read); font-weight:500; padding-right:16px; }
@@ -671,10 +686,10 @@ details.msgs[open] > summary::before { content:'▾ '; }
 .picker-bar input[type=search] { flex:1; min-width:0; background:var(--hull);
   border:1px solid var(--seam); color:var(--read); padding:4px 7px; font-size:12px;
   font-family:'IBM Plex Sans',sans-serif; }
-.picker-bar input[type=search]:focus { outline:none; border-color:var(--flux); }
+.picker-bar input[type=search]:focus { outline:none; border-color:var(--amber); }
 .mini { background:none; border:1px solid var(--seam); color:var(--dim); padding:3px 8px;
         cursor:pointer; font-size:11px; white-space:nowrap; }
-.mini:hover { color:var(--flux); border-color:var(--flux); }
+.mini:hover { color:var(--amber); border-color:var(--amber); }
 .picker-list { max-height:220px; overflow-y:auto; }
 .picker-list label { display:flex; align-items:center; gap:8px; padding:4px 8px;
                      cursor:pointer; font-size:12px; }
@@ -770,10 +785,7 @@ details.msgs[open] > summary::before { content:'▾ '; }
                  text-overflow:ellipsis; }
 .saved-row .meta { color:var(--dim); font-size:11px; font-family:'IBM Plex Mono',monospace; }
 .saved-row .acts { margin-left:auto; display:flex; gap:5px; flex:0 0 auto; }
-.saved-row.current { box-shadow:inset 2px 0 0 var(--flux); }
-.save-bar { display:flex; gap:6px; margin-bottom:8px; }
-.save-bar input { flex:1; min-width:0; background:var(--void); border:1px solid var(--seam);
-                  color:var(--read); padding:5px 8px; font-size:12px; }
+.saved-row.current { box-shadow:inset 2px 0 0 var(--amber); }
 .cmp { margin-top:8px; padding:8px 10px; border:1px solid var(--seam); background:var(--void);
        font-size:12px; }
 .cmp b { color:var(--bright); font-family:'IBM Plex Mono',monospace; }
@@ -861,9 +873,12 @@ thead .group th small { color:var(--dim); }
 .sugg .nm { color:var(--read); }
 .sugg .num { font-family:'IBM Plex Mono',monospace; color:var(--dim); text-align:right; }
 .sugg .num.isk { color:var(--bright); }
-.sugg button { background:none; border:1px solid var(--flux); color:var(--flux);
+/* Пропущено при Шаге 2 (перекраска палитры) — оставалось синим
+   (--flux) вместо золотого, хотя весь остальной акцентный цвет
+   в приложении уже перешёл на --amber. */
+.sugg button { background:none; border:1px solid var(--amber); color:var(--amber);
                padding:3px 10px; cursor:pointer; font-size:11px; }
-.sugg button:hover { background:rgba(79,156,214,.12); }
+.sugg button:hover { background:var(--accent-bg); }
 .advice .foot { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:10px; }
 .advice .foot .hint { font-size:11px; color:var(--dim); }
 .rolebadge.excess { color:var(--amber); background:rgba(212,160,74,.15); }
@@ -1043,11 +1058,7 @@ body.light .rolebadge.excess { background:rgba(154,107,18,.12); }
 
     <div class="action-bar">
       <button class="run" onclick="calculate()" data-i18n="build">Построить план</button>
-    </div>
-
-    <div class="saved-block">
-      <h2 data-i18n="savedPlans">Сохранённые планы</h2>
-      <div class="save-bar">
+      <div class="save-inline">
         <input id="planName" placeholder="название плана" data-i18n-ph="planNamePh">
         <button class="mini" onclick="savePlan()" data-i18n="save">Сохранить</button>
       </div>
