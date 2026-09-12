@@ -198,3 +198,42 @@ def _store(character_id: int, name: str, tokens: dict, claims: dict) -> None:
             char.account_id = account_id
 
         save_tokens(session, character_id, tokens, scopes)
+
+
+@bp.post("/auth/unlink/<int:character_id>")
+def unlink(character_id: int):
+    """
+    «Отвязать персонажа» — честная замена настоящему отзыву токена на
+    стороне CCP, а не отзыв сам по себе (см. infra/credentials.py::
+    delete_tokens, там разбор, почему сторонний PKCE-клиент не может
+    вызвать /v2/oauth/revoke). Стирает свою копию токена и открепляет
+    персонажа от этого визита (account_id=None) — тот же вид, что и до
+    первого входа, планировщик и сборщики его больше не увидят, не
+    дожидаясь ближайшего refresh_tokens.
+
+    Персонаж должен принадлежать текущему визиту — тот же честный «не
+    найден», что и у чужих сохранённых планов (domain/plan_storage.py):
+    не подтверждать самим ответом сам факт существования character_id.
+    Dev-заглушки (source="dev") отвязать нельзя — они не проходили через
+    SSO, отвязывать у них нечего, и в dev это привело бы к путанице ради
+    несуществующего сценария.
+    """
+    from api.session import current_account_id
+    from infra.credentials import delete_tokens
+    from infra.db import session_scope
+    from infra.models import Character
+
+    account_id = current_account_id()
+    if account_id is None:
+        return json_error("Персонаж не найден", 404)
+
+    with session_scope() as session:
+        character = session.get(Character, character_id)
+        if character is None or character.account_id != account_id:
+            return json_error("Персонаж не найден", 404)
+        if character.source != "esi":
+            return json_error("Этого персонажа нельзя отвязать")
+        character.account_id = None
+        delete_tokens(session, character_id)
+
+    return json_ok(unlinked=character_id)

@@ -46,6 +46,25 @@ def save_tokens(session: Session, character_id: int, tokens: dict, scopes: list)
             setattr(cred, key, value)
 
 
+def delete_tokens(session: Session, character_id: int) -> None:
+    """
+    Стереть токены персонажа — «Отвязать персонажа» (api/blueprints/auth.py).
+
+    Не настоящий отзыв на стороне CCP: у ESI SSO есть /v2/oauth/revoke
+    (сверено с .well-known/oauth-authorization-server, правило 11), но
+    все три поддерживаемых способа аутентификации (client_secret_basic/
+    post/jwt) требуют client_secret — у нас его нет и не может быть,
+    приложение публичный PKCE-клиент (см. auth.py). Честная замена —
+    стереть свою копию токена, чтобы сборщики и планировщик её не видели;
+    токен на стороне CCP формально жив до естественного истечения.
+    """
+    from infra.models import Credential
+
+    cred = session.get(Credential, character_id)
+    if cred is not None:
+        session.delete(cred)
+
+
 def get_access_token(session: Session, character_id: int) -> str | None:
     """
     Расшифрованный access-токен персонажа, если он есть и ещё годен.

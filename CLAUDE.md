@@ -124,6 +124,12 @@ Polyaramids) и удалён несуществующий `Positron Cord`.
   проверять по JWKS: issuer `https://login.eveonline.com/`, audience
   содержит `client_id` и `"EVE Online"`, срок не истёк. Refresh-токены
   шифровать at rest. Запрашивать только необходимые scope.
+  **Отзыв токена:** у ESI SSO есть `POST /v2/oauth/revoke` (адрес — из
+  `.well-known/oauth-authorization-server`), но все три способа его
+  аутентификации требуют `client_secret` — публичный PKCE-клиент вызвать
+  его не может ни при каких условиях. Кнопка «Отвязать» в приложении
+  поэтому стирает только свою копию токена (`api/blueprints/auth.py::
+  unlink`) — не настоящий отзыв на стороне CCP, честно сказано в UI.
 
 ---
 

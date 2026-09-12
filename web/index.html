@@ -905,6 +905,8 @@ const T={
   noReserve:'без запаса',sortLoad:'По загрузке',sortReserve:'По остатку запаса',
   sortPilot:'По имени персонажа',sortSystem:'По системе',
   cProc:'переработка',cMine:'добыча',crewHint:'Персонажи хранятся на сервере и не пропадают при перезаходе.',
+  unlink:'Отвязать',unlinkHint:'Стереть токен на нашей стороне — планировщик перестанет видеть персонажа до повторного входа. Доступ на стороне CCP отдельно отзывается на eveonline.com/account/third_party_apps.',
+  unlinkFail:'Не удалось отвязать персонажа',
   planetSlots:'слотов планет',wholeRegion:'Весь регион',clearAll:'Снять всё',nothingChosen:'ничего не выбрано',systems:'систем',selectAll:'Выбрать все',pickProducts:'Выберите хотя бы один продукт',pickConst:'Выберите хотя бы одно созвездие',export:'Экспорт в Excel',jumpPlan:'↑ План',jumpColonies:'↓ Мои колонии',jumpShopping:'↓ Список закупки',shopping:'Список закупки: командные центры',shopTotal:'Всего командных центров',exportEmpty:'Сначала постройте план',exportFail:'Не удалось выгрузить файл',profitTitle:'Что выгоднее производить',collectedAgo:'снимок собран',minutesAgo:'мин назад',stale:'устарел',colProduct:'Продукт',colColonies:'Планет',colPerColony:'ISK / колония-час',colPerHour:'ISK / час',colPrice:'Цена за единицу',noPrice:'нет цены',noSnapshot:'Снимок цен не собран',advDeficit:'Персонажей не хватает на эту цепочку',advSurplus:'Персонажей больше, чем нужно',advDeficitLead:'Полный цикл требует {need} колоний, а в пуле {have} слотов. Вот что поместится целиком:',advSurplusLead:'Выбранное занимает {need} колоний из {have}. Свободно {spare} — можно добавить:',advTake:'Взять',advIgnoreDeficit:'Строить как есть',advIgnoreSurplus:'Занять свободных добычей',advIgnoreDeficitHint:'план будет с дефицитом сырья',advIgnoreSurplusHint:'добыча сырья той же цепочки, по убыванию дефицитности',colonies3:'колоний',excess:'Добыча (избыток)',directP2:'Делать P2 прямо на добывающих планетах',directP2Hint:'где есть оба вида сырья — не нужно возить P1',mSpread:'Разброс по системам',logi:'всего задействовано',systemsAvg:'систем на персонажа',sysOne:'система',sysFew:'системы',sysMany:'систем',logiGood:'колонии собраны компактно',logiPoor:'урожай придётся собирать в разъездах',mColonies:'Колоний в плане',mChars:'Персонажей занято',mPeak:'Самая нагруженная',mShort:'Не хватает персонажей',planClosed:'план закрыт',fitsUpTo:'двойной шаблон помещается на планеты до',km:'км',suitableHere:'подходящих планет в системе',ofThem:'из них',decisionTitle:'План упёрся в размер планет',decisionText:'В выбранной домашней системе двойной шаблон не помещается ни на одну планету. Выберите, как поступить.',chooseOther:'Выбрать другую систему',useSingle:'Ставить по одному шаблону',singleNote:'планет и персонажей потребуется вдвое больше',savedPlans:'Сохранённые планы',save:'Сохранить',load:'Открыть',del:'Удалить',compare:'Сравнить',noSaved:'Пока ничего не сохранено',saveFirst:'Сначала постройте план',pickTwo:'Отметьте два плана для сравнения',cmpTitle:'Разница',colonies2:'колоний',chars2:'персонажей',peak2:'пиковая загрузка',onlyLeft:'Только в первом',onlyRight:'Только во втором',same:'Совпало',
   noPlanLong:'План не построен. Откройте вкладку «Настройки», выберите продукты и постройте план.',
   planEmpty:'План пуст.',counts0:'план не построен',searchPh:'поиск…',planNamePh:'название плана',
@@ -957,6 +959,8 @@ const T={
   noReserve:'no headroom',sortLoad:'By load',sortReserve:'By remaining headroom',
   sortPilot:'By character name',sortSystem:'By system',
   cProc:'processing',cMine:'extraction',crewHint:'Characters live on the server and survive a reload.',
+  unlink:'Unlink',unlinkHint:'Erases the token on our side — the planner stops seeing this character until you log in again. Access on the CCP side is revoked separately at eveonline.com/account/third_party_apps.',
+  unlinkFail:'Could not unlink the character',
   planetSlots:'planet slots',wholeRegion:'Whole region',clearAll:'Clear all',nothingChosen:'nothing selected',systems:'systems',selectAll:'Select all',pickProducts:'Select at least one product',pickConst:'Select at least one constellation',export:'Export to Excel',jumpPlan:'↑ Plan',jumpColonies:'↓ My colonies',jumpShopping:'↓ Shopping list',shopping:'Shopping list: command centres',shopTotal:'Command centres in total',exportEmpty:'Build a plan first',exportFail:'Export failed',profitTitle:'What is most profitable to produce',collectedAgo:'snapshot taken',minutesAgo:'min ago',stale:'stale',colProduct:'Product',colColonies:'Planets',colPerColony:'ISK / colony-hour',colPerHour:'ISK / hour',colPrice:'Unit price',noPrice:'no price',noSnapshot:'No price snapshot yet',advDeficit:'Not enough characters for this chain',advSurplus:'More characters than needed',advDeficitLead:'A full cycle needs {need} colonies, the pool has {have} slots. These fit entirely:',advSurplusLead:'Your choice takes {need} of {have} colonies. {spare} free — you could add:',advTake:'Take',advIgnoreDeficit:'Build as is',advIgnoreSurplus:'Put spare on extraction',advIgnoreDeficitHint:'the plan will report a raw material shortage',advIgnoreSurplusHint:'extraction of the same chain, scarcest first',colonies3:'colonies',excess:'Extraction (surplus)',directP2:'Make P2 right on the extraction planets',directP2Hint:'where both raw materials occur — no P1 hauling',mSpread:'Systems per character',logi:'systems used in total',systemsAvg:'systems each',sysOne:'system',sysFew:'systems',sysMany:'systems',logiGood:'colonies are compact',logiPoor:'harvesting will need travel',mColonies:'Colonies in the plan',mChars:'Characters used',mPeak:'Most loaded',mShort:'Characters missing',planClosed:'plan is complete',fitsUpTo:'a double template fits planets up to',km:'km',suitableHere:'suitable planets in this system',ofThem:'of them',decisionTitle:'The plan hit planet size limits',decisionText:'No planet in the chosen home system fits a double template. Pick how to proceed.',chooseOther:'Pick another system',useSingle:'Use single templates',singleNote:'twice as many planets and characters will be needed',savedPlans:'Saved plans',save:'Save',load:'Open',del:'Delete',compare:'Compare',noSaved:'Nothing saved yet',saveFirst:'Build a plan first',pickTwo:'Tick two plans to compare',cmpTitle:'Difference',colonies2:'colonies',chars2:'characters',peak2:'peak load',onlyLeft:'Only in the first',onlyRight:'Only in the second',same:'Unchanged',
   noPlanLong:'No plan yet. Open the Settings tab, pick products and build a plan.',
   planEmpty:'The plan is empty.',counts0:'no plan yet',searchPh:'search…',planNamePh:'plan name',
@@ -2659,6 +2663,13 @@ const DOC={
    приложение не видит ваш пароль. Персонажи, колонии и планы привязаны к
    вашему входу — другие пользователи приложения их не видят. Пока владелец
    не зарегистрировал приложение у CCP, кнопка отвечает, что вход не настроен.</p>
+   <p>Кнопка «Отвязать» рядом с персонажем в списке слева стирает его токен
+   на нашей стороне — планировщик перестаёт видеть персонажа, пока вы не
+   войдёте им заново. Это не отзыв доступа на стороне CCP: у EVE SSO есть
+   эндпоинт отзыва, но он принимает только приложения с секретом на
+   сервере, а у нас его нет и быть не может (PKCE, см. выше) — вызвать
+   его мы не в состоянии. Отозвать доступ самому приложению целиком можно
+   на eveonline.com/account/third_party_apps.</p>
 
    <h3>Мои колонии в игре</h3>
    <p>Отдельный блок на дашборде: что у персонажей действительно построено и
@@ -2880,6 +2891,12 @@ const DOC={
    stored encrypted on the server; the app never sees your password. Characters, colonies
    and plans are tied to your login — other users of the app cannot see them. Until the owner
    registers the app with CCP, the button replies that login is not configured.</p>
+   <p>The "Unlink" button next to a character in the list on the left erases that
+   character's token on our side — the planner stops seeing them until you log in again.
+   This is not revoking access on CCP's side: EVE SSO does have a revoke endpoint, but it
+   only accepts applications with a server-side secret, and we have none and can have none
+   (PKCE, see above) — we simply cannot call it. To revoke the app's access entirely, use
+   eveonline.com/account/third_party_apps.</p>
 
    <h3>My in-game colonies</h3>
    <p>A separate dashboard panel: what your characters have actually built and how long
@@ -3074,6 +3091,22 @@ async function loadCrew(){
   // аватары (charIdOf смотрит в crew) отрисовались бы без портретов.
   // Перерисовать план и факт, раз crew уже есть.
   renderDash(); renderColonies();
+}
+
+/* «Отвязать персонажа» — честная замена настоящему отзыву токена на
+   стороне CCP (её у нас нет и быть не может для публичного PKCE-клиента,
+   см. api/blueprints/auth.py::unlink). Стирает только нашу копию токена
+   и открепляет персонажа от визита — планировщик и «Мои колонии» его
+   больше не увидят, пока не войдёте им заново. Без confirm(): само
+   действие обратимо повторным входом, а не постоянная потеря данных. */
+async function unlinkCharacter(id){
+  const r=await fetch(`${API}/auth/unlink/${id}`, {method:'POST'});
+  if(!r.ok){
+    const d=await r.json().catch(()=>({}));
+    msg(d.message||t('unlinkFail'), true);
+    return;
+  }
+  await loadCrew();
 }
 
 async function startLogin(){
@@ -3277,7 +3310,10 @@ function renderCrew(){
       spread?' · '+spread.systems.join(', '):''}">
       <div class="pilot-lg" style="width:22px;height:22px;font-size:9px">${initials(c.name)}${avatarImg(c.character_id)}</div>
       <span>${c.name}</span>
-      <span class="lv">${used}/${c.planet_slots}${sys}</span></div>`;
+      <span class="lv">${used}/${c.planet_slots}${sys}</span>
+      ${c.esi_linked?`<button class="mini" style="padding:1px 6px;font-size:10px;margin-left:6px"
+        title="${t('unlinkHint')}" onclick="unlinkCharacter(${c.character_id})"
+        data-i18n="unlink">${t('unlink')}</button>`:''}</div>`;
   }).join('')
   + `<div style="color:var(--dim);font-size:11px;margin-top:8px">${t('crewHint')}</div>`;
 }
