@@ -184,7 +184,9 @@ button { font-family:inherit; }
 .tool { width:30px; height:26px; display:grid; place-items:center; cursor:pointer;
         background:none; border:1px solid transparent; color:var(--dim); border-radius:3px; }
 .tool:hover { color:var(--read); background:var(--hover); }
-.tool.on { color:var(--bright); border-color:var(--seam); background:var(--hover); }
+/* Активный вид дашборда — золотой акцент (как в макете, vbtn()),
+   а не нейтральный bright+seam из-под старой темы. */
+.tool.on { color:var(--amber); border-color:var(--amber); background:var(--hover); }
 .tool svg { width:15px; height:15px; }
 .counts { margin-left:auto; color:var(--dim); font-size:12px; }
 .counts b { color:var(--read); font-weight:500; }
@@ -632,7 +634,9 @@ details.msgs[open] > summary::before { content:'▾ '; }
 .lang { display:inline-flex; border:1px solid var(--seam); }
 .lang button { background:none; border:none; color:var(--dim); padding:5px 9px; cursor:pointer;
                font-size:12px; font-family:'IBM Plex Mono',monospace; }
-.lang button.on { background:var(--seam); color:var(--bright); }
+/* Активный язык — золотая заливка (как в макете, lng()), а не
+   нейтральный seam+bright из-под старой темы. */
+.lang button.on { background:var(--amber); color:var(--void); }
 .icon-btn { background:none; border:1px solid var(--seam); color:var(--dim); width:30px; height:28px;
             display:inline-grid; place-items:center; cursor:pointer; }
 .icon-btn:hover { color:var(--amber); border-color:var(--amber); }
@@ -819,7 +823,7 @@ details.msgs[open] > summary::before { content:'▾ '; }
 body.light .icon-btn .ic-sun { display:none; }
 body.light .icon-btn .ic-moon { display:block; }
 .icon-btn { color:var(--amber); border-color:var(--seam); }
-.icon-btn:hover { background:var(--accent-bg); }
+.icon-btn:hover { background:var(--accent-bg); border-color:var(--amber); }
 
 /* ── Плашки тиров ─────────────────────────────────────────────
    Цвет кодирует передел: холодный у сырья, тёплый у готового
