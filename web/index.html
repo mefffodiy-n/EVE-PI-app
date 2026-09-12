@@ -639,6 +639,18 @@ details.msgs[open] > summary::before { content:'▾ '; }
 .chosen b:hover { color:var(--alarm); }
 .chosen .none { color:var(--dim); border:none; background:none; padding:2px 0; }
 
+/* Шаг 5 (roadmap.md): декоративный HUD-уголок из макета Claude Design —
+   тонкая золотая скоба сверху-слева и снизу-справа поверх рамки
+   карточки. Только оформление (::before/::after), разметка не меняется
+   — класс вешается на уже существующие карточки со своей рамкой/фоном:
+   .shop-item, .unit .panel, .modal-box. */
+.hud-corner { position:relative; }
+.hud-corner::before, .hud-corner::after {
+  content:''; position:absolute; width:9px; height:9px; pointer-events:none;
+}
+.hud-corner::before { left:-1px; top:-1px; border-left:1px solid var(--amber); border-top:1px solid var(--amber); }
+.hud-corner::after { right:-1px; bottom:-1px; border-right:1px solid var(--amber); border-bottom:1px solid var(--amber); }
+
 /* ── Список закупки командных центров ────────────────────────── */
 .shop { border-top:1px solid var(--seam); padding:14px; }
 .shop h3 { font-size:12px; letter-spacing:.18em; text-transform:uppercase; color:var(--amber);
@@ -830,7 +842,7 @@ body.light .rolebadge.excess { background:rgba(154,107,18,.12); }
 </div>
 
 <div class="modal" id="modal" onclick="if(event.target===this)closeModal()">
-  <div class="modal-box">
+  <div class="modal-box hud-corner">
     <div class="modal-head">
       <h2 id="modalTitle"></h2>
       <button class="x" onclick="closeModal()">×</button>
@@ -2248,7 +2260,7 @@ function renderShopping(){
     <h3>${t('shopping')}</h3>
     <div class="shop-grid">${Object.entries(byType).sort().map(([type,n])=>{
       const id=ids[`${type} Command Center`];
-      return `<div class="shop-item">
+      return `<div class="shop-item hud-corner">
         ${id?`<img src="${ICON(id)}" alt="">`:'<span style="width:30px"></span>'}
         <span class="n">${type}</span><span class="q">${n}</span></div>`;
     }).join('')}</div>
@@ -2495,7 +2507,7 @@ function structureUnitsHTML(structuresDetail, planetType, ctx){
       :isFactoryKind&&ctx.resOut?{product:ctx.resOut,size:52}:{size:52};
     return `<div class="unit">
       ${structOrb(kind,1,planetType,orbOpts)}
-      <div class="panel">
+      <div class="panel hud-corner">
         <div class="title">${sname(kind)} <span class="code">${code}</span></div>
         ${structureUnitFields(kind,unitCtx)}
       </div>
@@ -2520,7 +2532,7 @@ function pinUnitsHTML(pins, planetType, planetLabel, load){
     if(pin.kind==='command_center' && load){ opts.cpu=load.cpu; opts.pg=load.pg; }
     return `<div class="unit">
       ${structOrb(pin.kind,1,planetType,opts)}
-      <div class="panel">
+      <div class="panel hud-corner">
         <div class="title">${sname(pin.kind)} <span class="code">${code}</span></div>
         ${structureUnitFields(pin.kind,{hasLoad:!!load, cpu:load&&load.cpu, pg:load&&load.pg,
           cpuUsed:load&&load.cpuUsed, cpuCap:load&&load.cpuCap, pgUsed:load&&load.pgUsed, pgCap:load&&load.pgCap, pin})}
