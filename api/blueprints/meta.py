@@ -303,6 +303,10 @@ def colonies():
                     "pg_capacity": row.pg_capacity,
                     "nearest_expiry": row.nearest_expiry.isoformat() if row.nearest_expiry else None,
                     "synced_at": row.synced_at.isoformat() if row.synced_at else None,
+                    # Когда ИГРА (не мы) в последний раз пересчитала колонию —
+                    # last_cycle_start фабрик достоверен только на этот момент,
+                    # не на текущее время (см. Colony.game_last_update).
+                    "game_last_update": row.game_last_update.isoformat() if row.game_last_update else None,
                 })
     except OperationalError:
         payload = []
