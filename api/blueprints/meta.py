@@ -170,6 +170,16 @@ def characters():
     знает (планировщику всё равно, откуда персонаж), поэтому читается
     отдельным запросом здесь, в API-слое, а не протаскивается через
     domain.
+
+    needs_reconnect — у esi-персонажа нет строки в `credentials`: либо
+    ни разу не проходил OAuth (не должно случаться для source="esi",
+    но на всякий случай), либо `refresh_tokens.py` удалил её сам после
+    отказа ESI (`invalid_grant` — пользователь отозвал доступ EVE или
+    сменил пароль). sync_colony_status.py в этом случае молча
+    пропускает персонажа (`get_access_token()` вернёт None, `sync_one()`
+    — "skipped", не ошибка джоба) — без этого поля колонии такого
+    персонажа тихо переставали бы обновляться, а чип «Сборщики»
+    оставался бы зелёным.
     """
     from sqlalchemy import select
 
@@ -177,13 +187,17 @@ def characters():
 
     from api.session import current_account_id
     from infra.db import session_scope
-    from infra.models import Character
+    from infra.models import Character, Credential
 
     crew = load_characters(current_account_id())
+    ids = [c.character_id for c in crew] or [-1]
     with session_scope() as session:
         sources = dict(session.execute(
             select(Character.character_id, Character.source)
-            .where(Character.character_id.in_([c.character_id for c in crew] or [-1]))
+            .where(Character.character_id.in_(ids))
+        ).all())
+        credentialed = set(session.scalars(
+            select(Credential.character_id).where(Credential.character_id.in_(ids))
         ).all())
 
     return json_ok(
@@ -195,6 +209,8 @@ def characters():
                 "ic": c.interplanetary_consolidation_level,
                 "planet_slots": c.planet_slots,
                 "esi_linked": sources.get(c.character_id) == "esi",
+                "needs_reconnect": sources.get(c.character_id) == "esi"
+                    and c.character_id not in credentialed,
             }
             for c in crew
         ],

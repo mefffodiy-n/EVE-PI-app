@@ -526,6 +526,12 @@ details.msgs[open] > summary::before { content:'▾ '; }
 .mini { background:none; border:1px solid var(--seam); color:var(--dim); padding:3px 8px;
         cursor:pointer; font-size:11px; white-space:nowrap; }
 .mini:hover { color:var(--flux); border-color:var(--flux); }
+/* Персонажу нужно перезайти через EVE SSO — токен протух/отозван,
+   колонии и скиллы больше не обновляются (см. needs_reconnect,
+   api/blueprints/meta.py). Тревожный цвет — не просто ещё одно
+   действие в списке, а сигнал, что данные по этому персонажу стоят. */
+.mini.reconnect { border-color:var(--alarm); color:var(--alarm); }
+.mini.reconnect:hover { background:var(--alarm); color:var(--void); }
 .picker-list { max-height:220px; overflow-y:auto; }
 .picker-list label { display:flex; align-items:center; gap:8px; padding:4px 8px;
                      cursor:pointer; font-size:12px; }
@@ -909,6 +915,7 @@ const T={
   sortPilot:'По имени персонажа',sortSystem:'По системе',
   cProc:'переработка',cMine:'добыча',crewHint:'Персонажи хранятся на сервере и не пропадают при перезаходе.',
   unlink:'Отвязать',unlinkHint:'Стереть токен на нашей стороне — планировщик перестанет видеть персонажа до повторного входа. Доступ на стороне CCP отдельно отзывается на eveonline.com/account/third_party_apps.',
+  reconnect:'Перезайти',reconnectHint:'Доступ ESI для этого персонажа истёк или отозван (сменён пароль, отозвано приложение) — колонии и скиллы больше не обновляются. Перезайдите через EVE SSO этим же персонажем.',
   unlinkFail:'Не удалось отвязать персонажа',
   chipJobs:'сборщики',jobsOk:'ок',jobsStale:'застряли',jobsFailing:'падают',
   jobsNever:'ни разу не запускался',jobsFailingCount:'падает {n}-й раз подряд',
@@ -967,6 +974,7 @@ const T={
   sortPilot:'By character name',sortSystem:'By system',
   cProc:'processing',cMine:'extraction',crewHint:'Characters live on the server and survive a reload.',
   unlink:'Unlink',unlinkHint:'Erases the token on our side — the planner stops seeing this character until you log in again. Access on the CCP side is revoked separately at eveonline.com/account/third_party_apps.',
+  reconnect:'Reconnect',reconnectHint:'ESI access for this character has expired or been revoked (password changed, app access revoked) — colonies and skills are no longer updating. Log in again through EVE SSO with this same character.',
   unlinkFail:'Could not unlink the character',
   chipJobs:'jobs',jobsOk:'ok',jobsStale:'stuck',jobsFailing:'failing',
   jobsNever:'never ran',jobsFailingCount:'failing {n} time(s) in a row',
@@ -2696,6 +2704,11 @@ const DOC={
    видно по ответу. Без секрета — только наша сторона, токен формально
    ещё жив до естественного истечения. Отозвать доступ самому приложению
    целиком в любом случае можно на eveonline.com/account/third_party_apps.</p>
+   <p>Если у персонажа истёк или отозван доступ (например, сменили пароль
+   EVE или отозвали приложение на eveonline.com), рядом с ним появится
+   красная кнопка «Перезайти»: планировщик больше не может обновлять его
+   скиллы и колонии, пока вы не войдёте этим же персонажем заново через
+   EVE SSO.</p>
 
    <h3>Мои колонии в игре</h3>
    <p>Отдельный блок на дашборде: что у персонажей действительно построено и
@@ -2936,6 +2949,10 @@ const DOC={
    apps): then unlinking also revokes access with CCP, and the response says so. Without a
    secret it's our side only, and the token stays formally valid until it naturally expires.
    You can always revoke the whole app's access at eveonline.com/account/third_party_apps.</p>
+   <p>If a character's access has expired or been revoked (say, you changed your EVE
+   password or revoked the app on eveonline.com), a red "Reconnect" button appears next to
+   them: the planner can no longer refresh their skills and colonies until you log in again
+   with that same character through EVE SSO.</p>
 
    <h3>My in-game colonies</h3>
    <p>A separate dashboard panel: what your characters have actually built and how long
@@ -3387,6 +3404,9 @@ function renderCrew(){
       <div class="pilot-lg" style="width:22px;height:22px;font-size:9px">${initials(c.name)}${avatarImg(c.character_id)}</div>
       <span>${c.name}</span>
       <span class="lv">${used}/${c.planet_slots}${sys}</span>
+      ${c.needs_reconnect?`<button class="mini reconnect" style="padding:1px 6px;font-size:10px;margin-left:6px"
+        title="${t('reconnectHint')}" onclick="startLogin()"
+        data-i18n="reconnect">${t('reconnect')}</button>`:''}
       ${c.esi_linked?`<button class="mini" style="padding:1px 6px;font-size:10px;margin-left:6px"
         title="${t('unlinkHint')}" onclick="unlinkCharacter(${c.character_id})"
         data-i18n="unlink">${t('unlink')}</button>`:''}</div>`;
