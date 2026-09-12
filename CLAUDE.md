@@ -118,12 +118,26 @@ Polyaramids) и удалён несуществующий `Positron Cord`.
   `EsiClient` хранит `Expires` вместе с `ETag` и пропускает запрос вообще,
   пока кэш не истёк (`_cache_fresh()`), а не только ставит `If-None-Match`
   и ждёт честный 304. Подробности в `roadmap.md`.
-- **SSO (Фаза 3):** у приложения нет безопасного места для секрета →
-  OAuth2 Authorization Code + **PKCE**, без `client_secret` в коде.
-  `client_id`/`client_secret` — в `.env`, не в git. Access-token (JWT)
-  проверять по JWKS: issuer `https://login.eveonline.com/`, audience
-  содержит `client_id` и `"EVE Online"`, срок не истёк. Refresh-токены
-  шифровать at rest. Запрашивать только необходимые scope.
+- **SSO (Фаза 3):** вход — OAuth2 Authorization Code + **PKCE**
+  (`login-url`/`callback`), без опоры на `client_secret` в самом flow.
+  Приложение зарегистрировано как confidential (владелец задал
+  `PI_ESI_CLIENT_SECRET` в `.env` VPS, не в git) — секрет используется
+  ТОЛЬКО там, где документация прямо требует его для конкретного
+  действия (отзыв, ниже; опционально при обмене кода, если задан,
+  `esi_sso.py::_token_request`), сам вход остаётся PKCE без изменений.
+  Access-token (JWT) проверять по JWKS: issuer
+  `https://login.eveonline.com/`, audience содержит `client_id` и
+  `"EVE Online"`, срок не истёк. Refresh-токены шифровать at rest.
+  Запрашивать только необходимые scope.
+  **Отзыв токена:** `POST /v2/oauth/revoke` (адрес — из
+  `.well-known/oauth-authorization-server`) принимает только
+  `client_secret_basic`/`_post`/`_jwt` — без секрета невозможен ни при
+  каких условиях, с секретом реализован (`scripts/esi_sso.py::revoke()`,
+  `client_secret_basic`). Кнопка «Отвязать» (`api/blueprints/auth.py::
+  unlink`) всегда стирает свою копию токена (гарантировано), и
+  дополнительно пытается настоящий отзыв на CCP, если секрет задан —
+  сбой обращения к CCP не мешает локальному удалению. Ответ несёт
+  `revoked: bool`, UI честно показывает, что произошло на самом деле.
 
 ---
 

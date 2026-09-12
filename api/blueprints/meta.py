@@ -99,12 +99,30 @@ def characters():
     load_characters() без account_id в проде честно отдаёт пусто, а не
     всех подряд (правило 1) — так до 11.09.2026 разные пользователи
     видели персонажей друг друга.
+
+    esi_linked — источник персонажа (dev-заглушка/настоящий вход через
+    SSO), нужен фронту только для кнопки «Отвязать персонажа»
+    (/api/auth/unlink) — заглушку отвязывать нечего, она не проходила
+    через SSO. domain/planner.py::CharacterSlot источник намеренно не
+    знает (планировщику всё равно, откуда персонаж), поэтому читается
+    отдельным запросом здесь, в API-слое, а не протаскивается через
+    domain.
     """
+    from sqlalchemy import select
+
     from scripts.seed_dev_characters import load_characters
 
     from api.session import current_account_id
+    from infra.db import session_scope
+    from infra.models import Character
 
     crew = load_characters(current_account_id())
+    with session_scope() as session:
+        sources = dict(session.execute(
+            select(Character.character_id, Character.source)
+            .where(Character.character_id.in_([c.character_id for c in crew] or [-1]))
+        ).all())
+
     return json_ok(
         characters=[
             {
@@ -113,6 +131,7 @@ def characters():
                 "ccu": c.command_center_upgrades_level,
                 "ic": c.interplanetary_consolidation_level,
                 "planet_slots": c.planet_slots,
+                "esi_linked": sources.get(c.character_id) == "esi",
             }
             for c in crew
         ],
