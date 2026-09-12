@@ -543,6 +543,11 @@ def sync_one(client, session, character) -> str:
                 planet_type=str(entry.get("planet_type", "")),
                 upgrade_level=ccu_level,
                 num_pins=int(entry.get("num_pins", 0)),
+                # Когда ИГРА реально в последний раз пересчитала эту
+                # колонию (не когда мы её опросили) — см. Colony.game_last_update.
+                # Из /characters/{id}/planets/ (список), не из detail —
+                # доступно независимо от того, закэширован ли detail-запрос.
+                game_last_update=_parse_iso(entry.get("last_update")),
             )
             if not detail.from_cache:
                 fields["nearest_expiry"] = expiry
