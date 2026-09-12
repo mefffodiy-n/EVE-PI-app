@@ -436,6 +436,11 @@ details.msgs[open] > summary::before { content:'▾ '; }
   .modal-body .rows, .modal-body dl { grid-template-columns:1fr; }
   .modal-body .rows > div:nth-child(odd) { padding-bottom:0; border-bottom:none; }
 }
+/* Планшет в альбомной ориентации: уходит последний чип-индикатор
+   (ESI) — Saira Condensed с прописными буквами и трекингом (Фаза 8)
+   занимает больше места, чем прежний шрифт вкладок/кнопок, порог
+   пришлось сдвинуть. Кнопки по-прежнему не прячутся никогда. */
+@media (max-width:980px) { #chipEsi { display:none; } }
 
 /* Планшет: рейка настроек становится верхней панелью, таблица
    прокручивается горизонтально внутри своей области. */
