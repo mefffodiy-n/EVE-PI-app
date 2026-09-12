@@ -345,10 +345,12 @@ button { font-family:inherit; }
 .colony-page { display:none; }
 .colony-page.on { display:block; }
 .cp-head { display:flex; align-items:center; gap:12px; padding:14px 16px; }
-.cp-head .back { margin-left:auto; background:none; border:1px solid var(--seam);
-                 color:var(--flux); padding:6px 16px; cursor:pointer; font-size:11px;
+/* Шаг 7 (roadmap.md): «Назад» золотым, как «Войти через EVE SSO»
+   из Шага 4 — рамка и текст амброй, по ховеру заливка сплошным золотом. */
+.cp-head .back { margin-left:auto; background:none; border:1px solid var(--amber);
+                 color:var(--amber); padding:6px 16px; cursor:pointer; font-size:11px;
                  font-family:'Saira Condensed',sans-serif; font-weight:600; letter-spacing:.12em; text-transform:uppercase; }
-.cp-head .back:hover { background:rgba(79,156,214,.1); }
+.cp-head .back:hover { background:var(--amber); color:var(--void); }
 
 /* Круг структуры стоит СЛЕВА, вне панели строки — как в игре. */
 .unit { display:flex; gap:14px; align-items:flex-start; padding:0 16px 8px; }
@@ -364,7 +366,10 @@ button { font-family:inherit; }
 .inputs { display:flex; gap:4px; margin-top:3px; }
 .inputs span { width:26px; height:26px; background:var(--inset); border:1px solid var(--seam);
                display:grid; place-items:center; }
-.inputs span.have { background:rgba(79,156,214,.14); border-color:var(--flux); }
+/* Фон был захардкожен под старый (до Фазы 8) синий flux и разошёлся
+   с текущим значением переменной в тёмной теме — тот же баг, что
+   у .sysbadge (Шаг 6), тот же t-p1-bg как исправление. */
+.inputs span.have { background:var(--t-p1-bg); border-color:var(--flux); }
 .inputs img { width:20px; height:20px; object-fit:contain; }
 .meter { height:4px; background:var(--inset); margin:5px 0 3px; max-width:280px; }
 .meter i { display:block; height:100%; }
