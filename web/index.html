@@ -312,13 +312,16 @@ button { font-family:inherit; }
             font-family:'IBM Plex Mono',monospace; font-size:11px; }
 .sec { font-family:'IBM Plex Mono',monospace; font-size:11px; padding:1px 5px; border-radius:3px; }
 .colony-head .tail { margin-left:auto; text-align:right; }
-.tail .lbl { color:var(--dim); font-size:11px; }
+/* Шаг 6 (roadmap.md): подпись хвостовой метки — Saira Condensed
+   заглавными, как заголовки разделов из Шага 3, вместо обычного текста. */
+.tail .lbl { color:var(--dim); font-size:10px; font-family:'Saira Condensed',sans-serif;
+             letter-spacing:.12em; text-transform:uppercase; }
 .tail .val { font-family:'IBM Plex Mono',monospace; color:var(--read); }
 .tail .val.hot { color:var(--alarm); }
-.details-btn { margin-left:12px; background:none; border:1px solid var(--seam); color:var(--flux);
+.details-btn { margin-left:12px; background:none; border:1px solid var(--seam); color:var(--amber);
                padding:5px 12px; cursor:pointer; font-size:11px; border-radius:2px;
                font-family:'Saira Condensed',sans-serif; font-weight:600; letter-spacing:.1em; text-transform:uppercase; }
-.details-btn:hover { background:rgba(79,156,214,.1); }
+.details-btn:hover { background:var(--accent-bg); border-color:var(--amber); }
 .strip { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; padding-left:2px; }
 
 /* ═══ Вид «Список»: строка на персонажа ═════════════════════════ */
@@ -773,9 +776,11 @@ thead .group th small { color:var(--dim); }
    и полоса слева, число янтарём. */
 .profit tr.best td:last-child { color:var(--amber); font-weight:600; }
 
-/* Названия систем моноширинным: они читаются как коды, а не слова. */
-.sysbadge { color:var(--flux); background:rgba(79,156,214,.10); }
-body.light .sysbadge { background:rgba(29,111,168,.10); }
+/* Названия систем моноширинным: они читаются как коды, а не слова.
+   Фон был захардкожен под старый (до Фазы 8) синий flux и не совпадал
+   с текущим значением переменной в тёмной теме (в светлой совпал
+   случайно) — используем t-p1-bg, как и в макете Claude Design. */
+.sysbadge { color:var(--flux); background:var(--t-p1-bg); }
 
 /* ── Подсказка по вместимости пула ────────────────────────────── */
 .advice { border:1px solid var(--seam); padding:12px 14px; margin:0 14px 10px;
