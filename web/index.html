@@ -708,10 +708,13 @@ details.msgs[open] > summary::before { content:'▾ '; }
   text-transform:uppercase; color:var(--dim); background:var(--hull);
   border-top:1px solid var(--seam); }
 .chosen { display:flex; flex-wrap:wrap; gap:4px; padding:6px 8px; border-top:1px solid var(--seam); }
-.chosen span { background:var(--hull); border:1px solid var(--seam); padding:2px 7px;
-               font-size:11px; display:inline-flex; align-items:center; gap:5px; }
-.chosen b { cursor:pointer; color:var(--dim); font-weight:400; }
-.chosen b:hover { color:var(--alarm); }
+/* Выбранные элементы — золотые, как в макете (background:accent-bg,
+   border/color:gold), а не нейтральная серая рамка: должны читаться
+   как «активный выбор», а не как ещё один служебный ярлык. */
+.chosen span { background:var(--accent-bg); border:1px solid var(--amber); color:var(--amber);
+               padding:2px 7px; font-size:11px; display:inline-flex; align-items:center; gap:5px; }
+.chosen b { cursor:pointer; color:inherit; opacity:.7; font-weight:400; }
+.chosen b:hover { color:var(--alarm); opacity:1; }
 .chosen .none { color:var(--dim); border:none; background:none; padding:2px 0; }
 /* Подсказка про персонажей — как «ничего не выбрано» у .chosen: отдельным
    блоком под списком, а не последней строкой внутри него (иначе она
