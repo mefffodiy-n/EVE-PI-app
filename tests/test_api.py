@@ -49,6 +49,18 @@ class TestReference:
         assert set(body) >= {"bases", "products", "product_ids"}
         assert body["bases"] == ["ALPHA", "BETA"]
 
+    def test_initial_data_includes_schematic_quantities(self, client):
+        """
+        simulateColonyFactories() (web/index.html) считает по этим
+        количествам, сколько фабрика потребляет/производит за цикл —
+        keyed по type_id ПРОДУКТА (см. scripts/extract_schematics.py).
+        """
+        schematics = client.get("/api/initial-data").get_json()["schematics"]
+        plasmoids = schematics.get("2389")
+        assert plasmoids is not None
+        assert plasmoids["output_qty"] == 20
+        assert plasmoids["inputs"] == {"2308": 3000}
+
     def test_initial_data_only_lists_processing_tiers(self, client):
         """В выдаче только P2-P4: P1 и сырьё пользователь не выбирает как цель."""
         products = client.get("/api/initial-data").get_json()["products"]
