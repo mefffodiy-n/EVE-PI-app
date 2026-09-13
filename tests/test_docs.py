@@ -125,7 +125,6 @@ class TestStructure:
         """
         about = _docs_block()
         assert 'id="aboutVersion"' in about
-        assert 'id="aboutPhase"' in about
 
         text = _frontend_text()
         assert "meta.version" in text, "версия не берётся из ответа сервера"
@@ -159,7 +158,18 @@ class TestHonesty:
         assert "верхняя оценка" in _section("help", "ru").lower()
         assert "upper bound" in _section("help", "en").lower()
 
-    def test_about_mentions_ccp_trademark(self):
-        """Требование к сторонним приложениям EVE."""
+    def test_about_mentions_trademark_owner(self):
+        """Требование к сторонним приложениям EVE — назвать держателя прав."""
         for lang in ("ru", "en"):
-            assert "CCP hf" in _section("about", lang)
+            assert "Fenris Creations" in _section("about", lang)
+
+    def test_about_mentions_license_and_source(self):
+        """
+        Проект открытый (MIT) — «О проекте» должно называть лицензию,
+        автора и давать ссылку на исходный код, а не только версию.
+        """
+        for lang in ("ru", "en"):
+            text = _section("about", lang)
+            assert "MIT" in text
+            assert "github.com/mefffodiy-n" in text
+            assert "mefffodiy-n" in text

@@ -3025,87 +3025,35 @@ const DOC={
    EVE SSO.</p>
 
    <h3>Мои колонии в игре</h3>
-   <p>Отдельный блок на дашборде: что у персонажей действительно построено и
-   сколько осталось до конца программы экстрактора на каждой планете. Это не
-   расчётный план, а снимок из игры — планета с программой на исходе (меньше
-   двух часов) подсвечивается, как и планета с забитым под завязку причалом
-   (кольцо заполненности мигает красным вместо ровного синего — складывать
-   добычу больше некуда, даже если таймер программы ещё идёт). Сводная строка
-   над блоком считает оба случая в «требуют внимания», а иконка ресурса на
-   такой колонии в сетке и списке уступает место красному знаку запрета —
-   при наведении всплывает подсказка с причиной, добываемым/производимым
-   ресурсом и заполненностью причала. В виде «Список по персонажам» после
-   колоний персонажа — пунктирные кружки со «+»: свободные слоты планет
-   (Interplanetary Consolidation + 1 минус реально построенные колонии, то
-   же допущение, что в расчёте плана), только там, где эти данные о
-   персонаже вообще известны. Карточка колонии выглядит так же, как у
-   расчётного плана: та же полоса иконок структур, только состав берётся не
-   из шаблона застройки, а из настоящих пинов на планете — колония в игре не
-   обязана совпадать ни с одним из игровых шаблонов. Портрет персонажа —
-   настоящий, с серверов CCP; пока он не загрузился или персонаж
-   тестовый — показываются инициалы. У каждой карточки есть кнопка
-   «Детали»: если колония совпала со строкой плана по персонажу, системе
-   и номеру планеты — открывается полная панель плана с настоящей
-   загрузкой CPU/Power; если нет — своя панель с тем же составом структур,
-   и загрузка CPU/Power там тоже настоящая, если планета есть в нашем файле
-   планет региона (ESI её радиус не отдаёт, а у нас, в отличие от ESI, он
-   есть — состав структур, число линков и голов экстрактора берутся из
-   той же самой ESI, честный расчёт, а не оценка). Планета вне
-   загруженного региона — как и раньше, «нет данных», а не выдуманный
-   процент. Обратный отсчёт браузер считает сам; данные обновляются в фоне.</p>
-   <p>В панели каждая структура показывает настоящее состояние: причал,
-   склад и собственное небольшое хранилище командного центра — что
-   реально лежит внутри (или честное «пусто») и сколько это в процентах
-   от вместимости (10 000 м³ у причала, 12 000 м³ у склада, 500 м³ у
-   командного центра — объём каждого предмета берёт сама ESI, а саму
-   ёмкость 500 м³ ни она, ни какой-либо другой источник не публикует, это
-   значение подтверждено скриншотом игрового клиента). Загрузка CPU/Power
-   командного центра показана и в процентах, и в абсолютных числах —
-   «7514/21315 tf», «16124/17000 MW», как в игре. Экстрактор — сколько
-   голов и
-   что именно добывает, базовая/продвинутая/высокотехнологичная фабрика —
-   что производит и идёт ли сейчас цикл («В производстве» с отсчётом до
-   конца). Длительность цикла — у самой ESI (справочник схем
-   производства). ESI обновляет состояние фабрики только когда колонию
-   открывают в игровом клиенте, а не в реальном времени; в игре фабрика
-   при этом продолжает крутить циклы сама, пока есть сырьё. Поэтому,
-   если с последнего подтверждённого цикла прошло больше его длительности,
-   прогресс досчитывается вперёд по модулю от последнего известного
-   старта (так же поступают сторонние PI-инструменты — RIFT, Planets in
-   Space) и подписывается «проекция: колонию давно не открывали в игре» —
-   это честная оценка от настоящих данных, а не гарантированный факт.
-   «Простаивает» пишется только когда фабрика точно ни разу не
-   запускалась — единственное состояние, для которого проецировать
-   нечего. Компактная полоса иконок под карточкой колонии показывает то
-   же самое по кругу: белое кольцо фабрики крутится дугой и во время
-   подтверждённого, и во время спроецированного цикла, и мигает целиком
-   только у той, что не запускалась ни разу; кольцо командного центра —
-   та же настоящая загрузка CPU/Power. В сетке
-   и списке «Моих колоний» — иконка добываемого сырья или конечного
-   продукта переработки поверх текстуры планеты, голубое кольцо —
-   заполненность причала, плашка — время до конца программы экстрактора
-   (часы или минуты, как в игре). У фабрики рядом с «Производит» — «Вход»:
-   иконки сырья, которое она потребляет (справочник рецептов, ESI это не
-   отдаёт, только что фабрика производит).</p>
-   <p>Экстрактор в панели показывает не только время до конца программы, но
-   и скорость добычи: «Сейчас» — расчёт по текущим данным ESI о количестве
-   за цикл и длительности цикла, «В среднем» — по накопленной истории (снимок при каждой
-   синхронизации; истории может не быть — «копим историю», а не выдуманное
-   число за несуществующий период). Колония с добычей ниже 48 000 ед./ч
-   помечается как дефицитная — фиксированный порог по решению пользователя
-   (не история самой колонии): при такой скорости ресурса всё равно не
-   хватит на всю цепочку, значит его придётся дублировать дополнительной
-   добычей. Дефицит — своя категория, отдельная от «требуют внимания»
-   (там остаются только истекающий таймер и забитый причал: колония
-   там уже не работает как надо прямо сейчас). Дефицитная колония
-   продолжает добывать, просто ниже порога — на круге у неё маленькая
-   янтарная точка, иконка ресурса не гасится, а в сводной строке свой
-   счётчик «M дефицит добычи». Если дефицитный ресурс прямо сейчас
-   потребляет фабрика другой вашей настоящей колонии — предупреждение
-   называет продукт этой цепочки и предлагает добавить ещё одну
-   добывающую колонию; сверяется только с уже действующими колониями
-   (теми, что были при входе, или построенными по плану и попавшими в
-   игру), а не с расчётным планом на экране.</p>
+   <p>Отдельный блок на дашборде: что у персонажей реально построено — снимок
+   из игры, а не расчётный план. Сводная строка над блоком считает четыре
+   категории: сколько колоний простаивает, сколько требуют внимания (программа
+   экстрактора кончается меньше чем через два часа или причал забит под
+   завязку), сколько в дефиците добычи, и общее число планет.</p>
+   <p>Карточка колонии выглядит как у расчётного плана — та же полоса иконок
+   структур, только состав берётся из настоящих пинов на планете, а не из
+   шаблона застройки. Кнопка «Детали» открывает полную панель: причал, склад
+   и хранилище командного центра показывают, что реально лежит внутри и
+   сколько это в процентах от вместимости; загрузка CPU/Power — в процентах
+   и в абсолютных числах, как в игре; экстрактор — сколько голов, что
+   добывает и с какой скоростью («сейчас» — по текущим данным ESI с поправкой
+   на естественное затухание программы добычи, «в среднем» — по накопленной
+   истории синхронизаций).</p>
+   <p>Состояние фабрики ESI обновляет только при заходе в колонию в игровом
+   клиенте, а не в реальном времени — поэтому программа честно проецирует
+   его вперёд по маршрутам между пинами и объёму сырья, накопленному у
+   каждой фабрики (тот же подход, что у стороннего инструмента RIFT):
+   «в производстве» или «простаивает» с настоящей длительностью. Без
+   маршрутов, или для колонии сразу после пересинхронизации — честное
+   «неизвестно», а не выдуманное состояние.</p>
+   <p>Колония, добывающая меньше 48 000 ед./ч, помечена как дефицитная —
+   фиксированный порог: на такой скорости ресурса не хватит на всю цепочку,
+   и его придётся дублировать дополнительной добычей. Дефицит — отдельная
+   категория: колония продолжает работать, просто ниже порога, в отличие от
+   «требует внимания», где колония уже не работает как надо прямо сейчас.
+   Если у персонажа истёк или отозван доступ ESI (сменили пароль, отозвали
+   приложение), рядом с ним появляется красная кнопка «Перезайти» — колонии
+   и скиллы перестают обновляться до повторного входа тем же персонажем.</p>
 
    <h3>Чего программа пока не знает</h3>
    <p>Загрузка CPU/Power командного центра колонии за пределами загруженного
@@ -3269,76 +3217,32 @@ const DOC={
    with that same character through EVE SSO.</p>
 
    <h3>My in-game colonies</h3>
-   <p>A separate dashboard panel: what your characters have actually built and how long
-   until the extraction program ends on each planet. This is not the computed plan but a
-   snapshot from the game — a planet whose program is nearly done (under two hours) is
-   highlighted, and so is a planet whose launchpad is full to the brim (the fill ring
-   blinks red instead of a steady blue — nowhere left to store more, even if the program
-   timer is still running). The summary line above the panel counts both cases as
-   "need attention", and in the grid and list views the resource icon on such a colony
-   gives way to a red no-entry sign — hovering shows why, plus what's being
-   extracted/produced and the launchpad fill level. In "List by character" view, after a
-   character's colonies come dashed circles with a "+": free planet slots (Interplanetary
-   Consolidation + 1 minus colonies actually built, the same assumption the plan itself
-   uses), shown only where that character's data is actually known. A colony card looks
-   the same as a plan colony — the same strip of structure
-   icons — except the composition comes from the real pins on the planet, not a building
-   template: an in-game colony need not match any of the game templates. The portrait is
-   real, served from CCP's own servers; until it loads, or for a test character, initials
-   show instead. Every card has a Details button: if the colony matches a plan row by
-   character, system and planet number, it opens the full plan panel with real CPU/Power
-   load; otherwise it opens its own panel with the same structures, and the CPU/Power load
-   there is real too, as long as the planet is in our regional planet file — ESI doesn't
-   expose a planet's radius, but unlike ESI, that file has it, and the structure list,
-   link count and extractor head count all come from ESI itself, so it's a real
-   calculation, not a guess. A planet outside the loaded region still honestly says
-   "no data" instead of an invented percentage. The browser runs the
-   countdown itself; the data refreshes in the background.</p>
-   <p>Inside the panel every structure shows its real state: launchpad, storage, and the
-   command centre's own small hold all show what's actually stored (or an honest "empty")
-   and how full that is as a percentage of capacity (10,000 m³ for a launchpad, 12,000 m³
-   for storage, 500 m³ for the command centre — per-item volume comes from ESI itself,
-   while the 500 m³ capacity figure isn't published by ESI or any other source and comes
-   from a screenshot of the live game client instead). Command centre CPU/Power load is
-   shown both as a percentage and as absolute numbers — "7514/21315 tf", "16124/17000 MW",
-   same as in the game. The extractor shows how many heads it has and exactly what it's
-   pulling, and basic/advanced/high-tech facilities show what they produce and whether a
-   cycle is running ("In production" with a countdown). The cycle length itself comes
-   straight from ESI's own production-schematic catalogue. ESI only updates a factory's
-   state when the colony is opened in the game client, not in real time — but in the game
-   the factory keeps auto-cycling on its own as long as it has input. So once more time
-   has passed than one cycle length since the last confirmed start, the progress shown is
-   projected forward by taking the elapsed time modulo the cycle length from that last
-   known start (the same approach third-party PI tools use — RIFT, Planets in Space) and
-   labelled "projected: colony not opened in-game recently" — an honest estimate from real
-   data, not a guaranteed fact. "Idle" is only shown when a factory has genuinely never
-   been started — the one state with nothing to project from. The compact strip under a
-   colony card shows the same thing as circles: a factory's white ring sweeps an arc
-   during both a confirmed and a projected cycle, and blinks whole only for one that's
-   never run, and the command
-   centre's ring is the same real CPU/Power load. The grid and list views of
-   "My colonies in the game" show the same data: the icon over the planet texture is the
-   raw resource being extracted or the processing chain's final product, the ring is
-   launchpad fullness (blue normally, blinking red once it's full), and the chip is time
-   left on the extractor program (hours or minutes, same as in the game). A factory panel
-   shows "Input" next to "Produces" — icons for what it consumes (the recipe catalogue;
-   ESI only reports what a factory produces, not what it consumes).</p>
-   <p>The extractor panel shows more than time left on the program: extraction rate too.
-   "Now" is computed from ESI's current per-cycle quantity and cycle length; "Average" comes
-   from history accumulated at each sync — there may be none yet ("building up history"
-   instead of inventing a number for a period that doesn't exist). A colony extracting
-   under 48,000 units/hour is flagged as in deficit — a fixed threshold by the user's own
-   decision, not derived from that colony's own history: at that rate the resource won't
-   cover the whole chain regardless, so it needs duplicating with extra extraction.
-   Deficit is its own category, separate from "need attention" (that one stays reserved
-   for an expiring timer or a full launchpad — a colony that isn't working right just now).
-   A colony in deficit keeps extracting, just below the threshold, so its circle gets a
-   small amber dot instead of losing its resource icon, and the summary line carries its
-   own "M in deficit" count. If a factory on another one of your actual colonies is
-   currently consuming the deficient resource, the warning names that chain's product and
-   suggests adding another mining colony; it only checks against colonies that already
-   exist (ones you had at login, or built from a plan and now real in-game), never against
-   the calculated plan on screen.</p>
+   <p>A separate dashboard panel: what your characters have actually built — a live
+   snapshot from the game, not the computed plan. The summary line above it counts four
+   things: how many colonies are idle, how many need attention (extractor program ending
+   in under two hours, or a launchpad packed full), how many are in extraction deficit,
+   and the total planet count.</p>
+   <p>A colony card looks like a plan card — the same strip of structure icons — except
+   the composition comes from the real pins on the planet, not a building template. The
+   Details button opens the full panel: launchpad, storage and the command centre's own
+   hold show what's actually stored and how full that is as a percentage of capacity;
+   CPU/Power load is shown both as a percentage and as absolute numbers, same as in the
+   game; the extractor shows head count, what it's pulling and at what rate ("now" from
+   ESI's current data corrected for the program's natural decay, "average" from synced
+   history).</p>
+   <p>ESI only updates a factory's state when the colony is opened in the game client, not
+   in real time, so the app honestly projects it forward using the routes between pins and
+   how much material has piled up at each factory (the same approach the third-party tool
+   RIFT uses) — "in production" or "idle" with a real duration. Without routes, or right
+   after a fresh resync, it says an honest "unknown" instead of guessing.</p>
+   <p>A colony extracting under 48,000 units/hour is flagged as in deficit — a fixed
+   threshold: at that rate the resource won't cover the whole chain, so it needs
+   duplicating with extra extraction. Deficit is its own category — the colony keeps
+   working, just below the threshold — unlike "need attention", reserved for a colony
+   that genuinely isn't working right now. If a character's ESI access has expired or
+   been revoked (password changed, app access revoked), a red "Reconnect" button appears
+   next to them: colonies and skills stop updating until you log in again with that same
+   character.</p>
 
    <h3>What the program does not know yet</h3>
    <p>CPU/Power load for a colony outside the loaded region (no row in the planet file —
@@ -3355,7 +3259,9 @@ const DOC={
    колоний, распределяет их по персонажам и показывает, где план упирается в ограничения.</p>
    <dl>
     <dt>Версия</dt><dd id="aboutVersion">—</dd>
-    <dt>Этап</dt><dd id="aboutPhase">—</dd>
+    <dt>Разработчик</dt><dd>mefffodiy-n</dd>
+    <dt>Лицензия</dt><dd>MIT</dd>
+    <dt>Исходный код</dt><dd><a href="https://github.com/mefffodiy-n/EVE-PI-app" target="_blank" rel="noopener">github.com/mefffodiy-n/EVE-PI-app</a></dd>
    </dl>
 
    <h3>Откуда данные</h3>
@@ -3375,9 +3281,11 @@ const DOC={
    OAuth 2.0 с PKCE; токены шифруются перед записью в базу.</p>
 
    <h3>Права</h3>
-   <p>EVE Online и логотип EVE — зарегистрированные торговые марки CCP hf. Все права на
-   игру, включая изображения и материалы, принадлежат CCP hf. Приложение сделано
-   независимо, CCP hf его не поддерживает и не одобряет.</p>`},
+   <p>Автор — mefffodiy-n. Проект сделан для себя и выложен открыто: пользоваться,
+   изменять и распространять его может кто угодно на условиях лицензии MIT.</p>
+   <p>EVE Online® и Fenris Creations™, а также все связанные с ними логотипы и другие
+   элементы являются товарными знаками Fenris Creations.<br>© 2026 Fenris Creations.
+   Все права защищены.</p>`},
 
   en:{title:'About',html:`
    <h3>The program</h3>
@@ -3385,7 +3293,9 @@ const DOC={
    layouts, assigns them to characters and shows where the plan hits its limits.</p>
    <dl>
     <dt>Version</dt><dd id="aboutVersion">—</dd>
-    <dt>Stage</dt><dd id="aboutPhase">—</dd>
+    <dt>Developer</dt><dd>mefffodiy-n</dd>
+    <dt>License</dt><dd>MIT</dd>
+    <dt>Source code</dt><dd><a href="https://github.com/mefffodiy-n/EVE-PI-app" target="_blank" rel="noopener">github.com/mefffodiy-n/EVE-PI-app</a></dd>
    </dl>
 
    <h3>Where the data comes from</h3>
@@ -3406,9 +3316,10 @@ const DOC={
    Authentication is OAuth 2.0 with PKCE; tokens are encrypted before they are stored.</p>
 
    <h3>Rights</h3>
-   <p>EVE Online and the EVE logo are registered trademarks of CCP hf. All rights to the
-   game, including imagery and materials, belong to CCP hf. This application is made
-   independently and is neither endorsed nor sponsored by CCP hf.</p>`}}
+   <p>Author — mefffodiy-n. This project was built for personal use and released
+   openly: anyone may use, modify and redistribute it under the MIT license.</p>
+   <p>EVE Online® and Fenris Creations™ and all related logos and other elements are
+   trademarks of Fenris Creations.<br>©2026 Fenris Creations. All rights reserved.</p>`}}
 };
 
 function openModal(name){
@@ -3416,11 +3327,8 @@ function openModal(name){
   const doc=DOC[name][lang]||DOC[name].ru;
   document.getElementById('modalTitle').textContent=doc.title;
   document.getElementById('modalBody').innerHTML=doc.html;
-  const v=document.getElementById('aboutVersion'), ph=document.getElementById('aboutPhase');
+  const v=document.getElementById('aboutVersion');
   if(v) v.textContent=meta.version||'—';
-  // meta.phase — {ru, en}; старый формат (строка) поддержим на всякий.
-  const phase=meta.phase&&typeof meta.phase==='object' ? (meta.phase[lang]||meta.phase.ru) : meta.phase;
-  if(ph) ph.textContent=phase||'—';
   document.getElementById('modal').classList.add('on');
 }
 function closeModal(){ document.getElementById('modal').classList.remove('on'); currentModal=null; }
