@@ -258,7 +258,30 @@ class TestPinDetail:
         не из ESI — она ёмкость структур не отдаёт).
         """
         detail = sync.pin_detail({"contents": []}, "command_center", client=None)
-        assert detail == {"kind": "command_center", "contents": [], "used_m3": 0.0, "capacity_m3": 500}
+        assert detail == {
+            "kind": "command_center", "pin_id": None, "contents": [], "used_m3": 0.0, "capacity_m3": 500,
+        }
+
+
+class TestRoutesDetail:
+    def test_resolves_content_type_to_name_and_drops_route_id(self):
+        with_names = sync._name_by_type_id
+        with_names.cache_clear()
+        routes = [
+            {"route_id": 1, "source_pin_id": 10, "destination_pin_id": 20,
+             "content_type_id": 2308, "quantity": 3000.0, "waypoints": []},
+        ]
+        detail = sync.routes_detail(routes)
+        assert detail == [{
+            "source_pin_id": 10, "destination_pin_id": 20,
+            "product": "Suspended Plasma", "quantity": 3000.0,
+        }]
+
+    def test_unknown_type_id_gives_no_product_name(self):
+        detail = sync.routes_detail([
+            {"source_pin_id": 1, "destination_pin_id": 2, "content_type_id": 999999999, "quantity": 1},
+        ])
+        assert detail[0]["product"] is None
 
 
 class TestRealColonyLoad:

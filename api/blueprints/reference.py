@@ -31,6 +31,7 @@ from domain.recipes import load_recipes
 bp = Blueprint("reference", __name__)
 
 TYPE_IDS_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "type_ids.json"
+SCHEMATICS_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "schematics.json"
 
 PROCESSING_TIERS = ("P2", "P3", "P4")
 
@@ -47,6 +48,32 @@ def _type_ids() -> dict[str, int]:
     if not TYPE_IDS_PATH.is_file():
         return {}
     return json.loads(TYPE_IDS_PATH.read_text(encoding="utf-8"))
+
+
+@lru_cache(maxsize=1)
+def _schematics_by_output() -> dict[str, dict]:
+    """
+    Количества вход/выход за цикл каждой фабричной схемы, по type_id
+    ПРОДУКТА (см. scripts/extract_schematics.py — ключ "S" игровых
+    шаблонов оказался type_id продукта, а не ESI schematic_id, поэтому
+    сопоставление с настоящим пином идёт через product_type_id/имя, а
+    не через schematic_id из ESI).
+
+    Нужно фронтенду для честной проекции состояния фабрики вперёд по
+    времени (simulateColonyFactories(), web/index.html) — сколько сырья
+    фабрика потребляет и производит за цикл ESI не отдаёт вовсе, а
+    recipes.json даёт только пропорции входов, не абсолютные количества.
+    Отдаём только inputs/output_qty — остальные поля файла (facility,
+    sources, inputs_by_name) фронту не нужны, там уже есть свои имена и
+    иконки через product_ids.
+    """
+    if not SCHEMATICS_PATH.is_file():
+        return {}
+    raw = json.loads(SCHEMATICS_PATH.read_text(encoding="utf-8")).get("schematics", {})
+    return {
+        type_id: {"inputs": entry["inputs"], "output_qty": entry["output_qty"]}
+        for type_id, entry in raw.items()
+    }
 
 
 @lru_cache(maxsize=1)
@@ -85,6 +112,7 @@ def _initial_payload() -> dict:
         "products": products,
         "product_ids": ids,
         "recipe_inputs": recipe_inputs,
+        "schematics": _schematics_by_output(),
         "bases": [],
         "regions": {},
         "system_counts": {},
@@ -115,6 +143,12 @@ def _initial_payload() -> dict:
         payload["data_problems"].append(
             "Нет карты type_id — иконки продуктов не отобразятся. "
             "Создайте её командой: python -m scripts.extract_schematics --write"
+        )
+    if not payload["schematics"]:
+        payload["data_problems"].append(
+            "Нет data/schematics.json — проекция состояния фабрик "
+            "вперёд по времени недоступна, показывается только честное "
+            "«неизвестно». Создайте файл: python -m scripts.extract_schematics --write"
         )
 
     return payload

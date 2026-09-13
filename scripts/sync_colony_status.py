@@ -406,14 +406,18 @@ def pin_detail(pin: dict, kind: str, client) -> dict:
     (простой/производство честно считает фронтенд по ним же — не по
     выдуманному таймеру), extractor_details у экстрактора, contents у
     склада/причала/фабрики.
+
+    pin_id — раньше был только у экстрактора (для истории добычи,
+    ExtractionSample). Нужен у ЛЮБОГО пина, чтобы сопоставить его с
+    source_pin_id/destination_pin_id в routes_detail() — без него
+    фронтенд не может понять, какой именно пин на другом конце маршрута.
     """
-    detail: dict = {"kind": kind}
+    detail: dict = {"kind": kind, "pin_id": pin.get("pin_id")}
 
     if kind == "extractor_control_unit":
         ed = pin.get("extractor_details") or {}
         product_id = ed.get("product_type_id")
         detail.update({
-            "pin_id": pin.get("pin_id"),
             "heads": len(ed.get("heads") or []) or None,
             "product": _name_by_type_id().get(int(product_id)) if product_id else None,
             "product_type_id": int(product_id) if product_id else None,
@@ -458,6 +462,32 @@ def pins_detail(pins: list[dict], client) -> list[dict]:
         kind = kind_by_type.get(int(pin.get("type_id", 0)))
         if kind:
             out.append(pin_detail(pin, kind, client))
+    return out
+
+
+def routes_detail(routes: list[dict]) -> list[dict]:
+    """
+    Маршруты между пинами — тот же массив "routes", что ESI отдаёт рядом
+    с pins/links в ответе GET /characters/{id}/planets/{id}/ (мы уже
+    ходим за этим ответом ради pins и links, новых запросов к ESI не
+    нужно). Поле "quantity" — количество за одну доставку по этому
+    маршруту, "content_type_id" переводим в имя тем же справочником, что
+    и остальные поля (product у экстрактора/фабрики) — фронтенду нужно
+    имя, чтобы сопоставить с ids[] (иконки) и со своим schematics[]
+    (количества входа/выхода фабрики, /api/initial-data).
+    route_id/waypoints не сохраняются — не нужны для определения, кто
+    кого кормит и сколько.
+    """
+    names = _name_by_type_id()
+    out = []
+    for route in routes:
+        type_id = route.get("content_type_id")
+        out.append({
+            "source_pin_id": route.get("source_pin_id"),
+            "destination_pin_id": route.get("destination_pin_id"),
+            "product": names.get(int(type_id)) if type_id else None,
+            "quantity": route.get("quantity"),
+        })
     return out
 
 
@@ -553,6 +583,7 @@ def sync_one(client, session, character) -> str:
                 fields["nearest_expiry"] = expiry
                 fields["structures"] = structures
                 fields["pins"] = pins
+                fields["routes"] = routes_detail((detail.data or {}).get("routes") or [])
                 link_count = len((detail.data or {}).get("links") or [])
                 fields.update(real_colony_load(
                     structures or [], raw_pins, link_count, system, idx, ccu_level,

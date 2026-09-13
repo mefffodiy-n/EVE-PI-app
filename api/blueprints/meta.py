@@ -295,6 +295,7 @@ def colonies():
                     "num_pins": row.num_pins,
                     "structures": row.structures or [],
                     "pins": pins,
+                    "routes": row.routes or [],
                     "cpu_percent": row.cpu_percent,
                     "pg_percent": row.pg_percent,
                     "cpu_used": row.cpu_used,
