@@ -16,7 +16,7 @@ from pathlib import Path
 from flask import Blueprint
 
 from api.cache import json_ok, with_etag
-from version import PHASE, VERSION
+from version import DEVELOPER, VERSION
 
 bp = Blueprint("meta", __name__)
 
@@ -144,7 +144,7 @@ def meta():
     """Версия, статус сервера, состояние входа — одним запросом."""
     return json_ok(
         version=VERSION,
-        phase=PHASE,           # {ru, en} — фронт берёт по языку интерфейса
+        developer=DEVELOPER,
         server=_server_status(),
         auth=_auth_status(),
         jobs=_job_status(),
