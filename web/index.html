@@ -1191,13 +1191,11 @@ const DEFICIT_UNITS_PER_HOUR=48000;
 // клиента пользователя (13.09.2026): игра — 17 030 ед./ч, наш прежний
 // расчёт «в лоб» (qty_per_cycle×циклов/час) — 21 868–22 061, разница
 // ~28% на давно идущей программе. Формула затухания не задокументирована
-// CCP официально, но воспроизведена независимо двумя сторонними PI-
-// инструментами (RIFT Intel Fusion Tool — эталон для нас,
-// PlanetaryIndustryRepository.kt/simulation/ExtractionSimulation.kt;
-// и «Planets in Space», по их же чейнджлогу) — правило 2 (сверка
-// нескольких источников) соблюдено. Ошибка была тем более значима,
-// что искажала DEFICIT_UNITS_PER_HOUR: заниженный дефицит выглядел
-// как «всё в порядке».
+// CCP официально, но воспроизведена независимо несколькими сторонними
+// PI-инструментами по их открытым исходникам и чейнджлогам — правило 2
+// (сверка нескольких источников) соблюдено. Ошибка была тем более
+// значима, что искажала DEFICIT_UNITS_PER_HOUR: заниженный дефицит
+// выглядел как «всё в порядке».
 function extractorDecayedQty(baseValue, installTimeIso, cycleSeconds, atMs){
   if(baseValue==null||!installTimeIso||!cycleSeconds) return null;
   const startS=Date.parse(installTimeIso)/1000;
@@ -1524,24 +1522,24 @@ function expandStructures(p){
    сравнивала last_cycle_start с ТЕКУЩИМ временем (Date.now()) — и
    ошиблась в другую сторону: ESI пересчитывает last_cycle_start только
    при заходе в колонию в игровом клиенте (esi-issues #654, подтверждено
-   исходниками RIFT — сторонний intel-инструмент, эталон для этой
-   области, gitlab.com/rift-intel-fusion-tool), поэтому у ЛЮБОЙ колонии,
-   которую давно не открывали, elapsed относительно «сейчас» почти
-   всегда превышает cycle_minutes — простаивающими показывались
-   практически все фабрики поголовно, включая настоящие работающие.
+   исходниками стороннего PI-инструмента с открытым кодом), поэтому у
+   ЛЮБОЙ колонии, которую давно не открывали, elapsed относительно
+   «сейчас» почти всегда превышает cycle_minutes — простаивающими
+   показывались практически все фабрики поголовно, включая настоящие
+   работающие.
 
    Третья версия сравнивает last_cycle_start с `gameLastUpdate` —
    временем, когда ИГРА (не мы) в последний раз пересчитала эту колонию
    (ESI-поле last_update у /characters/{id}/planets/, Colony.
-   game_last_update, см. sync_colony_status.py) — то же, что делает
-   RIFT при разборе снимка (PlanetaryIndustryRepository.getPin():
-   `activityState = lastCycleAgo < cycleTime`, где lastCycleAgo считается
-   от `lastUpdate`, а не от текущего времени). Сама RIFT после этого ещё
-   и симулирует колонию вперёд по маршрутам и буферам каждой фабрики
-   (ColonySimulation.kt) — то, чего мы пока не делаем: у нас нет ни
-   маршрутов между пинами, ни проверенных объёмов входа схемы. Поэтому
-   вместо уверенного прогноза вперёд — честное третье состояние
-   «неизвестно, в последний раз (при заходе в игру) работала».
+   game_last_update, см. sync_colony_status.py) — тот же приём разбора
+   снимка, что и у стороннего инструмента: `activityState = lastCycleAgo
+   < cycleTime`, где lastCycleAgo считается от `lastUpdate`, а не от
+   текущего времени. Тот инструмент после этого ещё и симулирует колонию
+   вперёд по маршрутам и буферам каждой фабрики — то, чего мы пока не
+   делаем: у нас нет ни маршрутов между пинами, ни проверенных объёмов
+   входа схемы. Поэтому вместо уверенного прогноза вперёд — честное
+   третье состояние «неизвестно, в последний раз (при заходе в игру)
+   работала».
 
    Состояния:
      cycle: 0-100, idle:false — на момент gameLastUpdate цикл ещё не
@@ -1591,7 +1589,7 @@ function pinCycleInfo(pin, gameLastUpdate, simResult){
   return {cycle:100*Math.min(elapsedNow,cycleMs)/cycleMs, idle:false, remainingMs:cycleMs-elapsedNow};
 }
 
-/* ── Проекция состояния фабрик по маршрутам (по образцу RIFT) ─────
+/* ── Проекция состояния фабрик по маршрутам ────────────────────────
    pinCycleInfo() честно останавливается на «неизвестно с момента
    снимка» (gameLastUpdate), когда с последнего захода в колонию прошло
    больше одного цикла фабрики: last_cycle_start сам по себе больше
@@ -1599,15 +1597,16 @@ function pinCycleInfo(pin, gameLastUpdate, simResult){
    доходит сырьё от экстрактора и сколько его накопилось у каждой
    фабрики — то есть маршруты (routes) и буферы (contents). Раньше
    этого не считали вовсе: колония с рабочим экстрактором и частью
-   работающих фабрик показывала «все простаивают» (скриншот RIFT
-   пользователя 13.09.2026: 7 из 9 фабрик «In production», 2 кратко
-   «Waiting for resources, Idle for 36s» — у нас все 9 давно «истекший
-   цикл»).
+   работающих фабрик показывала «все простаивают» (пользователь прислал
+   скриншот из другого PI-инструмента 13.09.2026: 7 из 9 фабрик
+   «In production», 2 кратко «Waiting for resources, Idle for 36s» — у
+   нас все 9 давно «истекший цикл»).
 
-   Идея (RIFT, simulation/ColonySimulation.kt): взять снимок на момент
-   gameLastUpdate (buf. каждого пина = pin.contents на тот момент — оно
-   ТОЖЕ достоверно только на этот момент, той же причине, что и
-   last_cycle_start) и прогнать события вперёд до «сейчас»: экстрактор
+   Идея (по образцу стороннего PI-инструмента с открытым кодом): взять
+   снимок на момент gameLastUpdate (buf. каждого пина = pin.contents на
+   тот момент — оно ТОЖЕ достоверно только на этот момент, по той же
+   причине, что и last_cycle_start) и прогнать события вперёд до
+   «сейчас»: экстрактор
    каждый cycle_seconds выдаёт decayed-количество (extractorDecayedQty,
    тот же факт игровой механики, что и в панели экстрактора) и рассылает
    его по исходящим маршрутам; фабрика каждый cycle_minutes проверяет,
@@ -1759,8 +1758,8 @@ function simulateColonyFactories(pins, routes, gameLastUpdateIso){
     }
 
     // Фабрика: сначала забрать то, что уже накопилось на складах,
-    // маршрутизированных сюда (routeCommodityInput в терминах RIFT) —
-    // покрывает запас, лежавший на складе ЕЩЁ ДО начала проекции.
+    // маршрутизированных сюда — покрывает запас, лежавший на складе
+    // ЕЩЁ ДО начала проекции.
     for(const r of (inRoutes.get(pinId)||[])){
       const src=st.get(r.src);
       if(!src || !src.isStorage) continue;
@@ -1814,8 +1813,9 @@ function simulateColonyFactories(pins, routes, gameLastUpdateIso){
    добавляла для добычи ещё и «все фабрики простаивают» — по мотивам
    скриншота колонии, где рабочий экстрактор соседствовал с двумя
    фабриками без цикла больше суток. Пользователь показал ВТОРОЙ
-   скриншот (RIFT, актуальное состояние той же связки «добываю и тут же
-   перерабатываю»): 7 из 9 фабрик «In production», 2 — «Waiting for
+   скриншот (из другого PI-инструмента, актуальное состояние той же
+   связки «добываю и тут же перерабатываю»): 7 из 9 фабрик
+   «In production», 2 — «Waiting for
    resources, Idle for 36s». Это НЕ поломка, а нормальное
    самокорректирующееся поведение недоснабжённой колонии: добыча не
    поспевает прокормить все фабрики сразу, часть из них периодически
@@ -2637,7 +2637,8 @@ function structureUnitFields(kind, ctx){
     // с самой ESI, GET /universe/schematics/{id}/, см. schematic_info()
     // в sync_colony_status.py). Прогресс/простой — pinCycleInfo(), без
     // переноса по модулю (см. её докстринг: почему модуль был неверен —
-    // скриншот RIFT с разным простоем у разных фабрик).
+    // скриншот из стороннего PI-инструмента с разным простоем у разных
+    // фабрик).
     if(pin){
       const info=pinCycleInfo(pin,ctx.gameLastUpdate,ctx.sim);
       let state;
@@ -3071,8 +3072,8 @@ const DOC={
    при этом продолжает крутить циклы сама, пока есть сырьё. Поэтому,
    если с последнего подтверждённого цикла прошло больше его длительности,
    прогресс досчитывается вперёд по модулю от последнего известного
-   старта (так же поступают сторонние PI-инструменты — RIFT, Planets in
-   Space) и подписывается «проекция: колонию давно не открывали в игре» —
+   старта (так же поступают сторонние PI-инструменты, включая Planets
+   in Space) и подписывается «проекция: колонию давно не открывали в игре» —
    это честная оценка от настоящих данных, а не гарантированный факт.
    «Простаивает» пишется только когда фабрика точно ни разу не
    запускалась — единственное состояние, для которого проецировать
@@ -3309,7 +3310,7 @@ const DOC={
    the factory keeps auto-cycling on its own as long as it has input. So once more time
    has passed than one cycle length since the last confirmed start, the progress shown is
    projected forward by taking the elapsed time modulo the cycle length from that last
-   known start (the same approach third-party PI tools use — RIFT, Planets in Space) and
+   known start (the same approach third-party PI tools use, including Planets in Space) and
    labelled "projected: colony not opened in-game recently" — an honest estimate from real
    data, not a guaranteed fact. "Idle" is only shown when a factory has genuinely never
    been started — the one state with nothing to project from. The compact strip under a
