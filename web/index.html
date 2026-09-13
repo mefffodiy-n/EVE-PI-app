@@ -1668,7 +1668,19 @@ function simulateColonyFactories(pins, routes, gameLastUpdateIso){
       entry.expiryMs=pin.expiry_time?Date.parse(pin.expiry_time):null;
       entry.baseValue=pin.qty_per_cycle;
       entry.outputTypeId=pin.product_type_id;
-      entry.lastRun=pin.last_cycle_start?Date.parse(pin.last_cycle_start):null;
+      // У экстрактора (в отличие от фабрики) last_cycle_start вообще не
+      // сохраняется отдельным полем (pin_detail() кладёт его только
+      // фабрикам) — планировать события нужно от install_time: программа
+      // экстрактора крутит циклы с момента установки, а не с момента
+      // последнего визита в колонию (в отличие от last_cycle_start,
+      // install_time не привязан к визитам, ESI отдаёт его как есть).
+      // Раньше здесь стояло pin.last_cycle_start, которого у экстрактора
+      // никогда нет — entry.lastRun оставался null, extractor ни разу не
+      // планировался в событийном цикле, ни грамма сырья не долетало ни
+      // до одной фабрики, и результат был тем же самым «все простаивают»,
+      // который эта симуляция должна была устранить (обнаружено
+      // 13.09.2026 на реальных данных прода).
+      entry.lastRun=entry.installIso?Date.parse(entry.installIso):null;
     }
     st.set(pin.pin_id, entry);
   }
