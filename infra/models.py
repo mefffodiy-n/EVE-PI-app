@@ -145,6 +145,24 @@ class Colony(Base):
     # contents), см. scripts/sync_colony_status.py::pin_detail().
     pins: Mapped[list] = mapped_column(JSON, default=list)
 
+    # Маршруты между пинами — [{"source_pin_id", "destination_pin_id",
+    # "product", "quantity"}, ...], тот же массив "routes", что ESI отдаёт
+    # в ответе GET /characters/{id}/planets/{id}/ рядом с pins/links (мы
+    # раньше читали из этого же ответа только links, только чтобы
+    # посчитать их число для CPU/PG). Без топологии маршрутов нельзя
+    # честно определить, продолжает ли фабрика работать ПРЯМО СЕЙЧАС:
+    # last_cycle_start фабрики достоверен только на момент game_last_update
+    # (см. её же комментарий), а что происходит после — зависит от того,
+    # докуда доходит сырьё от экстрактора и сколько его накопилось у
+    # каждой фабрики, то есть от маршрутов. Используется
+    # simulateColonyFactories() во фронтенде (web/index.html) — честная
+    # проекция вперёд по образцу RIFT Intel Fusion Tool
+    # (simulation/ColonySimulation.kt), а не выдуманное «работает/не
+    # работает». None/[] — колония ни разу не синхронизирована этим
+    # полем (старая запись до этой миграции) или на планете нет ни
+    # одного маршрута.
+    routes: Mapped[list] = mapped_column(JSON, default=list)
+
     # Ближайшее время окончания программы экстрактора на этой планете
     # (soonest expiry_time среди extractor-пинов). None — экстракторов нет
     # или программы не запущены.

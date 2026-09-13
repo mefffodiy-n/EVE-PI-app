@@ -883,7 +883,7 @@ const charIdOf=name=>{ const c=crew.find(x=>x.name===name); return c?c.character
 const avatarImg=characterId=>characterId
   ? `<img src="${PORTRAIT(characterId)}" alt="" onerror="this.remove()">` : '';
 
-let ids={}, recipeInputs={}, plan=[], staffing={}, view='details', sortBy='load';
+let ids={}, recipeInputs={}, schematics={}, plan=[], staffing={}, view='details', sortBy='load';
 let lang='ru', crew=[], meta={};
 let regions={}, systemCounts={}, allProducts=[], allConstellations=[];
 let dataCounts=null;  // {bases, products} — для чипа data, перерисовывается при смене языка
@@ -1554,9 +1554,20 @@ function expandStructures(p){
      idle:false, unknownSince — на момент gameLastUpdate цикл ещё шёл, но
             с тех пор прошло больше cycle_minutes реального времени —
             дальше неизвестно, работает или встала (симуляции у нас нет).
-     neverStarted:true — last_cycle_start нет вовсе. */
-function pinCycleInfo(pin, gameLastUpdate){
+     neverStarted:true — last_cycle_start нет вовсе.
+
+   Четвёртая версия (13.09.2026) закрывает состояние «unknownSince»,
+   когда для колонии есть маршруты (routes) и известны количества
+   входа/выхода схемы (schematics, /api/initial-data): simulateColony-
+   Factories() честно досчитывает буферы каждой фабрики вперёд по
+   маршрутам, и его результат (simResult) передаётся сюда третьим
+   параметром вызывающей стороной — pinCycleInfo просто отдаёт его как
+   есть, без изменений. Без маршрутов (колония не пересинхронизирована
+   этой версией, либо на планете их и правда нет) simResult не
+   передаётся, и остаётся честное «неизвестно» третьей версии. */
+function pinCycleInfo(pin, gameLastUpdate, simResult){
   if(!pin.kind || !pin.kind.endsWith('industry_facility')) return {cycle:null, idle:false};
+  if(simResult) return simResult;
   if(!pin.cycle_minutes) return {cycle:null, idle:false, unknown:true};
   if(!pin.last_cycle_start) return {cycle:null, idle:true, neverStarted:true};
   const cycleMs=pin.cycle_minutes*60000;
@@ -1578,6 +1589,206 @@ function pinCycleInfo(pin, gameLastUpdate){
   }
   const elapsedNow=Math.max(0, Date.now()-startMs);
   return {cycle:100*Math.min(elapsedNow,cycleMs)/cycleMs, idle:false, remainingMs:cycleMs-elapsedNow};
+}
+
+/* ── Проекция состояния фабрик по маршрутам (по образцу RIFT) ─────
+   pinCycleInfo() честно останавливается на «неизвестно с момента
+   снимка» (gameLastUpdate), когда с последнего захода в колонию прошло
+   больше одного цикла фабрики: last_cycle_start сам по себе больше
+   ничего не говорит, а настоящую работу колонии в игре решает, докуда
+   доходит сырьё от экстрактора и сколько его накопилось у каждой
+   фабрики — то есть маршруты (routes) и буферы (contents). Раньше
+   этого не считали вовсе: колония с рабочим экстрактором и частью
+   работающих фабрик показывала «все простаивают» (скриншот RIFT
+   пользователя 13.09.2026: 7 из 9 фабрик «In production», 2 кратко
+   «Waiting for resources, Idle for 36s» — у нас все 9 давно «истекший
+   цикл»).
+
+   Идея (RIFT, simulation/ColonySimulation.kt): взять снимок на момент
+   gameLastUpdate (buf. каждого пина = pin.contents на тот момент — оно
+   ТОЖЕ достоверно только на этот момент, той же причине, что и
+   last_cycle_start) и прогнать события вперёд до «сейчас»: экстрактор
+   каждый cycle_seconds выдаёт decayed-количество (extractorDecayedQty,
+   тот же факт игровой механики, что и в панели экстрактора) и рассылает
+   его по исходящим маршрутам; фабрика каждый cycle_minutes проверяет,
+   хватает ли в её буфере входов схемы (data/schematics.json —
+   количества, извлечённые из проверенных игровых шаблонов, правило 2,
+   НЕ выдумка), и либо потребляет и производит, либо простаивает.
+   Склад/причал/КЦ — просто проходной буфер (маршрут внутрь сразу
+   пробрасывается на исходящие маршруты, у склада нет своего цикла).
+
+   Сознательные упрощения (честно, а не молча):
+   - Ёмкость склада/причала в кубометрах НЕ ограничивает поток —
+     на фронтенде нет объёма каждого товара (это серверный расчёт
+     used_m3), только сами count'ы. Настоящее «склад забит» уже отдельно
+     показывает isLaunchpadFull() по последнему синку — здесь это не
+     дублируется.
+   - Порядок раздачи между несколькими маршрутами с одним источником —
+     по порядку самих routes от ESI, не по «приоритету» в игровом UI
+     (ESI его не отдаёт). Расходится с игрой только в редком случае
+     конкуренции нескольких потребителей за один дефицитный ресурс.
+   - Возвращает null, если считать нечем (нет маршрутов, нет
+     data/schematics.json, нет gameLastUpdate) — тогда вызывающая
+     сторона просто не передаёт simResult, и pinCycleInfo честно
+     остаётся на «неизвестно». */
+function simulateColonyFactories(pins, routes, gameLastUpdateIso){
+  if(!gameLastUpdateIso || !routes || !routes.length || !pins || !pins.length) return null;
+  const startMs=Date.parse(gameLastUpdateIso);
+  const nowMs=Date.now();
+  if(!(nowMs>startMs)) return null;
+
+  const typeIdOf=name=>name!=null?ids[name]:null;
+  const st=new Map();
+  let anyFactory=false;
+  for(const pin of pins){
+    if(pin.pin_id==null) continue;
+    const buf=new Map();
+    (pin.contents||[]).forEach(c=>{
+      const tid=typeIdOf(c.name); if(tid==null) return;
+      buf.set(tid,(buf.get(tid)||0)+c.amount);
+    });
+    const isFactory=pin.kind&&pin.kind.endsWith('industry_facility');
+    const isExtractor=pin.kind==='extractor_control_unit';
+    const entry={pin, buf, isFactory, isExtractor, isStorage:!isFactory&&!isExtractor, active:false, idleSinceMs:null};
+    if(isFactory){
+      const outId=typeIdOf(pin.product);
+      const schem=(outId!=null&&schematics[String(outId)])||null;
+      if(schem && pin.cycle_minutes && pin.last_cycle_start){
+        anyFactory=true;
+        entry.cycleMs=pin.cycle_minutes*60000;
+        entry.outputTypeId=outId; entry.outputQty=schem.output_qty;
+        entry.demands=new Map(Object.entries(schem.inputs).map(([k,v])=>[Number(k),v]));
+        entry.lastRun=Date.parse(pin.last_cycle_start);
+      } else {
+        entry.unsupported=true;
+      }
+    } else if(isExtractor){
+      entry.cycleMs=pin.cycle_seconds!=null?pin.cycle_seconds*1000:null;
+      entry.installIso=pin.install_time||null;
+      entry.expiryMs=pin.expiry_time?Date.parse(pin.expiry_time):null;
+      entry.baseValue=pin.qty_per_cycle;
+      entry.outputTypeId=pin.product_type_id;
+      entry.lastRun=pin.last_cycle_start?Date.parse(pin.last_cycle_start):null;
+    }
+    st.set(pin.pin_id, entry);
+  }
+  if(!anyFactory) return null;
+
+  const outRoutes=new Map(), inRoutes=new Map();
+  routes.forEach(r=>{
+    const typeId=typeIdOf(r.product);
+    if(typeId==null||r.source_pin_id==null||r.destination_pin_id==null) return;
+    if(!st.has(r.source_pin_id)||!st.has(r.destination_pin_id)) return;
+    if(!outRoutes.has(r.source_pin_id)) outRoutes.set(r.source_pin_id,[]);
+    outRoutes.get(r.source_pin_id).push({dest:r.destination_pin_id, typeId, qty:r.quantity||0});
+    if(!inRoutes.has(r.destination_pin_id)) inRoutes.set(r.destination_pin_id,[]);
+    inRoutes.get(r.destination_pin_id).push({src:r.source_pin_id, typeId, qty:r.quantity||0});
+  });
+
+  const canAccept=(entry, typeId, qty)=>{
+    if(entry.isFactory){
+      if(!entry.demands || !entry.demands.has(typeId)) return 0;
+      const need=entry.demands.get(typeId), have=entry.buf.get(typeId)||0;
+      return Math.max(0, Math.min(qty, need-have));
+    }
+    return qty; // склад/причал/КЦ — без ограничения по объёму, см. докстринг
+  };
+
+  let events=[]; // {pinId,t} — линейный поиск минимума: пинов в колонии мало
+  const schedule=(pinId,t)=>{
+    if(t==null||t>nowMs) return;
+    const existing=events.find(e=>e.pinId===pinId);
+    if(existing){ if(t<existing.t) existing.t=t; return; }
+    events.push({pinId,t});
+  };
+
+  const push=(sourcePinId, typeId, qty, t, depth)=>{
+    if(qty<=0 || depth>pins.length) return; // depth — защита от кольцевых маршрутов
+    let remaining=qty;
+    for(const r of (outRoutes.get(sourcePinId)||[])){
+      if(r.typeId!==typeId || remaining<=0) continue;
+      const dest=st.get(r.dest);
+      const amt=Math.min(remaining, r.qty, canAccept(dest, typeId, remaining));
+      if(amt<=0) continue;
+      dest.buf.set(typeId,(dest.buf.get(typeId)||0)+amt);
+      remaining-=amt;
+      if(dest.isStorage){
+        push(r.dest, typeId, amt, t, depth+1); // проходной буфер — сразу дальше
+      } else if(dest.isFactory && !dest.unsupported){
+        schedule(r.dest, t); // могло хватить входов — попробовать прямо сейчас
+      }
+    }
+  };
+
+  for(const [pinId,e] of st){
+    if((e.isExtractor||e.isFactory) && !e.unsupported && e.lastRun!=null && e.cycleMs){
+      schedule(pinId, e.lastRun+e.cycleMs);
+    }
+  }
+
+  let iterations=0;
+  const MAX_EVENTS=50000; // защита от зависания на аномальных данных
+  while(events.length && iterations++<MAX_EVENTS){
+    let idx=0;
+    for(let i=1;i<events.length;i++) if(events[i].t<events[idx].t) idx=i;
+    const {pinId,t}=events[idx];
+    events.splice(idx,1);
+    const entry=st.get(pinId);
+
+    if(entry.isExtractor){
+      const stillActive=entry.expiryMs==null||t<entry.expiryMs;
+      if(stillActive && entry.baseValue!=null && entry.installIso && entry.outputTypeId!=null){
+        const qty=extractorDecayedQty(entry.baseValue, entry.installIso, entry.pin.cycle_seconds, t);
+        if(qty) push(pinId, entry.outputTypeId, qty, t, 0);
+      }
+      entry.lastRun=t;
+      if(stillActive) schedule(pinId, t+entry.cycleMs);
+      continue;
+    }
+
+    // Фабрика: сначала забрать то, что уже накопилось на складах,
+    // маршрутизированных сюда (routeCommodityInput в терминах RIFT) —
+    // покрывает запас, лежавший на складе ЕЩЁ ДО начала проекции.
+    for(const r of (inRoutes.get(pinId)||[])){
+      const src=st.get(r.src);
+      if(!src || !src.isStorage) continue;
+      const have=src.buf.get(r.typeId)||0;
+      if(have<=0) continue;
+      const amt=Math.min(have, r.qty, canAccept(entry, r.typeId, have));
+      if(amt<=0) continue;
+      src.buf.set(r.typeId, have-amt);
+      entry.buf.set(r.typeId, (entry.buf.get(r.typeId)||0)+amt);
+    }
+
+    let canConsume=true;
+    for(const [typeId,need] of entry.demands){
+      if((entry.buf.get(typeId)||0)<need){ canConsume=false; break; }
+    }
+    if(canConsume){
+      for(const [typeId,need] of entry.demands) entry.buf.set(typeId, entry.buf.get(typeId)-need);
+      entry.active=true; entry.idleSinceMs=null; entry.lastRun=t;
+      push(pinId, entry.outputTypeId, entry.outputQty, t, 0);
+      schedule(pinId, t+entry.cycleMs);
+    } else {
+      entry.active=false;
+      if(entry.idleSinceMs==null) entry.idleSinceMs=t;
+      // Не перепланируем сами — разбудит push() при следующей поставке.
+    }
+  }
+
+  const results=new Map();
+  for(const [pinId,entry] of st){
+    if(!entry.isFactory || entry.unsupported) continue;
+    if(entry.active){
+      const elapsed=Math.max(0, nowMs-entry.lastRun);
+      results.set(pinId, {cycle:100*Math.min(elapsed,entry.cycleMs)/entry.cycleMs, idle:false,
+        remainingMs:entry.cycleMs-Math.min(elapsed,entry.cycleMs)});
+    } else {
+      results.set(pinId, {cycle:null, idle:true,
+        idleMs:Math.max(0, nowMs-(entry.idleSinceMs!=null?entry.idleSinceMs:entry.lastRun))});
+    }
+  }
+  return results;
 }
 
 /* Колония простаивает — общее определение для сводки «N простаивает»
@@ -1609,7 +1820,9 @@ function isColonyIdle(p){
   if(p.role_key==='mine') return !p.nearest_expiry;
   if(p.role_key==='proc'){
     const factories=(p.pins||[]).filter(pin=>pin.kind&&pin.kind.endsWith('industry_facility'));
-    return factories.length>0 && factories.every(pin=>pinCycleInfo(pin,p.game_last_update).idle);
+    const sim=simulateColonyFactories(p.pins,p.routes,p.game_last_update);
+    return factories.length>0 && factories.every(pin=>
+      pinCycleInfo(pin,p.game_last_update,sim&&sim.get(pin.pin_id)).idle);
   }
   return false;
 }
@@ -1638,8 +1851,9 @@ function sortPinsForDisplay(pins){
    structures_detail без прогресса. */
 function structOrbsForRow(p){
   if(p.isReal && p.pins && p.pins.length){
+    const sim=simulateColonyFactories(p.pins,p.routes,p.game_last_update);
     return sortPinsForDisplay(p.pins).map(pin=>{
-      const info=pinCycleInfo(pin,p.game_last_update);
+      const info=pinCycleInfo(pin,p.game_last_update,sim&&sim.get(pin.pin_id));
       const opts={cycle:info.cycle, idle:info.idle};
       if(pin.kind==='command_center' && p.cpu_percent!=null){
         opts.cpu=p.cpu_percent; opts.pg=p.pg_percent;
@@ -2085,7 +2299,7 @@ function realRows(){
       isReal:true, matchId:match?match.id:`real:${c.character_id}:${c.planet_id}`,
       character:c.character, system:c.system_name, planet:String(c.planet_index),
       planet_type:ptype, role_key, role_tier:null,
-      structures_detail:c.structures||[], pins:c.pins||[],
+      structures_detail:c.structures||[], pins:c.pins||[], routes:c.routes||[],
       cpu_percent:c.cpu_percent, pg_percent:c.pg_percent,
       cpu_used:c.cpu_used, cpu_capacity:c.cpu_capacity,
       pg_used:c.pg_used, pg_capacity:c.pg_capacity,
@@ -2413,7 +2627,7 @@ function structureUnitFields(kind, ctx){
     // переноса по модулю (см. её докстринг: почему модуль был неверен —
     // скриншот RIFT с разным простоем у разных фабрик).
     if(pin){
-      const info=pinCycleInfo(pin,ctx.gameLastUpdate);
+      const info=pinCycleInfo(pin,ctx.gameLastUpdate,ctx.sim);
       let state;
       if(info.unknown){
         state=`<div class="state-wait">${t('cycUnknown')}</div>
@@ -2508,10 +2722,12 @@ function structureUnitsHTML(structuresDetail, planetType, ctx){
    real_colony_load()), либо null, если планеты нет в planet_industry.csv
    — тогда честное «нет данных», как и раньше. Фабрики заодно получают
    настоящий прогресс цикла (pinCycleInfo) вместо статичного пунктира. */
-function pinUnitsHTML(pins, planetType, planetLabel, load, gameLastUpdate){
+function pinUnitsHTML(pins, planetType, planetLabel, load, gameLastUpdate, routes){
+  const sim=simulateColonyFactories(pins,routes,gameLastUpdate);
   return sortPinsForDisplay(pins).map((pin,i)=>{
     const code=`${String.fromCharCode(65+(i%26))}${i}-${planetLabel}`;
-    const info=pinCycleInfo(pin,gameLastUpdate);
+    const pinSim=sim&&sim.get(pin.pin_id);
+    const info=pinCycleInfo(pin,gameLastUpdate,pinSim);
     const opts={size:52, cycle:info.cycle, idle:info.idle};
     if(pin.kind==='command_center' && load){ opts.cpu=load.cpu; opts.pg=load.pg; }
     return `<div class="unit">
@@ -2520,7 +2736,7 @@ function pinUnitsHTML(pins, planetType, planetLabel, load, gameLastUpdate){
         <div class="title">${sname(pin.kind)} <span class="code">${code}</span></div>
         ${structureUnitFields(pin.kind,{hasLoad:!!load, cpu:load&&load.cpu, pg:load&&load.pg,
           cpuUsed:load&&load.cpuUsed, cpuCap:load&&load.cpuCap, pgUsed:load&&load.pgUsed, pgCap:load&&load.pgCap,
-          pin, gameLastUpdate})}
+          pin, gameLastUpdate, sim:pinSim})}
       </div>
     </div>`;
   }).join('');
@@ -2594,7 +2810,7 @@ function openRealColonyDetail(id){
     cpuUsed:c.cpu_used, cpuCap:c.cpu_capacity, pgUsed:c.pg_used, pgCap:c.pg_capacity}:null;
 
   const body=(c.pins&&c.pins.length)
-    ? pinUnitsHTML(c.pins, ptype, c.planet_index, load, c.game_last_update)
+    ? pinUnitsHTML(c.pins, ptype, c.planet_index, load, c.game_last_update, c.routes)
     : structureUnitsHTML(c.structures, ptype, {hasLoad:!!load, cpu:load&&load.cpu, pg:load&&load.pg,
         real:c, expMs, planetLabel:c.planet_index});
 
@@ -3304,6 +3520,7 @@ async function boot(){
     const d=await res.json();
     ids=d.product_ids||{};
     recipeInputs=d.recipe_inputs||{};
+    schematics=d.schematics||{};
     allConstellations=d.bases||[];
     allProducts=d.products||[];
     regions=d.regions||{};
