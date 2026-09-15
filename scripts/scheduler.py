@@ -51,6 +51,7 @@ STATUS_SNAPSHOT = ROOT / "data" / "cache" / "scheduler_status.json"
 @dataclass
 class Job:
     name: str
+    key: str
     run: Callable[[], int]
     every_minutes: int
     reason: str
@@ -95,19 +96,19 @@ def _backup() -> int:
 
 
 JOBS = [
-    Job("Статус сервера", _server_status, 10,
+    Job("Статус сервера", "server_status", _server_status, 10,
         "число игроков онлайн меняется медленно, чаще опрашивать незачем"),
-    Job("Рыночные цены", _market_prices, 60,
+    Job("Рыночные цены", "market_prices", _market_prices, 60,
         "цены на продукцию PI устойчивы, а Fuzzwork — чужой сервис"),
-    Job("Обновление токенов ESI", _refresh_tokens, 15,
+    Job("Обновление токенов ESI", "refresh_tokens", _refresh_tokens, 15,
         "access-токен живёт ~20 минут; продлеваем до истечения, "
         "пока пусто — мгновенный no-op"),
-    Job("Скиллы персонажей", _sync_skills, 360,
+    Job("Скиллы персонажей", "sync_skills", _sync_skills, 360,
         "уровни PI-скиллов меняются раз в дни; идёт ПОСЛЕ обновления токенов"),
-    Job("Статус колоний", _sync_colonies, 30,
+    Job("Статус колоний", "sync_colonies", _sync_colonies, 30,
         "таймеры экстракторов; фронт считает обратный отсчёт сам, "
         "сбор нужен на случай перезапуска программы"),
-    Job("Резервная копия", _backup, 1440,
+    Job("Резервная копия", "backup", _backup, 1440,
         "раз в сутки: база и снимки кэша, старые чистятся"),
 ]
 
@@ -131,6 +132,7 @@ def _write_status_snapshot() -> None:
         "jobs": [
             {
                 "name": job.name,
+                "key": job.key,
                 "every_minutes": job.every_minutes,
                 "last_run": (
                     datetime.fromtimestamp(job.last_run, tz=timezone.utc).isoformat(timespec="seconds")
