@@ -1197,6 +1197,7 @@ const T={
   hUnit:'ч',minUnit:'мин',dUnit:'д',pPin:['пин','пина','пинов'],
   progEnds:'до конца программы экстрактора',syncedColony:'колония в игре',
   procCycleLbl:'до конца цикла переработки',
+  procDepletionLbl:'до конца запаса сырья в причале',
   cycNoFactory:'ESI не отдаёт состояние фабрик — только экстракторы',
   role_mine:'Добыча',role_mine_surplus:'Добыча (избыток)',role_proc:'Переработка',role_direct_p2:'Прямое P2',
   factW:'фабрик',pFactory:['фабрика','фабрики','фабрик']},
@@ -1260,6 +1261,7 @@ const T={
   hUnit:'h',minUnit:'min',dUnit:'d',pPin:['pin','pins','pins'],
   progEnds:'until the extraction program ends',syncedColony:'built in game',
   procCycleLbl:'until the processing cycle ends',
+  procDepletionLbl:'until raw materials in the launchpad run out',
   cycNoFactory:'ESI does not expose factory state — extractors only',
   role_mine:'Extraction',role_mine_surplus:'Extraction (surplus)',role_proc:'Processing',role_direct_p2:'Direct P2',
   factW:'factories',pFactory:['factory','factories','factories']}
@@ -2042,6 +2044,38 @@ function simulateColonyFactories(pins, routes, gameLastUpdateIso){
         idleMs:Math.max(0, nowMs-(entry.idleSinceMs!=null?entry.idleSinceMs:entry.lastRun))});
     }
   }
+
+  // Время до исчерпания сырья в причале (только для переработки — у
+  // добычи буфер пополняет сам экстрактор, у переработки его пополняет
+  // только игрок вручную привозом, значит запас конечный и ничем сам не
+  // растёт). Причал/склад — не «сырьё» само по себе: тот же buf хранит
+  // и уже готовую продукцию, ждущую вывоза (ESI не помечает предмет как
+  // «вход» или «выход» — это просто type_id с количеством), поэтому
+  // расход считается ТОЛЬКО для типов, которые реально потребляет
+  // какая-то фабрика по исходящим маршрутам отсюда (entry.demands) —
+  // готовая продукция, для которой потребителя нет, в расход не попадает
+  // сама по себе. Совместное истощение нескольких видов сырья сразу:
+  // фабрика встаёт по ПЕРВОМУ кончившемуся, поэтому по колонии в целом
+  // берётся минимум по каждой паре (причал, вид сырья), а не одно число
+  // на весь причал разом.
+  let depletionMs=null;
+  for(const [pinId,entry] of st){
+    if(!entry.isStorage) continue;
+    if(entry.pin.kind!=='launchpad' && entry.pin.kind!=='storage_facility') continue;
+    const perHourByType=new Map();
+    for(const r of (outRoutes.get(pinId)||[])){
+      const dest=st.get(r.dest);
+      if(!dest||!dest.isFactory||dest.unsupported||!dest.demands||!dest.demands.has(r.typeId)) continue;
+      const perHour=dest.demands.get(r.typeId)/(dest.cycleMs/3600000);
+      perHourByType.set(r.typeId, (perHourByType.get(r.typeId)||0)+perHour);
+    }
+    for(const [typeId,perHour] of perHourByType){
+      if(perHour<=0) continue;
+      const ms=(entry.buf.get(typeId)||0)/perHour*3600000;
+      if(depletionMs==null||ms<depletionMs) depletionMs=ms;
+    }
+  }
+  results.depletionMs=depletionMs;
   return results;
 }
 
@@ -2163,6 +2197,15 @@ function colonyTail(p){
     return {lbl:t('progEnds'), cls, exp, val:left==null?t('cycIdle'):fmtLeft(left)};
   }
   if(p.role_key==='proc'){
+    // Честный расчёт (не догадка): sim.depletionMs — минимум по всем
+    // (причал, вид сырья) от simulateColonyFactories(), null если считать
+    // нечем (нет маршрутов/схем/снимка) — тогда как и раньше «нет данных».
+    const sim=simulateColonyFactories(p.pins,p.routes,p.game_last_update);
+    const depletionMs=sim&&sim.depletionMs;
+    if(depletionMs!=null){
+      const cls=depletionMs<=0?' over':depletionMs<7200000?' soon':'';
+      return {lbl:t('procDepletionLbl'), cls, val:fmtLeft(depletionMs)};
+    }
     return {lbl:t('procCycleLbl'), cls:'', val:t('noData'), title:t('cycNoFactory')};
   }
   return {lbl:t('progEnds'), cls:'', val:t('cycIdle')};
@@ -3282,6 +3325,12 @@ const DOC={
    длительностью. Без
    маршрутов, или для колонии сразу после пересинхронизации — честное
    «неизвестно», а не выдуманное состояние.</p>
+   <p>Для перерабатывающих колоний та же проекция считает, через сколько
+   закончится сырьё в причале: в отличие от добычи, где его пополняет
+   экстрактор, сюда сырьё привозит только игрок, и запас конечный.
+   Плашка показывает время до первого исчерпавшегося вида сырья (если их
+   несколько — до самого раннего), а не одно усреднённое число на весь
+   причал сразу.</p>
    <p>Колония, добывающая меньше 48 000 ед./ч, помечена как дефицитная —
    фиксированный порог: на такой скорости ресурса не хватит на всю цепочку,
    и его придётся дублировать дополнительной добычей. Дефицит — отдельная
@@ -3462,6 +3511,11 @@ const DOC={
    how much material has piled up at each factory — "in production" or "idle" with a real
    duration. Without routes, or right
    after a fresh resync, it says an honest "unknown" instead of guessing.</p>
+   <p>For processing colonies the same projection also works out how long until the
+   launchpad runs out of raw material: unlike extraction, where the extractor keeps
+   refilling it, here only the player brings material in, so the stock is finite. The badge
+   shows time until the first material type runs out (if there are several, the earliest
+   one) — not one averaged number for the whole launchpad.</p>
    <p>A colony extracting under 48,000 units/hour is flagged as in deficit — a fixed
    threshold: at that rate the resource won't cover the whole chain, so it needs
    duplicating with extra extraction. Deficit is its own category — the colony keeps
