@@ -207,5 +207,15 @@ FEATURES = FEATURES + (
 )
 
 
+FEATURES = FEATURES + (
+    Feature(
+        "character_grouping", "Постоянная группа «основной + альты»",
+        ("основного персонажа", "сохраните"),
+        ("primary character", "save"),
+        "0.10.2", "help",
+    ),
+)
+
+
 def by_section(section: str) -> tuple[Feature, ...]:
     return tuple(f for f in FEATURES if f.where == section)

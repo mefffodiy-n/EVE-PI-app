@@ -1183,6 +1183,9 @@ const T={
   unlink:'Отвязать',unlinkHint:'Стереть токен на нашей стороне — планировщик перестанет видеть персонажа до повторного входа. Доступ на стороне CCP отдельно отзывается на eveonline.com/account/third_party_apps.',
   reconnect:'Перезайти',reconnectHint:'Доступ ESI для этого персонажа истёк или отозван (сменён пароль, отозвано приложение) — колонии и скиллы больше не обновляются. Перезайдите через EVE SSO этим же персонажем.',
   unlinkFail:'Не удалось отвязать персонажа',
+  groupHint:'Отметьте, кто из вошедших персонажей основной, и сохраните — на новом устройстве или в другом браузере вход любым из этой группы подтянет всех остальных, без повторного входа каждым.',
+  groupSave:'Сохранить группу',groupSaved:'Группа сохранена',groupSaveFail:'Не удалось сохранить группу',
+  groupPrimary:'основной',groupPickPrimary:'Отметьте основного персонажа',
   chipJobs:'сборщики',jobsOk:'ок',jobsStale:'застряли',jobsFailing:'падают',
   jobsNever:'ни разу не запускался',jobsFailingCount:'падает {n}-й раз подряд',
   jobServerStatus:'Статус сервера',jobMarketPrices:'Рыночные цены',
@@ -1247,6 +1250,9 @@ const T={
   unlink:'Unlink',unlinkHint:'Erases the token on our side — the planner stops seeing this character until you log in again. Access on the CCP side is revoked separately at eveonline.com/account/third_party_apps.',
   reconnect:'Reconnect',reconnectHint:'ESI access for this character has expired or been revoked (password changed, app access revoked) — colonies and skills are no longer updating. Log in again through EVE SSO with this same character.',
   unlinkFail:'Could not unlink the character',
+  groupHint:'Mark which of your logged-in characters is the primary one and save — logging in with any of this group on a new device or browser will pull in all the others, no need to log in with each separately.',
+  groupSave:'Save group',groupSaved:'Group saved',groupSaveFail:'Could not save the group',
+  groupPrimary:'primary',groupPickPrimary:'Mark the primary character',
   chipJobs:'jobs',jobsOk:'ok',jobsStale:'stuck',jobsFailing:'failing',
   jobsNever:'never ran',jobsFailingCount:'failing {n} time(s) in a row',
   jobServerStatus:'Server status',jobMarketPrices:'Market prices',
@@ -3367,6 +3373,14 @@ const DOC={
    красная кнопка «Перезайти»: планировщик больше не может обновлять его
    скиллы и колонии, пока вы не войдёте этим же персонажем заново через
    EVE SSO.</p>
+   <p>Персонажи группируются только в рамках одного визита (одного браузера):
+   на новом устройстве или после долгого перерыва вход даже уже знакомым
+   персонажем начинает пустой список — остальные альты придётся вводить
+   заново. Если вошло несколько персонажей сразу, рядом с каждым появляется
+   отметка выбора основного персонажа и кнопка «Сохранить группу»: отметьте,
+   кто из них основной, и сохраните — при входе ЛЮБЫМ персонажем этой группы
+   на любом устройстве или в любом браузере подтянутся сразу все остальные,
+   без повторного входа каждым.</p>
 
    <h3>Мои колонии в игре</h3>
    <p>Отдельный блок на дашборде: что у персонажей реально построено — снимок
@@ -3560,6 +3574,13 @@ const DOC={
    password or revoked the app on eveonline.com), a red "Reconnect" button appears next to
    them: the planner can no longer refresh their skills and colonies until you log in again
    with that same character through EVE SSO.</p>
+   <p>Characters are grouped only within one visit (one browser): on a new device or
+   after a long break, logging in with even a familiar character starts from an empty
+   list — the other alts need logging in again separately. Once several characters have
+   logged in together, a pick mark for the primary character and a "Save group" button
+   appear next to each of them: mark which one is primary and save — logging in with ANY
+   character from that group, on any device or browser, will pull in all the others at
+   once, with no need to log in with each separately.</p>
 
    <h3>My in-game colonies</h3>
    <p>A separate dashboard panel: what your characters have actually built — a live
@@ -4000,12 +4021,25 @@ function renderCrew(){
     const c=busy[r.character]=busy[r.character]||{mine:0,proc:0};
     isMining(r)?c.mine++:c.proc++;
   });
+  // Группа «основной + альты» (docs/ROADMAP.md, Фаза 9, 16.09.2026) —
+  // предлагается только для esi-персонажей этого визита (dev-заглушки
+  // никогда не проходят SSO, group_characters() их и не тронет). Текущее
+  // состояние — общий primary_character_id, если он ОДИН на всех
+  // esi-персонажей визита; разнобой (после конфликта/ручной правки в БД)
+  // — честно «не выбран», а не гадать, кто из них главнее.
+  const linked=crew.filter(c=>c.esi_linked);
+  const groupIds=new Set(linked.map(c=>c.primary_character_id).filter(x=>x!=null));
+  const currentPrimary=groupIds.size===1?[...groupIds][0]:null;
+
   box.innerHTML=crew.map(c=>{
     const b=busy[c.name]||{mine:0,proc:0}, used=b.mine+b.proc;
     const spread=(lastLogistics&&lastLogistics.characters||[]).find(x=>x.character===c.name);
     const sys=spread?` · ${plural(spread.system_count,t('sysOne'),t('sysFew'),t('sysMany'))}`:'';
     return `<div title="CCU ${c.ccu} · IC ${c.ic} · ${c.planet_slots} ${t('planetSlots')}${
       spread?' · '+spread.systems.join(', '):''}">
+      ${linked.length>1?`<input type="radio" name="primaryPick" value="${c.character_id}"
+        ${c.character_id===currentPrimary?'checked':''}
+        style="margin-right:4px" title="${t('groupPickPrimary')}">`:''}
       <div class="pilot-lg" style="width:22px;height:22px;font-size:9px">${initials(c.name)}${avatarImg(c.character_id)}</div>
       <span>${c.name}</span>
       <span class="lv">${used}/${c.planet_slots}${sys}</span>
@@ -4016,7 +4050,34 @@ function renderCrew(){
         title="${t('unlinkHint')}" onclick="unlinkCharacter(${c.character_id})"
         data-i18n="unlink">${t('unlink')}</button>`:''}</div>`;
   }).join('');
+  if(linked.length>1){
+    box.insertAdjacentHTML('beforeend',
+      `<div style="margin-top:6px">
+        <button class="mini" style="padding:2px 8px;font-size:10px" title="${t('groupHint')}"
+          onclick="saveCharacterGroup()">${t('groupSave')}</button>
+      </div>`);
+  }
   fitStepFills();
+}
+
+/* Постоянная группа «основной + альты» (docs/ROADMAP.md, Фаза 9,
+   16.09.2026): пользователь отмечает радио-кнопкой, кто из УЖЕ вошедших
+   в этот визит esi-персонажей основной, и сохраняет — /api/auth/group
+   привязывает всех esi-персонажей визита к одному детерминированному
+   account_id (f"char:{primary}"), одинаковому при входе с любого
+   устройства/браузера. Без выбора — честная подсказка, а не тихий
+   no-op. */
+async function saveCharacterGroup(){
+  const picked=document.querySelector('input[name="primaryPick"]:checked');
+  if(!picked){ msg(t('groupPickPrimary'), true); return; }
+  const r=await fetch(`${API}/auth/group`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({primary_character_id:Number(picked.value)}),
+  });
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok){ msg(d.message||t('groupSaveFail'), true); return; }
+  msg(t('groupSaved'));
+  await loadCrew();
 }
 
 /* Карточки 01/03 «Что производим»/«Где перерабатываем» должны быть

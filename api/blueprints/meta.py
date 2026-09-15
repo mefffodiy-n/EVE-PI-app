@@ -200,6 +200,14 @@ def characters():
         credentialed = set(session.scalars(
             select(Credential.character_id).where(Credential.character_id.in_(ids))
         ).all())
+        # primary_character_id — постоянная группа (docs/ROADMAP.md, Фаза 9,
+        # 16.09.2026), нужна фронту, чтобы показать текущее состояние
+        # (уже сгруппированы или нет) и предложить группировку только для
+        # esi-персонажей этого визита, а не dev-заглушек.
+        primary_ids = dict(session.execute(
+            select(Character.character_id, Character.primary_character_id)
+            .where(Character.character_id.in_(ids))
+        ).all())
 
     return json_ok(
         characters=[
@@ -212,6 +220,7 @@ def characters():
                 "esi_linked": sources.get(c.character_id) == "esi",
                 "needs_reconnect": sources.get(c.character_id) == "esi"
                     and c.character_id not in credentialed,
+                "primary_character_id": primary_ids.get(c.character_id),
             }
             for c in crew
         ],

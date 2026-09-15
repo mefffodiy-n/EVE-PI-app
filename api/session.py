@@ -38,3 +38,18 @@ def ensure_account_id() -> str:
         session["account_id"] = account_id
         session.permanent = True
     return account_id
+
+
+def set_account_id(account_id: str) -> None:
+    """
+    Заменить account_id визита на конкретное значение — используется
+    только для перехода на постоянный групповой id персонажа
+    (`f"char:{primary_character_id}"`, docs/ROADMAP.md, Фаза 9,
+    16.09.2026): при входе персонажем, состоящим в постоянной группе
+    «основной + альты», визит должен видеть ВСЮ группу, а не только
+    персонажей, вошедших в рамках этой случайной cookie-сессии. Обычный
+    вход без группы продолжает использовать случайный account_id из
+    ensure_account_id() — эта функция для него не вызывается.
+    """
+    session["account_id"] = account_id
+    session.permanent = True
