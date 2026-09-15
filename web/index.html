@@ -4,13 +4,43 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PI Director</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Saira+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
-<!-- Saira Condensed подключён для Фазы 8 (roadmap.md) — шрифт заголовков/
-     лейблов/кнопок из макета Claude Design. Пока нигде не применяется:
-     это шаг 1 плана, само подключение не должно ничего сломать. -->
 <style>
+/* Шрифты — самостоятельный хостинг, не Google Fonts (roadmap.md, Фаза 9,
+   16.09.2026, разбор github.com/Alexmidrus/EveGAS_calc): раньше здесь был
+   <link> на fonts.googleapis.com — внешний CDN-запрос на каждый визит.
+   Файлы (те же 4 юникод-диапазона на каждое семейство — latin, latin-ext,
+   cyrillic, cyrillic-ext; переменный вес 100-900/100-800 одним файлом на
+   диапазон, не по файлу на насечку) сняты с самого Google Fonts (тот же
+   источник, что был у <link>) и лежат в web/fonts/, отдаются тем же
+   web_files() маршрутом, что и остальной web/. IBM Plex Sans/Mono и Saira
+   Condensed заменены на Inter/JetBrains Mono целиком — Saira Condensed
+   нигде не остаётся, решение полной замены визуального характера
+   редизайна Фазы 8 принято пользователем осознанно, не только ради
+   самохостинга. */
+@font-face { font-family:'Inter'; font-style:normal; font-weight:100 900; font-display:swap;
+  src:url('fonts/inter-latin.woff2') format('woff2');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family:'Inter'; font-style:normal; font-weight:100 900; font-display:swap;
+  src:url('fonts/inter-latin-ext.woff2') format('woff2');
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family:'Inter'; font-style:normal; font-weight:100 900; font-display:swap;
+  src:url('fonts/inter-cyrillic.woff2') format('woff2');
+  unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116; }
+@font-face { font-family:'Inter'; font-style:normal; font-weight:100 900; font-display:swap;
+  src:url('fonts/inter-cyrillic-ext.woff2') format('woff2');
+  unicode-range:U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F; }
+@font-face { font-family:'JetBrains Mono'; font-style:normal; font-weight:100 800; font-display:swap;
+  src:url('fonts/jetbrains-mono-latin.woff2') format('woff2');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family:'JetBrains Mono'; font-style:normal; font-weight:100 800; font-display:swap;
+  src:url('fonts/jetbrains-mono-latin-ext.woff2') format('woff2');
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family:'JetBrains Mono'; font-style:normal; font-weight:100 800; font-display:swap;
+  src:url('fonts/jetbrains-mono-cyrillic.woff2') format('woff2');
+  unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116; }
+@font-face { font-family:'JetBrains Mono'; font-style:normal; font-weight:100 800; font-display:swap;
+  src:url('fonts/jetbrains-mono-cyrillic-ext.woff2') format('woff2');
+  unicode-range:U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F; }
 /* ═══ Общие токены ═══════════════════════════════════════════════════
    Две вкладки говорят на разных визуальных языках намеренно:
    дашборд повторяет игровое окно Planetary Industry, чтобы взгляд
@@ -82,8 +112,8 @@ body.light {
    сжаться дальше — так честнее, чем ломать вёрстку в узкой полосе. */
 html { min-width:500px; }
 body { margin:0; background:var(--void); color:var(--read); min-width:500px;
-       font-family:'IBM Plex Sans',system-ui,sans-serif; font-size:13px; line-height:1.45; }
-.num { font-family:'IBM Plex Mono',monospace; font-variant-numeric:tabular-nums; }
+       font-family:'Inter',system-ui,sans-serif; font-size:13px; line-height:1.45; }
+.num { font-family:'JetBrains Mono',monospace; font-variant-numeric:tabular-nums; }
 button { font-family:inherit; }
 
 /* ═══ Шапка приложения ═══════════════════════════════════════════ */
@@ -105,13 +135,13 @@ button { font-family:inherit; }
 .brand-avatar { width:30px; height:30px; border-radius:50%; flex:0 0 auto;
                 filter:drop-shadow(0 0 6px var(--glow)); }
 .brand-text { display:flex; flex-direction:column; line-height:1.15; }
-.brand-title { font-family:'Saira Condensed',sans-serif; font-weight:700; font-size:16px;
+.brand-title { font-family:'Inter',sans-serif; font-weight:700; font-size:16px;
                letter-spacing:.12em; text-transform:uppercase; color:var(--bright); }
 .brand small { color:var(--dim); font-weight:400; font-size:10px; letter-spacing:.1em;
                text-transform:uppercase; }
 .tab { white-space:nowrap; background:none; border:none; border-bottom:2px solid transparent; color:var(--dim);
        padding:12px 14px; cursor:pointer; font-size:13px;
-       font-family:'Saira Condensed',sans-serif; font-weight:600; letter-spacing:.14em; text-transform:uppercase; }
+       font-family:'Inter',sans-serif; font-weight:600; letter-spacing:.14em; text-transform:uppercase; }
 .tab:hover { color:var(--read); }
 .tab.on { color:var(--bright); border-bottom-color:var(--amber); }
 .topbar .right { margin-left:auto; display:flex; gap:6px; align-items:center; }
@@ -120,7 +150,7 @@ button { font-family:inherit; }
    Каждая отвечает на один вопрос и не требует пояснений. */
 .chip { display:flex; align-items:center; gap:7px; padding:5px 11px;
         border:1px solid var(--seam); color:var(--dim); font-size:12px;
-        font-family:'IBM Plex Mono',monospace; white-space:nowrap; }
+        font-family:'JetBrains Mono',monospace; white-space:nowrap; }
 .chip b { color:var(--read); font-weight:500; }
 .chip .dot { width:7px; height:7px; border-radius:50%; background:var(--calm); }
 .chip .dot.off { background:var(--dim); }
@@ -131,7 +161,7 @@ button { font-family:inherit; }
 .hbtn:hover { border-color:var(--flux); color:var(--flux); }
 .langs { display:flex; border:1px solid var(--seam); }
 .langs button { background:none; border:none; color:var(--dim); padding:5px 10px;
-                cursor:pointer; font-size:12px; font-family:'IBM Plex Mono',monospace; }
+                cursor:pointer; font-size:12px; font-family:'JetBrains Mono',monospace; }
 .langs button.on { background:var(--seam); color:var(--bright); }
 .icon-btn { width:30px; height:28px; display:grid; place-items:center; background:none;
             border:1px solid var(--seam); color:var(--dim); cursor:pointer; }
@@ -246,7 +276,7 @@ button { font-family:inherit; }
 .orb .badge { position:absolute; top:-3px; left:-2px; z-index:3;
               background:var(--inset); border:1px solid var(--seam); border-radius:3px;
               padding:0 4px; font-size:10px; line-height:14px;
-              font-family:'IBM Plex Mono',monospace; color:var(--amber); }
+              font-family:'JetBrains Mono',monospace; color:var(--amber); }
 .orb .badge.hot { color:var(--alarm); border-color:var(--alarm); }
 /* Дефицит добычи (isColonyDeficient) — отдельная категория от «требует
    внимания» (.attn/noEntry): не гасит иконку ресурса, только маленькая
@@ -283,7 +313,7 @@ button { font-family:inherit; }
 .tip-label { color:var(--dim); font-size:10px; text-transform:uppercase; letter-spacing:.03em; }
 .tip-bar { height:4px; background:var(--orb-track); border-radius:2px; overflow:hidden; margin:3px 0; }
 .tip-bar i { display:block; height:100%; background:var(--ring-infra); }
-.tip-meta { color:var(--dim); font-family:'IBM Plex Mono',monospace; font-size:10px; }
+.tip-meta { color:var(--dim); font-family:'JetBrains Mono',monospace; font-size:10px; }
 .tip-planet { margin-top:4px; color:var(--bright); font-weight:500; }
 
 /* Свободный слот планеты у персонажа (вид «Список по персонажам») —
@@ -306,27 +336,27 @@ button { font-family:inherit; }
 .pilot-lg img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
 .pilot-name { color:var(--bright); font-weight:500; }
 .pilot-name .skills { color:var(--dim); font-weight:400; font-size:11px;
-  font-family:'IBM Plex Mono',monospace; margin-left:8px; }
+  font-family:'JetBrains Mono',monospace; margin-left:8px; }
 .sub .synced { color:var(--calm); border:1px solid var(--calm); border-radius:3px;
   padding:0 5px; font-size:10px; text-transform:uppercase; letter-spacing:.04em;
   white-space:nowrap; }
-.extractor-left { font-family:'IBM Plex Mono',monospace; color:var(--calm); }
+.extractor-left { font-family:'JetBrains Mono',monospace; color:var(--calm); }
 .extractor-left.soon { color:var(--amber); }
 .extractor-left.over { color:var(--alarm); font-weight:600; }
 .sub { color:var(--dim); font-size:12px; display:flex; gap:8px; align-items:center; margin-top:1px; }
 .sysbadge { border-radius:3px; padding:1px 6px;
-            font-family:'IBM Plex Mono',monospace; font-size:11px; }
-.sec { font-family:'IBM Plex Mono',monospace; font-size:11px; padding:1px 5px; border-radius:3px; }
+            font-family:'JetBrains Mono',monospace; font-size:11px; }
+.sec { font-family:'JetBrains Mono',monospace; font-size:11px; padding:1px 5px; border-radius:3px; }
 .colony-head .tail { margin-left:auto; text-align:right; }
 /* Шаг 6 (roadmap.md): подпись хвостовой метки — Saira Condensed
    заглавными, как заголовки разделов из Шага 3, вместо обычного текста. */
-.tail .lbl { color:var(--dim); font-size:10px; font-family:'Saira Condensed',sans-serif;
+.tail .lbl { color:var(--dim); font-size:10px; font-family:'Inter',sans-serif;
              letter-spacing:.12em; text-transform:uppercase; }
-.tail .val { font-family:'IBM Plex Mono',monospace; color:var(--read); }
+.tail .val { font-family:'JetBrains Mono',monospace; color:var(--read); }
 .tail .val.hot { color:var(--alarm); }
 .details-btn { margin-left:12px; background:none; border:1px solid var(--seam); color:var(--amber);
                padding:5px 12px; cursor:pointer; font-size:11px; border-radius:2px;
-               font-family:'Saira Condensed',sans-serif; font-weight:600; letter-spacing:.1em; text-transform:uppercase; }
+               font-family:'Inter',sans-serif; font-weight:600; letter-spacing:.1em; text-transform:uppercase; }
 .details-btn:hover { background:var(--accent-bg); border-color:var(--amber); }
 .strip { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; padding-left:2px; }
 
@@ -355,7 +385,7 @@ button { font-family:inherit; }
    из Шага 4 — рамка и текст амброй, по ховеру заливка сплошным золотом. */
 .cp-head .back { margin-left:auto; background:none; border:1px solid var(--amber);
                  color:var(--amber); padding:6px 16px; cursor:pointer; font-size:11px;
-                 font-family:'Saira Condensed',sans-serif; font-weight:600; letter-spacing:.12em; text-transform:uppercase; }
+                 font-family:'Inter',sans-serif; font-weight:600; letter-spacing:.12em; text-transform:uppercase; }
 .cp-head .back:hover { background:var(--amber); color:var(--void); }
 
 /* Круг структуры стоит СЛЕВА, вне панели строки — как в игре. */
@@ -367,7 +397,7 @@ button { font-family:inherit; }
 .unit .cols2 { display:grid; grid-template-columns:1fr 1fr; gap:4px 24px; margin-top:6px; max-width:640px; }
 .unit .lbl { color:var(--dim); font-size:11px; }
 .unit .meta { color:var(--dim); font-size:12px; }
-.unit .val { font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--read); }
+.unit .val { font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--read); }
 .state-ok { color:var(--calm); } .state-wait { color:var(--dim); }
 .inputs { display:flex; gap:4px; margin-top:3px; }
 .inputs span { width:26px; height:26px; background:var(--inset); border:1px solid var(--seam);
@@ -389,11 +419,11 @@ button { font-family:inherit; }
 .answer { padding:11px 14px; border-right:1px solid var(--seam); }
 .answer:last-child { border-right:none; }
 .answer .label { color:var(--dim); font-size:10px; letter-spacing:.18em; text-transform:uppercase;
-                 font-family:'Saira Condensed',sans-serif; font-weight:600; }
-.answer .value { font-family:'IBM Plex Mono',monospace; font-variant-numeric:tabular-nums;
+                 font-family:'Inter',sans-serif; font-weight:600; }
+.answer .value { font-family:'JetBrains Mono',monospace; font-variant-numeric:tabular-nums;
                  font-size:25px; color:var(--bright); line-height:1.15; margin-top:2px; }
 .answer .value.warn { color:var(--amber); }
-.answer .unit-s { font-size:13px; color:var(--dim); margin-left:5px; font-family:'IBM Plex Sans',sans-serif; }
+.answer .unit-s { font-size:13px; color:var(--dim); margin-left:5px; font-family:'Inter',sans-serif; }
 .answer .note { color:var(--dim); font-size:12px; }
 /* Шаг 9 (roadmap.md, решение пользователя): рейка .rail заменена
    сеткой из трёх равных карточек-шагов по макету Claude Design —
@@ -403,7 +433,7 @@ button { font-family:inherit; }
    переносятся в один столбец, когда не помещаются по 300px. */
 .split { display:flex; flex-direction:column; gap:16px; padding:16px; }
 .brief-head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; }
-.brief-head h2 { margin:0; font-family:'Saira Condensed',sans-serif; font-size:15px; font-weight:600;
+.brief-head h2 { margin:0; font-family:'Inter',sans-serif; font-size:15px; font-weight:600;
                  letter-spacing:.22em; text-transform:uppercase; color:var(--bright); }
 .brief-head .sub { color:var(--dim); font-size:12px; }
 /* stretch (не start): карточки 01/02/03 должны быть одной высоты и
@@ -415,12 +445,12 @@ button { font-family:inherit; }
 .step-card { background:var(--hull); border:1px solid var(--seam); }
 .step-head { display:flex; align-items:center; gap:10px; padding:11px 14px; border-bottom:1px solid var(--seam); }
 .step-num { width:22px; height:22px; display:grid; place-items:center; border:1px solid var(--amber);
-            color:var(--amber); font-family:'IBM Plex Mono',monospace; font-size:11px; flex:0 0 auto; }
-.step-title { font-family:'Saira Condensed',sans-serif; font-weight:600; font-size:12px;
+            color:var(--amber); font-family:'JetBrains Mono',monospace; font-size:11px; flex:0 0 auto; }
+.step-title { font-family:'Inter',sans-serif; font-weight:600; font-size:12px;
               letter-spacing:.18em; text-transform:uppercase; color:var(--bright); }
-.step-count { margin-left:auto; color:var(--amber); font-size:11px; font-family:'IBM Plex Mono',monospace; flex:0 0 auto; }
+.step-count { margin-left:auto; color:var(--amber); font-size:11px; font-family:'JetBrains Mono',monospace; flex:0 0 auto; }
 .step-body { padding:12px 14px; display:flex; flex-direction:column; min-height:0; }
-.step-subhead { font-family:'Saira Condensed',sans-serif; font-weight:600; font-size:10px;
+.step-subhead { font-family:'Inter',sans-serif; font-weight:600; font-size:10px;
                 letter-spacing:.18em; text-transform:uppercase; color:var(--dim);
                 margin:16px 0 8px; padding-top:13px; border-top:1px solid var(--seam); }
 /* Карточки 01/03 короче 02 по содержимому, но вытянуты до её высоты
@@ -458,7 +488,7 @@ button { font-family:inherit; }
 .field { margin-bottom:11px; }
 .field label { display:block; font-size:12px; color:var(--dim); margin-bottom:3px; }
 .field select, .field input { width:100%; background:var(--void); border:1px solid var(--seam);
-    color:var(--read); padding:6px 8px; font-family:'IBM Plex Mono',monospace; font-size:12px; }
+    color:var(--read); padding:6px 8px; font-family:'JetBrains Mono',monospace; font-size:12px; }
 .field select:focus, .field input:focus { outline:none; border-color:var(--amber); }
 /* Пропущено при Шаге 9: кнопка осталась прозрачной с синей (--flux)
    рамкой из-под старой рейки — в макете это сплошная золотая заливка,
@@ -467,20 +497,20 @@ button { font-family:inherit; }
    в одной строке с полем сохранения — width:100% её раздувал бы). */
 .run { padding:10px 26px; cursor:pointer; background:var(--amber);
        border:1px solid var(--amber); color:var(--void); font-size:13px; font-weight:700;
-       font-family:'Saira Condensed',sans-serif; letter-spacing:.14em; text-transform:uppercase;
+       font-family:'Inter',sans-serif; letter-spacing:.14em; text-transform:uppercase;
        white-space:nowrap; flex:0 0 auto; }
 .run:hover { background:var(--amber-hi); border-color:var(--amber-hi); }
 .crew { max-height:210px; overflow-y:auto; }
 .crew div { display:flex; gap:8px; align-items:center; padding:4px 0; font-size:12px; }
-.crew .lv { margin-left:auto; color:var(--dim); font-family:'IBM Plex Mono',monospace; font-size:11px; }
+.crew .lv { margin-left:auto; color:var(--dim); font-family:'JetBrains Mono',monospace; font-size:11px; }
 
 table { width:100%; border-collapse:collapse; }
 thead .group th { text-align:left; padding:9px 10px 3px; font-size:11px; font-weight:600;
     letter-spacing:.16em; text-transform:uppercase; color:var(--dim);
-    font-family:'Saira Condensed',sans-serif;
+    font-family:'Inter',sans-serif;
     border-bottom:1px solid var(--seam); border-left:1px solid var(--seam); }
 thead .group th small { display:block; font-weight:400; letter-spacing:0; text-transform:none;
-    color:var(--dim); font-size:11px; font-family:'IBM Plex Sans',sans-serif; }
+    color:var(--dim); font-size:11px; font-family:'Inter',sans-serif; }
 thead .cols th { text-align:left; padding:5px 10px; font-size:11px; font-weight:500;
     letter-spacing:.05em; text-transform:uppercase; color:var(--dim);
     border-bottom:1px solid var(--seam); }
@@ -494,8 +524,8 @@ td.r { text-align:right; }
 .stack::after { content:''; position:absolute; left:90%; top:-2px; bottom:-2px; width:1px; background:var(--seam); }
 .stack i { display:block; height:100%; }
 .s-str { background:var(--t-p1); } .s-hed { background:var(--t-p3); } .s-lnk { background:var(--amber); }
-.parts { font-size:11px; color:var(--dim); margin-top:3px; font-family:'IBM Plex Mono',monospace; }
-.pct { font-family:'IBM Plex Mono',monospace; font-variant-numeric:tabular-nums; }
+.parts { font-size:11px; color:var(--dim); margin-top:3px; font-family:'JetBrains Mono',monospace; }
+.pct { font-family:'JetBrains Mono',monospace; font-variant-numeric:tabular-nums; }
 .pct.hot { color:var(--alarm); } .pct.warm { color:var(--amber); }
 
 .msg { padding:5px 10px; margin-bottom:3px; font-size:12px; border-left:2px solid var(--amber);
@@ -623,7 +653,7 @@ details.msgs[open] > summary::before { content:'▾ '; }
 .chip { display:inline-flex; align-items:center; gap:7px; padding:4px 10px;
         border:1px solid var(--seam); background:var(--void); font-size:12px;
         color:var(--dim); white-space:nowrap; }
-.chip b { color:var(--read); font-weight:500; font-family:'IBM Plex Mono',monospace; }
+.chip b { color:var(--read); font-weight:500; font-family:'JetBrains Mono',monospace; }
 .chip .dot { width:7px; height:7px; border-radius:50%; background:var(--dim); flex:0 0 auto; }
 .chip .dot.live { background:var(--calm); box-shadow:0 0 6px var(--calm); }
 .chip .dot.stale { background:var(--amber); }
@@ -633,7 +663,7 @@ details.msgs[open] > summary::before { content:'▾ '; }
 .tbtn:hover { border-color:var(--amber); color:var(--amber); }
 .lang { display:inline-flex; border:1px solid var(--seam); }
 .lang button { background:none; border:none; color:var(--dim); padding:5px 9px; cursor:pointer;
-               font-size:12px; font-family:'IBM Plex Mono',monospace; }
+               font-size:12px; font-family:'JetBrains Mono',monospace; }
 /* Активный язык — золотая заливка (как в макете, lng()), а не
    нейтральный seam+bright из-под старой темы. */
 .lang button.on { background:var(--amber); color:var(--void); }
@@ -646,7 +676,7 @@ details.msgs[open] > summary::before { content:'▾ '; }
 .sso { background:linear-gradient(180deg,var(--accent-bg),transparent);
        border:1px solid var(--amber); color:var(--amber); padding:5px 14px;
        cursor:pointer; font-size:11px; white-space:nowrap;
-       font-family:'Saira Condensed',sans-serif; font-weight:600; letter-spacing:.12em; text-transform:uppercase; }
+       font-family:'Inter',sans-serif; font-weight:600; letter-spacing:.12em; text-transform:uppercase; }
 .sso:hover { background:var(--amber); color:var(--void); }
 
 /* ── Всплывающие окна ────────────────────────────────────────── */
@@ -664,13 +694,13 @@ details.msgs[open] > summary::before { content:'▾ '; }
               background:linear-gradient(90deg,var(--accent-bg),transparent); }
 .modal-head .brand-avatar { width:22px; height:22px; }
 .modal-head h2 { margin:0; font-size:13px; letter-spacing:.18em; text-transform:uppercase;
-                 color:var(--bright); font-family:'Saira Condensed',sans-serif; font-weight:600; }
+                 color:var(--bright); font-family:'Inter',sans-serif; font-weight:600; }
 .modal-head .x { margin-left:auto; background:none; border:1px solid var(--seam); color:var(--dim);
                  width:28px; height:28px; cursor:pointer; font-size:15px; line-height:1; }
 .modal-head .x:hover { color:var(--amber); border-color:var(--amber); }
 .modal-body { overflow-y:auto; padding:18px; }
 .modal-body h3 { font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--amber);
-                 font-family:'Saira Condensed',sans-serif; font-weight:600; margin:22px 0 8px; }
+                 font-family:'Inter',sans-serif; font-weight:600; margin:22px 0 8px; }
 .modal-body h3:first-child { margin-top:0; }
 .modal-body p { margin:0 0 10px; max-width:74ch; }
 .modal-body ol, .modal-body ul { margin:0 0 10px; padding-left:22px; max-width:74ch; }
@@ -693,7 +723,7 @@ details.msgs[open] > summary::before { content:'▾ '; }
               border-bottom:1px solid var(--seam); }
 .picker-bar input[type=search] { flex:1; min-width:0; background:var(--hull);
   border:1px solid var(--seam); color:var(--read); padding:4px 7px; font-size:12px;
-  font-family:'IBM Plex Sans',sans-serif; }
+  font-family:'Inter',sans-serif; }
 .picker-bar input[type=search]:focus { outline:none; border-color:var(--amber); }
 .mini { background:none; border:1px solid var(--seam); color:var(--dim); padding:3px 8px;
         cursor:pointer; font-size:11px; white-space:nowrap; }
@@ -715,9 +745,9 @@ details.msgs[open] > summary::before { content:'▾ '; }
                                     accent-color:var(--amber); flex:0 0 auto; }
 .picker-list img { width:20px; height:20px; object-fit:contain; flex:0 0 auto; }
 .picker-list .tier { margin-left:auto; color:var(--dim); font-size:10px;
-                     font-family:'IBM Plex Mono',monospace; }
+                     font-family:'JetBrains Mono',monospace; }
 .picker-list .cnt { margin-left:auto; color:var(--dim); font-size:11px;
-                    font-family:'IBM Plex Mono',monospace; }
+                    font-family:'JetBrains Mono',monospace; }
 .picker-list .group-title { padding:5px 8px; font-size:10px; letter-spacing:.08em;
   text-transform:uppercase; color:var(--dim); background:var(--hull);
   border-top:1px solid var(--seam); }
@@ -750,13 +780,13 @@ details.msgs[open] > summary::before { content:'▾ '; }
 /* ── Список закупки командных центров ────────────────────────── */
 .shop { border-top:1px solid var(--seam); padding:14px; }
 .shop h3 { font-size:12px; letter-spacing:.18em; text-transform:uppercase; color:var(--amber);
-           font-family:'Saira Condensed',sans-serif; font-weight:600; margin:0 0 10px; }
+           font-family:'Inter',sans-serif; font-weight:600; margin:0 0 10px; }
 .shop-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:10px; }
 .shop-item { display:flex; align-items:center; gap:10px; padding:9px 11px;
              border:1px solid var(--seam); background:var(--hull); }
 .shop-item img { width:30px; height:30px; object-fit:contain; flex:0 0 auto; }
 .shop-item .n { font-size:12px; color:var(--read); }
-.shop-item .q { margin-left:auto; font-family:'IBM Plex Mono',monospace;
+.shop-item .q { margin-left:auto; font-family:'JetBrains Mono',monospace;
                 font-size:16px; color:var(--bright); }
 .shop-total { margin-top:10px; color:var(--dim); font-size:12px; }
 
@@ -766,7 +796,7 @@ details.msgs[open] > summary::before { content:'▾ '; }
    выглядеть как план, а не отдельным списком строк. */
 .colonies { border-top:1px solid var(--seam); }
 .colonies h3 { font-size:12px; letter-spacing:.18em; text-transform:uppercase; color:var(--amber);
-  font-family:'Saira Condensed',sans-serif; font-weight:600;
+  font-family:'Inter',sans-serif; font-weight:600;
   margin:0; padding:14px 14px 4px; display:flex; justify-content:space-between; align-items:baseline; }
 .colonies h3 .colsum { text-transform:none; letter-spacing:normal; font-weight:400; }
 .colonies .colony:last-child { border-bottom:none; }
@@ -777,11 +807,11 @@ details.msgs[open] > summary::before { content:'▾ '; }
 .profit { padding:14px; border-top:1px solid var(--seam); }
 .profit-head { display:flex; align-items:baseline; gap:12px; margin-bottom:10px; flex-wrap:wrap; }
 .profit-head h3 { font-size:13px; letter-spacing:.18em; text-transform:uppercase;
-                  color:var(--bright); font-family:'Saira Condensed',sans-serif; font-weight:600; margin:0; }
+                  color:var(--bright); font-family:'Inter',sans-serif; font-weight:600; margin:0; }
 .profit-head .age { font-size:11px; color:var(--dim); }
 .profit-head .age.stale { color:var(--amber); }
 .profit td.name { color:var(--read); }
-.profit .tierbadge { font-size:10px; color:var(--dim); font-family:'IBM Plex Mono',monospace;
+.profit .tierbadge { font-size:10px; color:var(--dim); font-family:'JetBrains Mono',monospace;
                      margin-left:6px; }
 .profit tr.best td { background:rgba(212,160,74,.06); }
 .profit tr.best td:first-child { box-shadow:inset 2px 0 0 var(--amber); }
@@ -792,7 +822,7 @@ details.msgs[open] > summary::before { content:'▾ '; }
 /* ── Сохранённые планы ────────────────────────────────────────── */
 .saved { border-top:1px solid var(--seam); padding:12px 14px; }
 .saved h3 { font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--dim);
-            font-family:'Saira Condensed',sans-serif; font-weight:600; margin:0 0 8px; }
+            font-family:'Inter',sans-serif; font-weight:600; margin:0 0 8px; }
 /* Рейка узкая, поэтому строка переносится: кнопки уходят под название,
    а не сплющивают его до переноса по буквам. */
 .saved-row { display:flex; align-items:center; gap:8px; padding:6px 8px; flex-wrap:wrap;
@@ -800,18 +830,18 @@ details.msgs[open] > summary::before { content:'▾ '; }
 .saved-row .body { flex:1 1 auto; min-width:0; }
 .saved-row .nm { color:var(--read); white-space:nowrap; overflow:hidden;
                  text-overflow:ellipsis; }
-.saved-row .meta { color:var(--dim); font-size:11px; font-family:'IBM Plex Mono',monospace; }
+.saved-row .meta { color:var(--dim); font-size:11px; font-family:'JetBrains Mono',monospace; }
 .saved-row .acts { margin-left:auto; display:flex; gap:5px; flex:0 0 auto; }
 .saved-row.current { box-shadow:inset 2px 0 0 var(--amber); }
 .cmp { margin-top:8px; padding:8px 10px; border:1px solid var(--seam); background:var(--void);
        font-size:12px; }
-.cmp b { color:var(--bright); font-family:'IBM Plex Mono',monospace; }
+.cmp b { color:var(--bright); font-family:'JetBrains Mono',monospace; }
 .cmp .up { color:var(--alarm); } .cmp .down { color:var(--calm); }
 .cmp ul { margin:6px 0 0; padding-left:18px; color:var(--dim); }
 
 /* ── Пороговые радиусы и выбор при предупреждении ─────────────── */
 .thresholds { font-size:11px; color:var(--dim); line-height:1.6; margin-top:4px; }
-.thresholds b { color:var(--read); font-family:'IBM Plex Mono',monospace; font-weight:500; }
+.thresholds b { color:var(--read); font-family:'JetBrains Mono',monospace; font-weight:500; }
 .thresholds .fit { color:var(--calm); } .thresholds .nofit { color:var(--amber); }
 
 .decision { border:1px solid var(--amber); background:rgba(212,160,74,.07);
@@ -836,7 +866,7 @@ body.light .icon-btn .ic-moon { display:block; }
    изделия. Плашка, а не просто цвет текста: в плотной таблице
    подложка читается быстрее, чем оттенок букв. */
 .tier { display:inline-block; padding:1px 6px; border-radius:3px; font-size:10px;
-        font-family:'IBM Plex Mono',monospace; font-weight:600; letter-spacing:.03em;
+        font-family:'JetBrains Mono',monospace; font-weight:600; letter-spacing:.03em;
         vertical-align:middle; }
 .tier.P1 { color:var(--t-p1); background:var(--t-p1-bg); }
 .tier.P2 { color:var(--t-p2); background:var(--t-p2-bg); }
@@ -883,12 +913,12 @@ thead .group th small { color:var(--dim); }
 .advice.surplus { border-color:var(--calm); background:rgba(74,157,127,.06); }
 .advice h4 { margin:0 0 4px; font-size:13px; font-weight:600; color:var(--bright); }
 .advice .lead { font-size:12px; color:var(--read); margin:0 0 10px; max-width:76ch; }
-.advice .lead b { font-family:'IBM Plex Mono',monospace; color:var(--bright); }
+.advice .lead b { font-family:'JetBrains Mono',monospace; color:var(--bright); }
 .sugg { display:grid; grid-template-columns:1fr auto auto auto; gap:6px 14px;
         align-items:center; font-size:12px; }
 .sugg > div { padding:5px 0; border-top:1px solid var(--seam); }
 .sugg .nm { color:var(--read); }
-.sugg .num { font-family:'IBM Plex Mono',monospace; color:var(--dim); text-align:right; }
+.sugg .num { font-family:'JetBrains Mono',monospace; color:var(--dim); text-align:right; }
 .sugg .num.isk { color:var(--bright); }
 /* Пропущено при Шаге 2 (перекраска палитры) — оставалось синим
    (--flux) вместо золотого, хотя весь остальной акцентный цвет
