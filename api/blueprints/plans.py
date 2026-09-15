@@ -157,6 +157,65 @@ def advice():
     return json_ok(**advise(targets, characters, prices).to_dict(lang))
 
 
+MAX_POCO_RATE = 1.0  # 100% — выше физически бессмысленно, явный признак опечатки
+
+
+@bp.post("/plan-profitability")
+def plan_profitability():
+    """
+    Прибыльность УЖЕ ПОСТРОЕННОГО плана с учётом налога POCO
+    (docs/ROADMAP.md, Фаза 9, 16.09.2026) — не общая экономика шаблона
+    (см. domain/profit.py::rank(), вкладка «Что выгоднее производить»),
+    а конкретно эти строки с их настоящими planet_type и structures_detail.
+
+    Строки плана присылает фронтенд — они у него уже есть (последний
+    ответ /api/calculate), пересчитывать план заново здесь не нужно и
+    было бы двойной работой. Ставки POCO по типам планет — ручной ввод
+    пользователя (вкладка «Настройки»), не из data/planet_industry.csv
+    (там точные, но статичные значения по конкретным планетам — устарели
+    бы молча, см. docstring domain/poco_tax.py).
+    """
+    from domain.poco_tax import evaluate_plan_profitability
+
+    payload, error = parse_json_body({
+        "rows": list, "target_products": list, "poco_rates": dict,
+    })
+    if error:
+        return json_error(error)
+
+    rows = payload["rows"]
+    if not all(isinstance(r, dict) for r in rows):
+        return json_error("Каждая строка плана должна быть объектом")
+
+    targets = [str(t) for t in payload["target_products"]]
+
+    rates: dict[str, float] = {}
+    for planet_type, rate in payload["poco_rates"].items():
+        if not isinstance(rate, (int, float)):
+            return json_error(f"Ставка POCO для «{planet_type}» должна быть числом")
+        if not (0 <= rate <= MAX_POCO_RATE):
+            return json_error(
+                f"Ставка POCO для «{planet_type}» должна быть от 0 до {MAX_POCO_RATE:.0%}"
+            )
+        rates[str(planet_type)] = float(rate)
+
+    prices: dict[str, float] = {}
+    try:
+        from api.blueprints.market import _load_snapshot
+
+        raw = (_load_snapshot() or {}).get("prices") or {}
+        prices = {
+            name: entry["buy_max"]
+            for name, entry in raw.items()
+            if isinstance(entry, dict) and entry.get("buy_max")
+        }
+    except Exception:
+        prices = {}
+
+    result = evaluate_plan_profitability(rows, targets, prices, rates)
+    return json_ok(**result.to_dict())
+
+
 # ── Сохранённые планы ────────────────────────────────────────────
 # Хранятся на сервере, а не в браузере: план должен переживать
 # перезагрузку, смену устройства и быть показываемым напарнику.
