@@ -1606,15 +1606,30 @@ function orb(row,size,showPilot=true){
   const r=(size/2)-2, c=2*Math.PI*r;
   const planetId=ids['planet:'+row.planet_type];
   if(row.isReal){
-    const exp=row.nearest_expiry?Date.parse(row.nearest_expiry):null;
+    // У добычи exp — настоящая метка ESI (nearest_expiry). У переработки
+    // такой метки в игре нет вовсе — вместо неё то же sim.depletionMs, что
+    // и в colonyTail() (панель «Детали»): время до первого исчерпавшегося
+    // вида сырья в причале, честно посчитанное simulateColonyFactories(),
+    // переведённое в такую же абсолютную метку (Date.now()+depletionMs),
+    // чтобы плашка тикала сама через общий setInterval по data-exp, как и
+    // у добычи, а не пересчитывала симуляцию на каждый тик. Раньше бейдж
+    // для переработки не рисовался вовсе ни в сетке, ни в списке по
+    // персонажам — только в панели «Детали» (обнаружено пользователем
+    // 16.09.2026 по скриншотам обоих видов).
+    const isProc=row.role_key==='proc';
+    const exp=isProc
+      ? (()=>{ const sim=simulateColonyFactories(row.pins,row.routes,row.game_last_update);
+                const ms=sim&&sim.depletionMs; return ms!=null?Date.now()+ms:null; })()
+      : (row.nearest_expiry?Date.parse(row.nearest_expiry):null);
     const left=exp!=null?exp-Date.now():null;
     const over=left!=null&&left<=0;
     // Таймер показывается только там, где он есть по-настоящему (активный
-    // экстрактор) или где его отсутствие само по себе сигнал (простаивающий
-    // экстрактор). У колоний переработки без экстрактора таймера в игре нет
-    // вовсе — как на референсном скрине, там чип не рисуется совсем, а не
-    // подставляется «нет данных».
-    const showBadge=exp!=null||row.role_key!=='proc';
+    // экстрактор/посчитанное истощение причала) или где его отсутствие
+    // само по себе сигнал (простаивающий экстрактор). Для переработки без
+    // маршрутов/схем (считать нечем) — чип не рисуется совсем, как и
+    // раньше, а не подставляется «нет данных» лишним значком на итак
+    // плотной сетке.
+    const showBadge=exp!=null||!isProc;
     const badgeTxt=exp!=null?fmtBadgeLeft(left):t('cycIdle');
     const info=producedInfo(row);
     const pin=launchpadPin(row);
@@ -2204,7 +2219,11 @@ function colonyTail(p){
     const depletionMs=sim&&sim.depletionMs;
     if(depletionMs!=null){
       const cls=depletionMs<=0?' over':depletionMs<7200000?' soon':'';
-      return {lbl:t('procDepletionLbl'), cls, val:fmtLeft(depletionMs)};
+      // exp — тот же приём, что и у добычи (nearest_expiry): абсолютная
+      // метка времени, а не относительный остаток, чтобы плашка тикала
+      // сама по setInterval (см. его докстринг), не перезапуская всю
+      // симуляцию каждую минуту ради одного числа.
+      return {lbl:t('procDepletionLbl'), cls, exp:Date.now()+depletionMs, val:fmtLeft(depletionMs)};
     }
     return {lbl:t('procCycleLbl'), cls:'', val:t('noData'), title:t('cycNoFactory')};
   }
