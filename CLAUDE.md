@@ -253,7 +253,7 @@ eve-webtools.com, вики EVE University): рецепты и количеств
 ## Запуск
 
 ```
-pip install -r requirements.txt
+pip install -r requirements.lock.txt           # точные версии; requirements.txt — только границы
 python -m scripts.extract_schematics --write   # создаёт data/schematics.json
 python -m alembic upgrade head                 # создаёт таблицы БД
 python -m scripts.seed_dev_characters          # dev-персонажи (только PI_ENV=dev)

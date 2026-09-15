@@ -19,7 +19,7 @@ systemd, а расписание — через cron.
 
 ```
 python -m venv .venv
-.venv\Scripts\pip install -r requirements.txt
+.venv\Scripts\pip install -r requirements.lock.txt
 .venv\Scripts\python -m scripts.extract_schematics --write
 .venv\Scripts\python -m alembic upgrade head
 ```
@@ -205,7 +205,7 @@ sudo mkdir -p /opt/pi-director && sudo chown deploy:deploy /opt/pi-director
 cd /opt/pi-director
 git clone --depth 1 https://github.com/mefffodiy-n/EVE-PI-app.git app
 cd app
-python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+python3 -m venv .venv && .venv/bin/pip install -r requirements.lock.txt
 .venv/bin/python -m scripts.extract_schematics --write
 
 # .env — см. раздел 2, PI_DATABASE_URL на sqlite-файл в data/,
