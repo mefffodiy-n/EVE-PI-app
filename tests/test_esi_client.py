@@ -177,3 +177,41 @@ class TestEtagAndExpires:
         with pytest.raises(EsiRateLimited) as exc_info:
             client.get("/status/")
         assert exc_info.value.retry_after == 30
+
+
+class TestTokenLimitVisibility:
+    """
+    X-Ratelimit-* (roadmap.md, Фаза 9, 16.09.2026) — читается ТОЛЬКО для
+    наглядности, не для защиты: не должен ни блокировать клиент, ни
+    мешать обычному ответу, в отличие от лимита ошибок.
+    """
+
+    def test_token_limits_recorded_per_group(self):
+        opener = _counting_opener([], headers={
+            "X-Ratelimit-Group": "planetary_interaction",
+            "X-Ratelimit-Remaining": "42",
+            "X-Ratelimit-Limit": "100",
+        })
+        client = EsiClient(opener=opener)
+        client.get("/status/", use_etag=False)
+        assert client.token_limits == {
+            "planetary_interaction": {"remaining": 42, "limit": 100}
+        }
+
+    def test_missing_token_limit_headers_leave_it_empty(self):
+        opener = _counting_opener([], headers={})
+        client = EsiClient(opener=opener)
+        client.get("/status/", use_etag=False)
+        assert client.token_limits == {}
+
+    def test_low_token_limit_does_not_block_next_request(self):
+        """В отличие от лимита ошибок — низкий остаток не самоблокирует."""
+        opener = _counting_opener([], headers={
+            "X-Ratelimit-Group": "planetary_interaction",
+            "X-Ratelimit-Remaining": "0",
+            "X-Ratelimit-Limit": "100",
+        })
+        client = EsiClient(opener=opener)
+        client.get("/status/", use_etag=False)
+        assert client.blocked_for == 0
+        client.get("/status/", use_etag=False)  # не должно бросить EsiRateLimited
