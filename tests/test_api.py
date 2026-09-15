@@ -386,6 +386,62 @@ class TestColonies:
         assert history[0]["cycle_seconds"] == 900
 
 
+class TestColoniesIsolation:
+    """
+    /api/colonies (api/blueprints/meta.py::colonies()) фильтрует через тот
+    же load_characters(current_account_id()), что и персонажи и планы
+    (уже проверенные примитивы, см. test_db.py::TestLoad и
+    TestPlansIsolation выше) — гарантия логически та же, но отдельного
+    HTTP-теста на два разных account_id именно для этого эндпоинта не
+    было (docs/ROADMAP.md, Фаза 9, 16.09.2026): TestColonies проверяет
+    сортировку и историю добычи, не многопользовательскую изоляцию.
+    """
+
+    def _login_as(self, client, account_id: str) -> None:
+        with client.session_transaction() as sess:
+            sess["account_id"] = account_id
+
+    def test_two_accounts_do_not_see_each_others_colonies(self, client, monkeypatch):
+        from infra import config
+        from infra.db import session_scope
+        from infra.models import Character, Colony
+
+        monkeypatch.setattr(config, "IS_DEV", False)
+
+        with session_scope() as s:
+            s.add(Character(character_id=201, name="Pilot A", command_center_upgrades_level=5,
+                             interplanetary_consolidation_level=5, source="esi", account_id="acct-a"))
+            s.add(Character(character_id=202, name="Pilot B", command_center_upgrades_level=5,
+                             interplanetary_consolidation_level=5, source="esi", account_id="acct-b"))
+            s.add(Colony(character_id=201, planet_id=910, planet_name="A II", system_name="A",
+                         planet_index=2, planet_type="barren", upgrade_level=4, num_pins=3))
+            s.add(Colony(character_id=202, planet_id=920, planet_name="B II", system_name="B",
+                         planet_index=2, planet_type="barren", upgrade_level=4, num_pins=3))
+
+        self._login_as(client, "acct-a")
+        rows = client.get("/api/colonies").get_json()["colonies"]
+        assert [r["planet_name"] for r in rows] == ["A II"]
+
+        self._login_as(client, "acct-b")
+        rows = client.get("/api/colonies").get_json()["colonies"]
+        assert [r["planet_name"] for r in rows] == ["B II"]
+
+    def test_anonymous_prod_visit_sees_no_colonies(self, client, monkeypatch):
+        from infra import config
+        from infra.db import session_scope
+        from infra.models import Character, Colony
+
+        monkeypatch.setattr(config, "IS_DEV", False)
+
+        with session_scope() as s:
+            s.add(Character(character_id=203, name="Pilot C", command_center_upgrades_level=5,
+                             interplanetary_consolidation_level=5, source="esi", account_id="acct-c"))
+            s.add(Colony(character_id=203, planet_id=930, planet_name="C II", system_name="C",
+                         planet_index=2, planet_type="barren", upgrade_level=4, num_pins=3))
+
+        assert client.get("/api/colonies").get_json()["colonies"] == []
+
+
 class TestMarket:
     def test_market_never_calls_external_service(self, client):
         """
