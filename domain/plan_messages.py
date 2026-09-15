@@ -209,12 +209,6 @@ _CATALOG: dict[str, dict[str, str]] = {
               "or more Interplanetary Consolidation on the ones you have.",
     },
     # ── допущения ────────────────────────────────────────────────────
-    "assume_planets_per_char": {
-        "ru": "Число планет на персонажа принято как Interplanetary Consolidation + 1 "
-              "(не подтверждено источником)",
-        "en": "Planets per character taken as Interplanetary Consolidation + 1 "
-              "(not confirmed by the source)",
-    },
     "assume_extraction_margin": {
         "ru": "Число добывающих планет увеличено в {margin} раза "
               "как запас на истощение месторождений (задано пользователем, не расчёт)",

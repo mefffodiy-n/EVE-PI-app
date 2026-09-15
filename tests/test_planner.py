@@ -200,11 +200,15 @@ class TestHonesty:
     def test_unverified_assumptions_are_reported(self, planets, characters):
         """
         В расчёте должны перечисляться только ДЕЙСТВИТЕЛЬНО непроверенные
-        значения. Длительности циклов подтверждены вики EVE University и
-        из списка убраны; осталось одно — формула числа планет.
+        значения. Длительности циклов подтверждены вики EVE University,
+        формула числа планет на персонажа — пользователем по игре
+        (16.09.2026, docs/ROADMAP.md) — обе закрыты и не должны значиться
+        допущениями.
         """
         assumptions = _plan(planets, characters).assumptions
-        assert any("Interplanetary Consolidation" in a for a in assumptions)
+        assert not any("Interplanetary Consolidation" in a for a in assumptions), (
+            "формула числа планет подтверждена и не должна значиться допущением"
+        )
         assert not any("цикла" in a for a in assumptions), (
             "циклы подтверждены источником и не должны значиться допущениями"
         )
@@ -333,7 +337,10 @@ class TestMessagesI18n:
     def test_english_render_has_no_cyrillic(self):
         payload = self._deficit_plan().to_dict("en")
         assert payload["critical_warnings"], "у дефицитного плана есть критические"
-        assert payload["assumptions"]
+        # assumptions может быть пуст: раньше формула числа планет на
+        # персонажа значилась допущением всегда, теперь она подтверждена
+        # (docs/ROADMAP.md, 16.09.2026) и не добавляется — блок остаётся
+        # в цикле ниже честности ради (не Cyrillic, если что-то в нём есть).
         for block in ("warnings", "critical_warnings", "assumptions", "site_warnings"):
             for text in payload[block]:
                 assert not self.CYRILLIC.search(text), (block, text)
