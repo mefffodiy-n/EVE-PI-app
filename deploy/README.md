@@ -54,7 +54,7 @@ PI_ESI_CALLBACK_URL=https://ваш-домен/api/auth/callback
 SQLite тянет один процесс без проблем, но веб и сборщики пишут в базу
 одновременно, а с ростом числа пользователей — конкурентная запись и
 JSON-колонки (`pins`/`routes`/`structures`) начинают тянуть к Postgres
-(см. roadmap.md, Фаза 9). На бою (с 15.09.2026) стоит Postgres,
+(см. docs/ROADMAP.md, Фаза 9). На бою (с 15.09.2026) стоит Postgres,
 установленный так (Ubuntu):
 
 ```bash

@@ -54,7 +54,7 @@ def calculate():
     # /api/calculate с direct_p2=true в теле запроса тоже не включал
     # непроверенную застройку. Код (domain/direct_p2.py, planner.py::
     # _plan_direct_p2/_place_direct_p2) не удалён — раз проверят в игре,
-    # включается обратно снятием этой строки. См. roadmap.md, Фаза 9.
+    # включается обратно снятием этой строки. См. docs/ROADMAP.md, Фаза 9.
     direct_p2 = False
     lang = "en" if str(payload.get("lang", "ru")).lower().startswith("en") else "ru"
 
