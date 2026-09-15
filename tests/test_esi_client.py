@@ -181,7 +181,7 @@ class TestEtagAndExpires:
 
 class TestTokenLimitVisibility:
     """
-    X-Ratelimit-* (roadmap.md, Фаза 9, 16.09.2026) — читается ТОЛЬКО для
+    X-Ratelimit-* (docs/ROADMAP.md, Фаза 9, 16.09.2026) — читается ТОЛЬКО для
     наглядности, не для защиты: не должен ни блокировать клиент, ни
     мешать обычному ответу, в отличие от лимита ошибок.
     """

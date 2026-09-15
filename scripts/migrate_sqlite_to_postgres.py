@@ -2,7 +2,7 @@
 Разовый перенос данных из dev/старой prod SQLite-базы в Postgres.
 
 ЗАЧЕМ. Переключение PI_DATABASE_URL на Postgres (см. requirements.txt,
-CLAUDE.md, roadmap.md Фаза 9) даёт СХЕМУ через `alembic upgrade head`,
+CLAUDE.md, docs/ROADMAP.md Фаза 9) даёт СХЕМУ через `alembic upgrade head`,
 но не переносит уже накопленные строки — персонажей, их зашифрованные
 токены, реальные колонии, историю добычи, сохранённые планы. Без этого
 скрипта переключение на Postgres означало бы для всех вошедших
@@ -43,7 +43,7 @@ from sqlalchemy.orm import Session
 from infra.models import Character, Colony, Credential, ExtractionSample, Plan
 
 # Порядок неважен — ни одна модель не ссылается на другую через FK
-# (roadmap.md: связь Colony/Credential с Character — по character_id
+# (docs/ROADMAP.md: связь Colony/Credential с Character — по character_id
 # как по натуральному ключу, без ForeignKey, см. infra/models.py).
 TABLES = [Character, Plan, Credential, Colony, ExtractionSample]
 
