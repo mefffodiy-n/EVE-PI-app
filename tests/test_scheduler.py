@@ -28,7 +28,7 @@ def _isolate_snapshot(tmp_path, monkeypatch):
 @pytest.fixture
 def job():
     """Один изолированный Job — не трогаем реальный список JOBS целиком."""
-    return sched.Job("Тестовый джоб", lambda: 0, every_minutes=10, reason="тест")
+    return sched.Job("Тестовый джоб", "test_job", lambda: 0, every_minutes=10, reason="тест")
 
 
 def _read_snapshot():
@@ -53,7 +53,7 @@ class TestRunJobSnapshot:
         def boom():
             raise RuntimeError("сеть недоступна")
 
-        job = sched.Job("Падающий джоб", boom, every_minutes=10, reason="тест")
+        job = sched.Job("Падающий джоб", "failing_job", boom, every_minutes=10, reason="тест")
         monkeypatch.setattr(sched, "JOBS", [job])
         sched.run_job(job)
 
@@ -62,7 +62,7 @@ class TestRunJobSnapshot:
         assert snapshot["jobs"][0]["failures"] == 1
 
     def test_nonzero_exit_code_counts_as_failure(self, monkeypatch):
-        job = sched.Job("Падающий джоб", lambda: 1, every_minutes=10, reason="тест")
+        job = sched.Job("Падающий джоб", "failing_job", lambda: 1, every_minutes=10, reason="тест")
         monkeypatch.setattr(sched, "JOBS", [job])
         sched.run_job(job)
 
@@ -70,7 +70,7 @@ class TestRunJobSnapshot:
         assert _read_snapshot()["jobs"][0]["failures"] == 1
 
     def test_repeated_failures_accumulate(self, monkeypatch):
-        job = sched.Job("Падающий джоб", lambda: 1, every_minutes=10, reason="тест")
+        job = sched.Job("Падающий джоб", "failing_job", lambda: 1, every_minutes=10, reason="тест")
         monkeypatch.setattr(sched, "JOBS", [job])
         sched.run_job(job)
         sched.run_job(job)
@@ -86,7 +86,7 @@ class TestRunJobSnapshot:
             calls["n"] += 1
             return 1 if calls["n"] == 1 else 0
 
-        job = sched.Job("Нестабильный джоб", flaky, every_minutes=10, reason="тест")
+        job = sched.Job("Нестабильный джоб", "flaky_job", flaky, every_minutes=10, reason="тест")
         monkeypatch.setattr(sched, "JOBS", [job])
         sched.run_job(job)
         assert job.failures == 1

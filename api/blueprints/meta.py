@@ -110,6 +110,7 @@ def _job_status() -> dict:
         status = "failing" if failures else ("stale" if overdue else "ok")
         jobs.append({
             "name": job.get("name"),
+            "key": job.get("key"),
             "age_minutes": age_minutes,
             "failures": failures,
             "status": status,
