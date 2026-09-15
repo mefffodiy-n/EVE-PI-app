@@ -182,10 +182,7 @@ alembic.ini       конфиг Alembic (URL берётся из infra.config, н
 (`data/pi_reference.json` → `assumptions`), и какие правила игры важны
 для расчёта (лимиты CCU, кому какая планета подходит) — вынесено в
 `docs/DOMAIN.md` (16.09.2026, по образцу
-github.com/Alexmidrus/EveGAS_calc). Единственное непроверенное число в
-самом расчёте — число планет на персонажа
-(`Interplanetary Consolidation + 1`), возвращается в `/api/calculate`
-полем `assumptions`.
+github.com/Alexmidrus/EveGAS_calc).
 
 ---
 

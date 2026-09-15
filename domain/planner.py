@@ -131,10 +131,10 @@ class CharacterSlot:
         """
         Сколько планет может держать персонаж.
 
-        ДОПУЩЕНИЕ (см. assumptions.planet_slots_per_character в
-        data/pi_reference.json): базовая одна планета плюс по одной за
-        уровень Interplanetary Consolidation. В материалах источника
-        это прямо не указано — проверить по описанию скилла в игре.
+        Базовая одна планета плюс по одной за уровень Interplanetary
+        Consolidation (см. assumptions.planet_slots_per_character в
+        data/pi_reference.json) — в материалах источника это прямо не
+        было указано, подтверждено пользователем по игре 16.09.2026.
         """
         return self.interplanetary_consolidation_level + 1
 
@@ -665,7 +665,6 @@ def build_plan(
     result.demand = demand
     for entry in demand.assumptions_used:
         result.assume(entry["code"], **{k: v for k, v in entry.items() if k != "code"})
-    result.assume("assume_planets_per_char")
     for missing in demand.missing:
         result.warn("chain_broken_no_schematic", product=missing)
 

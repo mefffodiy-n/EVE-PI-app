@@ -318,7 +318,7 @@ button { font-family:inherit; }
 
 /* Свободный слот планеты у персонажа (вид «Список по персонажам») —
    planet_slots из /api/characters (Interplanetary Consolidation + 1,
-   то же допущение, что в самом расчёте, см. CLAUDE.md) минус реально
+   та же формула, что и в самом расчёте, см. CLAUDE.md) минус реально
    построенные колонии. Пунктирный круг того же размера, что и .orb,
    без содержимого, только на характерах, для которых реально известны
    planet_slots — иначе честно ничего не дорисовываем. */
@@ -824,7 +824,8 @@ details.msgs[open] > summary::before { content:'▾ '; }
    класс только потому, что раскладка внутри другая (сводка чисел, не
    таблица рядов). */
 .poco-profit { padding:14px; border-top:1px solid var(--seam); }
-.poco-profit .figures { display:flex; gap:22px; flex-wrap:wrap; margin-top:6px; }
+.poco-profit .figures { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,max-content));
+                         gap:8px 22px; margin-top:6px; }
 .poco-profit .figure { min-width:120px; }
 .poco-profit .figure .lbl { font-size:10px; letter-spacing:.1em; text-transform:uppercase;
                              color:var(--dim); }
@@ -2761,7 +2762,7 @@ function renderColonies(){
     const byPilot={};
     rows.forEach(p=>(byPilot[p.character]=byPilot[p.character]||[]).push(p));
     // Свободные слоты — planet_slots персонажа (Interplanetary Consolidation
-    // + 1, /api/characters, то же допущение, что в самом расчёте) минус
+    // + 1, /api/characters, та же формула, что и в самом расчёте) минус
     // реально построенные колонии. Только там, где planet_slots вообще
     // известны — иначе честно ни одного пунктирного кружка не рисуем.
     body=Object.entries(byPilot).map(([name,items])=>{
@@ -2872,14 +2873,30 @@ const POCO_PLANET_TYPES=['Barren','Gas','Ice','Lava','Oceanic','Plasma','Storm',
 
 /* Вызывается один раз при загрузке страницы (boot), не на каждый applyLang:
    иначе смена языка стирала бы уже введённые пользователем ставки. Сами
-   названия типов планет — термины EVE, не переводятся. */
+   названия типов планет — термины EVE, не переводятся.
+   Ставки сохраняются в localStorage (store) — та же память браузера, что
+   и у языка/темы: переживают перезагрузку страницы в ЭТОЙ СЕССИИ/браузере,
+   но не путешествуют между устройствами (в отличие от сохранённых планов
+   на сервере) — сами ставки специфичны пользователю, не персонажу или
+   аккаунту, серверного хранения им не заведено. */
+const POCO_RATES_KEY='pi-poco-rates';
+
+function savePocoRates(){
+  store.set(POCO_RATES_KEY, JSON.stringify(pocoRatesFromInputs()));
+}
+
 function renderPocoRateInputs(){
   const box=document.getElementById('pocoRates'); if(!box) return;
-  box.innerHTML=POCO_PLANET_TYPES.map(pt=>`
-    <label class="poco-rate-item"><span>${pt}</span>
+  let saved={};
+  try{ saved=JSON.parse(store.get(POCO_RATES_KEY,'{}')); }catch(e){ saved={}; }
+  box.innerHTML=POCO_PLANET_TYPES.map(pt=>{
+    const rate=saved[pt];
+    const pct=rate!=null?Math.round(rate*100):'';
+    return `<label class="poco-rate-item"><span>${pt}</span>
       <input type="number" class="poco-rate" data-planet-type="${pt}"
-        min="0" max="100" step="1" placeholder="—" oninput="renderPocoProfit()"></label>
-  `).join('');
+        min="0" max="100" step="1" placeholder="—" value="${pct}"
+        oninput="savePocoRates();renderPocoProfit()"></label>`;
+  }).join('');
 }
 
 /* {тип планеты: доля 0..1} только для полей, которые пользователь

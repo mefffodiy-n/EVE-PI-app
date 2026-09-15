@@ -298,8 +298,8 @@
     },
     "planet_slots_per_character": {
       "formula": "interplanetary_consolidation_level + 1",
-      "rationale": "Базовая одна планета плюс по одной за уровень Interplanetary Consolidation, то есть 6 планет при уровне V. В материалах источника это прямо не указано — проверить по описанию скилла в игре.",
-      "status": "не проверено"
+      "rationale": "ЗАКРЫТО. Базовая одна планета плюс по одной за уровень Interplanetary Consolidation, то есть 6 планет при уровне V. В материалах источника это прямо не было указано, подтверждено пользователем по игре 16.09.2026.",
+      "status": "подтверждено (16.09.2026)"
     },
     "advanced_cycle_ratio": {
       "value": 2.0,
