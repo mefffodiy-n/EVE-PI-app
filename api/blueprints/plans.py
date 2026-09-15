@@ -45,7 +45,17 @@ def calculate():
     targets = [str(t) for t in payload["target_products"]]
     allow_single = bool(payload.get("allow_single_template_fallback", False))
     surplus_mining = bool(payload.get("surplus_mining", False))
-    direct_p2 = bool(payload.get("direct_p2", False))
+    # Прямое P2 приостановлено (15.09.2026, решение пользователя): состав
+    # застройки (domain/direct_p2.py) — расчёт из стоимостей отдельных
+    # структур, а не выписка из проверенного игрового шаблона (готового
+    # шаблона на два экстрактора + P1 + P2-фабрики на одной планете в
+    # наборе DalShooth нет), и никогда не был сверен в игре. Флажок в
+    # интерфейсе убран; здесь — вторая точка контроля, чтобы прямой вызов
+    # /api/calculate с direct_p2=true в теле запроса тоже не включал
+    # непроверенную застройку. Код (domain/direct_p2.py, planner.py::
+    # _plan_direct_p2/_place_direct_p2) не удалён — раз проверят в игре,
+    # включается обратно снятием этой строки. См. roadmap.md, Фаза 9.
+    direct_p2 = False
     lang = "en" if str(payload.get("lang", "ru")).lower().startswith("en") else "ru"
 
     if not constellations:
