@@ -822,26 +822,37 @@ details.msgs[open] > summary::before { content:'▾ '; }
 /* ── Прибыльность плана с учётом POCO (docs/ROADMAP.md, Фаза 9,
    16.09.2026) — та же визуальная семья, что и .profit выше, отдельный
    класс только потому, что раскладка внутри другая (сводка чисел, не
-   таблица рядов). */
+   таблица рядов). Внутренние ячейки называются .net (не .profit) —
+   .profit уже занят классом СНАРУЖИ (блок «Что выгоднее производить»,
+   padding+border-top), и элемент с обоими классами (`.figure.profit`)
+   наследовал их же селектором `.profit`, из-за чего ячейка «Чистая
+   прибыль» получала лишние padding/border-top и съезжала строкой ниже
+   остальных (обнаружено пользователем 16.09.2026 по скриншоту). */
 .poco-profit { padding:14px; border-top:1px solid var(--seam); }
-.poco-profit .figures { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,max-content));
+.poco-profit .figures { display:grid; grid-template-columns:repeat(3,minmax(120px,1fr));
                          gap:8px 22px; margin-top:6px; }
-.poco-profit .figure { min-width:120px; }
 .poco-profit .figure .lbl { font-size:10px; letter-spacing:.1em; text-transform:uppercase;
                              color:var(--dim); }
 .poco-profit .figure .val { font-family:'JetBrains Mono',monospace; font-size:16px;
                              color:var(--read); margin-top:2px; }
-.poco-profit .figure.profit .val { color:var(--bright); }
+/* Чистая прибыль — акцентным цветом в обеих темах (та же переменная,
+   что у кнопок и лучшей строки в «Что выгоднее производить»). */
+.poco-profit .figure.net .val { color:var(--amber); }
 .poco-profit .figure .val.dim { color:var(--dim); font-size:13px; }
 .poco-profit-note { margin-top:8px; color:var(--dim); font-size:11px; max-width:82ch; }
+@media (max-width:520px){ .poco-profit .figures { grid-template-columns:repeat(2,minmax(120px,1fr)); } }
 
-/* Ставки POCO по типам планет — компактная сетка коротких полей, тот же
-   характер ввода, что у соседнего margin. */
-.poco-rates { display:grid; grid-template-columns:repeat(auto-fill,minmax(110px,1fr));
-              gap:6px 10px; margin-top:4px; }
-.poco-rate-item { display:flex; align-items:center; justify-content:space-between;
-                   gap:6px; font-size:11px; color:var(--dim); }
-.poco-rate-item input { width:52px; padding:3px 5px; font-size:12px; }
+/* Ставки POCO по типам планет — фиксированные 3 колонки (не auto-fill:
+   при auto-fill число колонок прыгало от ширины экрана, а тут и так
+   всего 8 полей, три колонки читаются ровным блоком). Подпись — своя
+   ширина, чтобы поля ввода в одной колонке стояли на одном месте,
+   независимо от длины имени типа планеты («Barren» короче
+   «Temperate»). */
+.poco-rates { display:grid; grid-template-columns:repeat(3,1fr); gap:8px 16px; margin-top:4px; }
+.poco-rate-item { display:flex; align-items:center; gap:8px; font-size:11px; color:var(--dim); }
+.poco-rate-item span { min-width:64px; }
+.poco-rate-item input { width:52px; padding:3px 5px; font-size:12px; margin-left:auto; }
+@media (max-width:520px){ .poco-rates { grid-template-columns:repeat(2,1fr); } }
 
 /* ── Сохранённые планы ────────────────────────────────────────── */
 .saved { border-top:1px solid var(--seam); padding:12px 14px; }
@@ -2942,7 +2953,7 @@ async function renderPocoProfit(){
         <div class="val${d.monthly_revenue==null?' dim':''}">${d.monthly_revenue==null?t('noData'):isk(d.monthly_revenue)}</div></div>
       <div class="figure"><div class="lbl">${t('pocoTax')}</div>
         <div class="val${d.monthly_tax==null?' dim':''}">${d.monthly_tax==null?t('noData'):isk(d.monthly_tax)}</div></div>
-      <div class="figure profit"><div class="lbl">${t('pocoNetProfit')}</div>
+      <div class="figure net"><div class="lbl">${t('pocoNetProfit')}</div>
         <div class="val${netKnown?'':' dim'}">${netKnown?isk(d.monthly_net_profit):t('noData')}</div></div>
     </div>
     ${gaps.length?`<div class="poco-profit-note">${gaps.join(' · ')}</div>`:''}
