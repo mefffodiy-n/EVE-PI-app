@@ -49,10 +49,21 @@ PI_ESI_CALLBACK_URL=https://ваш-домен/api/auth/callback
 `PI_ENV=prod` отключает dev-заглушки персонажей: планировщику нужны
 настоящие персонажи из SSO.
 
-## 3. Postgres (необязательно)
+## 3. Postgres
 
 SQLite тянет один процесс без проблем, но веб и сборщики пишут в базу
-одновременно. Под нагрузкой или при частых сборах поставьте Postgres:
+одновременно, а с ростом числа пользователей — конкурентная запись и
+JSON-колонки (`pins`/`routes`/`structures`) начинают тянуть к Postgres
+(см. roadmap.md, Фаза 9). На бою (с 15.09.2026) стоит Postgres,
+установленный так (Ubuntu):
+
+```bash
+sudo apt-get install -y postgresql
+sudo -u postgres psql -c "CREATE USER pidirector WITH PASSWORD '...';"
+sudo -u postgres psql -c "CREATE DATABASE pidirector OWNER pidirector;"
+```
+
+Дальше — обычное переключение приложения:
 
 ```
 PI_DATABASE_URL=postgresql+psycopg://user:pass@localhost/pidirector
@@ -60,7 +71,12 @@ PI_DATABASE_URL=postgresql+psycopg://user:pass@localhost/pidirector
 .venv\Scripts\python -m alembic upgrade head
 ```
 
-ORM-модели те же — миграции применятся как есть.
+ORM-модели те же — миграции применятся как есть. Если переключаетесь
+не на пустую базу, а переносите уже накопленные данные (персонажей,
+сохранённые планы, историю добычи) — `python -m scripts.
+migrate_sqlite_to_postgres --sqlite ... --postgres ...` ПОСЛЕ
+`alembic upgrade head` на пустой Postgres (создаёт только схему, не
+данные), см. докстринг скрипта.
 
 ## 4. Службы Windows (NSSM)
 

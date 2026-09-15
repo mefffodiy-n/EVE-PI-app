@@ -7,12 +7,16 @@ Flask>=3.0
 pandas>=2.2
 openpyxl>=3.1
 
-# Слой БД (Фаза 3, подготовка). На разработке — SQLite (нулевая
-# настройка, Docker не нужен). Postgres подключается сменой
-# PI_DATABASE_URL + `alembic upgrade head`; модели не меняются.
-# Причина выбора Postgres в продакшене — см. roadmap.md, раздел 5.
+# Слой БД. На разработке — SQLite (нулевая настройка, Docker не
+# нужен). На продакшене (с 15.09.2026) — Postgres: подключается сменой
+# PI_DATABASE_URL + `alembic upgrade head`, модели не меняются.
+# Причина выбора Postgres — см. roadmap.md, Фаза 9 (JSON-колонки,
+# конкурентная запись из фоновых джобов при росте числа пользователей).
 SQLAlchemy>=2.0
 alembic>=1.13
+# Драйвер Postgres — нужен только на проде (PI_DATABASE_URL=postgresql+
+# psycopg://...), в dev с SQLite не участвует ни в одном импорте.
+psycopg[binary]>=3.1
 
 # EVE SSO (OAuth2 + PKCE, Фаза 3): шифрование токенов at rest и проверка
 # JWT по JWKS. Без действующего client_id auth-слой отдаёт 503.
