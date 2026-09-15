@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PI Director</title>
 <style>
-/* Шрифты — самостоятельный хостинг, не Google Fonts (roadmap.md, Фаза 9,
+/* Шрифты — самостоятельный хостинг, не Google Fonts (docs/ROADMAP.md, Фаза 9,
    16.09.2026, разбор github.com/Alexmidrus/EveGAS_calc): раньше здесь был
    <link> на fonts.googleapis.com — внешний CDN-запрос на каждый визит.
    Файлы (те же 4 юникод-диапазона на каждое семейство — latin, latin-ext,
@@ -47,7 +47,7 @@
    переносился между игрой и планировщиком без переучивания;
    настройки — плотная таблица решений, где важны числа, а не иконки. */
 :root {
-  /* Фаза 8 (roadmap.md) — палитра из макета Claude Design: тёплая
+  /* Фаза 8 (docs/ROADMAP.md) — палитра из макета Claude Design: тёплая
      «кузнечная» тема вместо прежней сине-серой. Имена переменных не
      менялись (--amber остался --amber, хоть в макете он называется
      --gold) — так вся палитра меняется одним диффом здесь, без правки
@@ -129,7 +129,7 @@ button { font-family:inherit; }
           display:flex; align-items:center; gap:4px 6px; padding:6px 14px; min-height:46px;
           border-bottom:1px solid var(--seam); background:var(--hull); flex-wrap:wrap; }
 .topbar > * { flex:0 0 auto; }
-/* Шаг 4 (roadmap.md): лого-аватар + заголовок/подпись в столбик, как в
+/* Шаг 4 (docs/ROADMAP.md): лого-аватар + заголовок/подпись в столбик, как в
    макете Claude Design — вместо однострочного «PI Director текст». */
 .brand { display:flex; align-items:center; gap:11px; margin-right:20px; }
 .brand-avatar { width:30px; height:30px; border-radius:50%; flex:0 0 auto;
@@ -348,7 +348,7 @@ button { font-family:inherit; }
             font-family:'JetBrains Mono',monospace; font-size:11px; }
 .sec { font-family:'JetBrains Mono',monospace; font-size:11px; padding:1px 5px; border-radius:3px; }
 .colony-head .tail { margin-left:auto; text-align:right; }
-/* Шаг 6 (roadmap.md): подпись хвостовой метки — Saira Condensed
+/* Шаг 6 (docs/ROADMAP.md): подпись хвостовой метки — Saira Condensed
    заглавными, как заголовки разделов из Шага 3, вместо обычного текста. */
 .tail .lbl { color:var(--dim); font-size:10px; font-family:'Inter',sans-serif;
              letter-spacing:.12em; text-transform:uppercase; }
@@ -381,7 +381,7 @@ button { font-family:inherit; }
 .colony-page { display:none; }
 .colony-page.on { display:block; }
 .cp-head { display:flex; align-items:center; gap:12px; padding:14px 16px; }
-/* Шаг 7 (roadmap.md): «Назад» золотым, как «Войти через EVE SSO»
+/* Шаг 7 (docs/ROADMAP.md): «Назад» золотым, как «Войти через EVE SSO»
    из Шага 4 — рамка и текст амброй, по ховеру заливка сплошным золотом. */
 .cp-head .back { margin-left:auto; background:none; border:1px solid var(--amber);
                  color:var(--amber); padding:6px 16px; cursor:pointer; font-size:11px;
@@ -425,7 +425,7 @@ button { font-family:inherit; }
 .answer .value.warn { color:var(--amber); }
 .answer .unit-s { font-size:13px; color:var(--dim); margin-left:5px; font-family:'Inter',sans-serif; }
 .answer .note { color:var(--dim); font-size:12px; }
-/* Шаг 9 (roadmap.md, решение пользователя): рейка .rail заменена
+/* Шаг 9 (docs/ROADMAP.md, решение пользователя): рейка .rail заменена
    сеткой из трёх равных карточек-шагов по макету Claude Design —
    вместо фиксированной левой колонки 270px. Сама сетка адаптивна
    по своей природе (auto-fit), поэтому прежний медиа-запрос
@@ -671,7 +671,7 @@ details.msgs[open] > summary::before { content:'▾ '; }
             display:inline-grid; place-items:center; cursor:pointer; }
 .icon-btn:hover { color:var(--amber); border-color:var(--amber); }
 .icon-btn svg { width:15px; height:15px; }
-/* Шаг 4 (roadmap.md): кнопка входа новым стилем — золотая рамка и
+/* Шаг 4 (docs/ROADMAP.md): кнопка входа новым стилем — золотая рамка и
    градиентная подложка вместо синей заливки по ховеру. */
 .sso { background:linear-gradient(180deg,var(--accent-bg),transparent);
        border:1px solid var(--amber); color:var(--amber); padding:5px 14px;
@@ -683,7 +683,7 @@ details.msgs[open] > summary::before { content:'▾ '; }
 .modal { position:fixed; inset:0; background:rgba(4,6,10,.7); display:none;
          z-index:100; align-items:center; justify-content:center; padding:24px; }
 .modal.on { display:flex; }
-/* Шаг 8 (roadmap.md): рамка модалки золотая, уголок увеличенного
+/* Шаг 8 (docs/ROADMAP.md): рамка модалки золотая, уголок увеличенного
    размера (2px/14px против обычных 1px/9px у .hud-corner) — модалка
    единственное место с таким акцентом, поэтому не отдельный модификатор
    класса, а точечное переопределение по месту использования. */
@@ -765,7 +765,7 @@ details.msgs[open] > summary::before { content:'▾ '; }
    прокручивалась бы вместе со списком и то появлялась, то пряталась). */
 .crew-hint { padding:6px 8px; border-top:1px solid var(--seam); color:var(--dim); font-size:11px; }
 
-/* Шаг 5 (roadmap.md): декоративный HUD-уголок из макета Claude Design —
+/* Шаг 5 (docs/ROADMAP.md): декоративный HUD-уголок из макета Claude Design —
    тонкая золотая скоба сверху-слева и снизу-справа поверх рамки
    карточки. Только оформление (::before/::after), разметка не меняется
    — класс вешается на уже существующие карточки со своей рамкой/фоном:
@@ -884,7 +884,7 @@ body.light .rolebadge.proc { background:rgba(160,95,28,.11); }
 
 /* Надзаголовки групп колонок — акцентным цветом: они объясняют,
    зачем смотреть в колонки, и должны выделяться из шапки. Шаг 10
-   (roadmap.md, решение пользователя: группировка уже была в разметке —
+   (docs/ROADMAP.md, решение пользователя: группировка уже была в разметке —
    colspan «Колония»/«Производство»/«Нагрузка» — трогать структуру не
    нужно, только цвет, как в макете Claude Design: --amber вместо
    --flux). */
@@ -1072,7 +1072,7 @@ body.light .rolebadge.excess { background:rgba(154,107,18,.12); }
             <input id="margin" type="number" value="1.0" step="0.1" min="1" max="3">
           </div>
           <!-- Флажок «Прямое P2» убран из интерфейса (15.09.2026, решение
-               пользователя, см. roadmap.md Фаза 9): застройка в
+               пользователя, см. docs/ROADMAP.md Фаза 9): застройка в
                domain/direct_p2.py — расчёт из стоимостей структур, а не
                выписка из проверенного игрового шаблона, никогда не
                сверена в игре. Второй барьер — api/blueprints/plans.py
@@ -1455,7 +1455,7 @@ function isLaunchpadFull(row){
 // планеты (плотность месторождения у каждой своя, но 48 000/ч — тот
 // минимум, ниже которого ресурс всё равно приходится дублировать
 // добычей). Осознанное отступление от общего принципа «порог — из
-// истории колонии, не норматив» (см. roadmap.md, Фаза 7).
+// истории колонии, не норматив» (см. docs/ROADMAP.md, Фаза 7).
 const DEFICIT_UNITS_PER_HOUR=48000;
 
 // ESI отдаёт qty_per_cycle как БАЗОВОЕ значение программы экстрактора

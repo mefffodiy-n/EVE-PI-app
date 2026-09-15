@@ -62,7 +62,7 @@ def test_noop_when_db_missing(_paths, monkeypatch):
 
 def test_backs_up_postgres_via_pg_dump(_paths, monkeypatch):
     """
-    С 15.09.2026 прод на Postgres (roadmap.md, Фаза 9) — pg_dump реальный
+    С 15.09.2026 прод на Postgres (docs/ROADMAP.md, Фаза 9) — pg_dump реальный
     процесс, недоступный в тестовом окружении, поэтому подменяется тем же
     приёмом, что и ESI-клиент в других тестах: сама функция запуска, не
     subprocess.run целиком, чтобы проверить и передаваемый URL, и то, что
