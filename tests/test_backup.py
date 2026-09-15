@@ -55,12 +55,57 @@ def test_prunes_to_keep_limit(_paths, monkeypatch):
     assert _backups(_paths)[-1].startswith("pi-backup-2026")  # свежая на месте
 
 
-def test_noop_for_non_sqlite_url(_paths, monkeypatch):
-    monkeypatch.setattr("infra.config.DATABASE_URL", "postgresql://x/y")
-    assert backup.main() == 0
-    assert _backups(_paths) == []
-
-
 def test_noop_when_db_missing(_paths, monkeypatch):
     monkeypatch.setattr("infra.config.DATABASE_URL", f"sqlite:///{_paths / 'nope.db'}")
     assert backup.main() == 0
+
+
+def test_backs_up_postgres_via_pg_dump(_paths, monkeypatch):
+    """
+    С 15.09.2026 прод на Postgres (roadmap.md, Фаза 9) — pg_dump реальный
+    процесс, недоступный в тестовом окружении, поэтому подменяется тем же
+    приёмом, что и ESI-клиент в других тестах: сама функция запуска, не
+    subprocess.run целиком, чтобы проверить и передаваемый URL, и то, что
+    результат действительно попадает в архив бэкапа.
+    """
+    monkeypatch.setattr("infra.config.DATABASE_URL", "postgresql+psycopg://u:p@localhost/pidirector")
+    calls = []
+
+    def fake_backup_postgres(url, dst):
+        calls.append(url)
+        dst.write_text("-- dump", encoding="utf-8")
+
+    monkeypatch.setattr(backup, "_backup_postgres", fake_backup_postgres)
+    assert backup.main() == 0
+    # pg_dump получает conninfo-URI (postgresql://), а не форму
+    # SQLAlchemy с драйвером (postgresql+psycopg://) — драйвер нужен
+    # только SQLAlchemy, не libpq.
+    assert calls == ["postgresql://u:p@localhost/pidirector"]
+    made = next((_paths / "backups").glob("pi-backup-*"))
+    assert (made / "pidirector.sql").read_text(encoding="utf-8") == "-- dump"
+    assert "market_prices.json" in {p.name for p in made.iterdir()}
+
+
+def test_pg_dump_failure_is_logged_not_silenced(_paths, monkeypatch):
+    """
+    Честный сбой, а не тихий пропуск: если pg_dump не выполнился,
+    резервной копии БД в этом запуске нет вовсе — снимки кэша её не
+    заменяют, значит запуск должен явно сообщить об ошибке, а не
+    отчитаться успехом с неполной копией.
+    """
+    monkeypatch.setattr("infra.config.DATABASE_URL", "postgresql+psycopg://u:p@localhost/pidirector")
+
+    def fake_backup_postgres(url, dst):
+        raise FileNotFoundError("pg_dump: команда не найдена")
+
+    monkeypatch.setattr(backup, "_backup_postgres", fake_backup_postgres)
+    assert backup.main() == 1
+    assert _backups(_paths) == []
+
+
+def test_unknown_database_url_still_backs_up_cache(_paths, monkeypatch):
+    """Не SQLite и не Postgres — БД не копируем, но снимки кэша всё равно сохраняем."""
+    monkeypatch.setattr("infra.config.DATABASE_URL", "mysql://u:p@localhost/x")
+    assert backup.main() == 0
+    made = next((_paths / "backups").glob("pi-backup-*"))
+    assert "market_prices.json" in {p.name for p in made.iterdir()}

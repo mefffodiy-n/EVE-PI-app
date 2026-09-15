@@ -101,15 +101,17 @@ Linux: два unit-файла systemd с `ExecStart=/path/.venv/bin/python -m sc
 
 ## 5. Бэкап
 
-`scripts.scheduler` делает копию раз в сутки сам. Если сборщики не крутятся
-постоянно, заведите отдельное задание — образец `deploy/backup-task.xml`
-(Task Scheduler → *Import Task*), путь к python и рабочему каталогу
-поправьте под себя.
+`scripts.scheduler` делает копию раз в сутки сам — для обоих движков:
+SQLite через API `.backup()`, Postgres через `pg_dump` (нужен в PATH,
+на Ubuntu ставится вместе с пакетом `postgresql`). Если сборщики не
+крутятся постоянно, заведите отдельное задание — образец
+`deploy/backup-task.xml` (Task Scheduler → *Import Task*), путь к
+python и рабочему каталогу поправьте под себя.
 
-Postgres бэкапится не этим скриптом:
+Восстановление dump-файла Postgres (обычный SQL, не custom-формат):
 
 ```
-pg_dump pidirector > pi-%DATE%.sql
+psql pidirector < pi-backup-*/pidirector.sql
 ```
 
 ## 6. nginx
