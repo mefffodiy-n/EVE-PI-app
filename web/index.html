@@ -819,6 +819,29 @@ details.msgs[open] > summary::before { content:'▾ '; }
 .profit-note { margin-top:8px; color:var(--dim); font-size:11px; max-width:82ch; }
 @media (max-width:680px){ .profit { overflow-x:auto; } .profit table { min-width:640px; } }
 
+/* ── Прибыльность плана с учётом POCO (docs/ROADMAP.md, Фаза 9,
+   16.09.2026) — та же визуальная семья, что и .profit выше, отдельный
+   класс только потому, что раскладка внутри другая (сводка чисел, не
+   таблица рядов). */
+.poco-profit { padding:14px; border-top:1px solid var(--seam); }
+.poco-profit .figures { display:flex; gap:22px; flex-wrap:wrap; margin-top:6px; }
+.poco-profit .figure { min-width:120px; }
+.poco-profit .figure .lbl { font-size:10px; letter-spacing:.1em; text-transform:uppercase;
+                             color:var(--dim); }
+.poco-profit .figure .val { font-family:'JetBrains Mono',monospace; font-size:16px;
+                             color:var(--read); margin-top:2px; }
+.poco-profit .figure.profit .val { color:var(--bright); }
+.poco-profit .figure .val.dim { color:var(--dim); font-size:13px; }
+.poco-profit-note { margin-top:8px; color:var(--dim); font-size:11px; max-width:82ch; }
+
+/* Ставки POCO по типам планет — компактная сетка коротких полей, тот же
+   характер ввода, что у соседнего margin. */
+.poco-rates { display:grid; grid-template-columns:repeat(auto-fill,minmax(110px,1fr));
+              gap:6px 10px; margin-top:4px; }
+.poco-rate-item { display:flex; align-items:center; justify-content:space-between;
+                   gap:6px; font-size:11px; color:var(--dim); }
+.poco-rate-item input { width:52px; padding:3px 5px; font-size:12px; }
+
 /* ── Сохранённые планы ────────────────────────────────────────── */
 .saved { border-top:1px solid var(--seam); padding:12px 14px; }
 .saved h3 { font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--dim);
@@ -1071,6 +1094,16 @@ body.light .rolebadge.excess { background:rgba(154,107,18,.12); }
             <label for="margin" data-i18n="margin">Запас на истощение месторождений</label>
             <input id="margin" type="number" value="1.0" step="0.1" min="1" max="3">
           </div>
+          <!-- Ставки POCO по типам планет (docs/ROADMAP.md, Фаза 9, 16.09.2026):
+               ручной ввод пользователя, тот же характер, что и margin выше —
+               не из data/planet_industry.csv (там точные, но статичные ставки
+               по конкретным планетам, устаревают молча). Пустое поле — «ставка
+               не введена», не 0%: domain/poco_tax.py честно исключает такую
+               планету из расчёта (missing_rates), а не подставляет «без налога». -->
+          <div class="field">
+            <label data-i18n="pocoRatesLabel">Ставки POCO по типам планет, %</label>
+            <div class="poco-rates" id="pocoRates"></div>
+          </div>
           <!-- Флажок «Прямое P2» убран из интерфейса (15.09.2026, решение
                пользователя, см. docs/ROADMAP.md Фаза 9): застройка в
                domain/direct_p2.py — расчёт из стоимостей структур, а не
@@ -1118,6 +1151,7 @@ body.light .rolebadge.excess { background:rgba(154,107,18,.12); }
       <div id="decision"></div>
       <div id="messages" style="padding:12px 14px 0"></div>
       <div id="profit"></div>
+      <div id="pocoProfit"></div>
       <div id="tableWrap"><div class="empty" data-i18n="noPlan">План не построен.</div></div>
     </main>
   </div>
@@ -1186,6 +1220,12 @@ const T={
   groupHint:'Отметьте, кто из вошедших персонажей основной, и сохраните — на новом устройстве или в другом браузере вход любым из этой группы подтянет всех остальных, без повторного входа каждым.',
   groupSave:'Сохранить группу',groupSaved:'Группа сохранена',groupSaveFail:'Не удалось сохранить группу',
   groupPrimary:'основной',groupPickPrimary:'Отметьте основного персонажа',
+  pocoRatesLabel:'Ставки POCO по типам планет, %',
+  pocoProfitTitle:'Прогноз прибыльности плана',
+  pocoRevenue:'Выручка / мес',pocoTax:'Налог POCO / мес',pocoNetProfit:'Чистая прибыль / мес',
+  pocoMissingPrices:'Нет цены: {list}',pocoMissingRates:'Не введена ставка POCO: {list}',
+  pocoIncomplete:'Чистая прибыль не считается, пока не введены все ставки и не собраны все цены — частичная сумма выглядела бы точнее, чем есть на самом деле.',
+  pocoAssumption:'Оценка при полной загрузке цепочки без простоев и истощения месторождений, {hours} часов в месяце. Налог — и на вывоз, и на ввоз на каждом перемещении между планетами по цепочке.',
   chipJobs:'сборщики',jobsOk:'ок',jobsStale:'застряли',jobsFailing:'падают',
   jobsNever:'ни разу не запускался',jobsFailingCount:'падает {n}-й раз подряд',
   jobServerStatus:'Статус сервера',jobMarketPrices:'Рыночные цены',
@@ -1253,6 +1293,12 @@ const T={
   groupHint:'Mark which of your logged-in characters is the primary one and save — logging in with any of this group on a new device or browser will pull in all the others, no need to log in with each separately.',
   groupSave:'Save group',groupSaved:'Group saved',groupSaveFail:'Could not save the group',
   groupPrimary:'primary',groupPickPrimary:'Mark the primary character',
+  pocoRatesLabel:'POCO tax rates by planet type, %',
+  pocoProfitTitle:'Plan profitability forecast',
+  pocoRevenue:'Revenue / mo',pocoTax:'POCO tax / mo',pocoNetProfit:'Net profit / mo',
+  pocoMissingPrices:'No price: {list}',pocoMissingRates:'POCO rate not entered: {list}',
+  pocoIncomplete:'Net profit is not shown until every rate is entered and every price is available — a partial sum would look more accurate than it really is.',
+  pocoAssumption:'Estimate at full chain throughput, no downtime, no deposit depletion, {hours} hours per month. Tax applies on both export and import at every hop between planets in the chain.',
   chipJobs:'jobs',jobsOk:'ok',jobsStale:'stuck',jobsFailing:'failing',
   jobsNever:'never ran',jobsFailingCount:'failing {n} time(s) in a row',
   jobServerStatus:'Server status',jobMarketPrices:'Market prices',
@@ -1321,7 +1367,7 @@ function applyLang(){
   document.querySelectorAll('.lang button').forEach(b=>b.classList.toggle('on',b.dataset.lang===lang));
   store.set('pi-lang',lang);
   renderDataChip(); renderMeta();
-  buildSortMenu(); renderCrew(); renderDash(); renderShopping(); renderProfit(); renderColonies(); renderSaved();
+  buildSortMenu(); renderCrew(); renderDash(); renderShopping(); renderProfit(); renderPocoProfit(); renderColonies(); renderSaved();
   if(allProducts.length){ renderProducts(); renderConstellations(); } if(plan.length){renderAnswers(); renderTable();}
   if(document.getElementById('modal').classList.contains('on')) openModal(currentModal);
   if(currentColony && document.getElementById('colonyPage').classList.contains('on')) openColony(currentColony);
@@ -2813,6 +2859,81 @@ function renderProfit(){
     <div class="profit-note">${t('profitNote')}</div></div>`;
 }
 
+/* ── Прибыльность плана с учётом POCO (docs/ROADMAP.md, Фаза 9,
+   16.09.2026) ────────────────────────────────────────────────────
+   Ставки — ручной ввод пользователя по типу планеты (тот же характер,
+   что margin выше): пустое поле значит «ставка не введена», а не 0% —
+   domain/poco_tax.py честно исключает такую планету из расчёта
+   (missing_rates), не подставляет «без налога». Планета без введённой
+   ставки, если план вообще на неё не заходит, никак не мешает: список
+   типов фиксированный (8, все типы EVE), большинство планов не строит
+   колоний на части из них. */
+const POCO_PLANET_TYPES=['Barren','Gas','Ice','Lava','Oceanic','Plasma','Storm','Temperate'];
+
+/* Вызывается один раз при загрузке страницы (boot), не на каждый applyLang:
+   иначе смена языка стирала бы уже введённые пользователем ставки. Сами
+   названия типов планет — термины EVE, не переводятся. */
+function renderPocoRateInputs(){
+  const box=document.getElementById('pocoRates'); if(!box) return;
+  box.innerHTML=POCO_PLANET_TYPES.map(pt=>`
+    <label class="poco-rate-item"><span>${pt}</span>
+      <input type="number" class="poco-rate" data-planet-type="${pt}"
+        min="0" max="100" step="1" placeholder="—" oninput="renderPocoProfit()"></label>
+  `).join('');
+}
+
+/* {тип планеты: доля 0..1} только для полей, которые пользователь
+   реально заполнил — пустое поле не превращается в 0%. */
+function pocoRatesFromInputs(){
+  const rates={};
+  document.querySelectorAll('.poco-rate').forEach(inp=>{
+    if(inp.value==='') return;
+    const pct=parseFloat(inp.value);
+    if(!isNaN(pct)) rates[inp.dataset.planetType]=pct/100;
+  });
+  return rates;
+}
+
+async function renderPocoProfit(){
+  const box=document.getElementById('pocoProfit'); if(!box) return;
+  if(!plan.length || !lastRequest){ box.innerHTML=''; return; }
+
+  let d;
+  try{
+    const r=await fetch(`${API}/plan-profitability`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        rows:plan, target_products:lastRequest.target_products,
+        poco_rates:pocoRatesFromInputs(),
+      }),
+    });
+    d=await r.json();
+  }catch(e){ box.innerHTML=''; return; }
+  if(!d || d.status!=='success'){ box.innerHTML=''; return; }
+
+  const gaps=[];
+  if(d.missing_prices && d.missing_prices.length)
+    gaps.push(fmtPlain(t('pocoMissingPrices'),{list:d.missing_prices.join(', ')}));
+  if(d.missing_rates && d.missing_rates.length)
+    gaps.push(fmtPlain(t('pocoMissingRates'),{list:d.missing_rates.join(', ')}));
+
+  const netKnown=d.monthly_net_profit!=null;
+  box.innerHTML=`<div class="poco-profit">
+    <div class="profit-head"><h3>${t('pocoProfitTitle')}</h3></div>
+    <div class="figures">
+      <div class="figure"><div class="lbl">${t('pocoRevenue')}</div>
+        <div class="val${d.monthly_revenue==null?' dim':''}">${d.monthly_revenue==null?t('noData'):isk(d.monthly_revenue)}</div></div>
+      <div class="figure"><div class="lbl">${t('pocoTax')}</div>
+        <div class="val${d.monthly_tax==null?' dim':''}">${d.monthly_tax==null?t('noData'):isk(d.monthly_tax)}</div></div>
+      <div class="figure profit"><div class="lbl">${t('pocoNetProfit')}</div>
+        <div class="val${netKnown?'':' dim'}">${netKnown?isk(d.monthly_net_profit):t('noData')}</div></div>
+    </div>
+    ${gaps.length?`<div class="poco-profit-note">${gaps.join(' · ')}</div>`:''}
+    ${!netKnown&&(d.monthly_revenue!=null||d.monthly_tax!=null)?`<div class="poco-profit-note">${t('pocoIncomplete')}</div>`:''}
+    <div class="poco-profit-note">${fmtPlain(t('pocoAssumption'),{hours:d.hours_per_month})}</div>
+  </div>`;
+}
+
 /* ── Список закупки ──────────────────────────────────────────
    Считается по типам планет: командный центр покупается под тип,
    и в игре это отдельный предмет с собственным type_id. */
@@ -3332,6 +3453,21 @@ const DOC={
    Линия, приносящая больше всех в час, но занимающая вдвое больше планет, хуже.</p>
    <p>Налог POCO, доставка и биржевые сборы не учтены, поэтому числа — верхняя оценка.</p>
 
+   <h3>Прогноз прибыльности плана</h3>
+   <p>Отдельная панель под таблицей выше — не обобщённая экономика шаблона, а
+   прибыльность УЖЕ ПОСТРОЕННОГО плана: настоящее число колоний и фабрик из
+   расчёта, помесячно, при полной загруженности цепочки без простоев. В
+   отличие от таблицы «Что выгоднее производить», здесь учтён налог POCO — и
+   на вывоз, и на ввоз на каждом перемещении между планетами по цепочке, не
+   только на финальной продаже.</p>
+   <p>Ставки POCO по типам планет вводятся вручную рядом с «Запас на
+   истощение месторождений» — по типу, не по конкретной планете: реальная
+   ставка меняется в игре когда угодно, а типовая честнее, чем протухший
+   молча снимок. Пустое поле — «ставка не введена», расчёт честно исключает
+   такую планету, а не считает её беспошлинной. Чистая прибыль показывается
+   только когда собраны все нужные цены и введены все нужные ставки —
+   частичная сумма выглядела бы точнее, чем есть на самом деле.</p>
+
    <h3>Индикаторы вверху</h3>
    <p>Плашка «ESI» — число игроков онлайн из снимка сервера; жёлтая точка значит,
    что снимок давно не обновлялся (сборщик мог не запуститься), при наведении
@@ -3537,6 +3673,19 @@ const DOC={
    unit price: the limited resource here is planets and characters, not time. A line that
    earns most per hour but occupies twice the planets is worse.</p>
    <p>POCO tax, hauling and broker fees are not included, so the figures are an upper bound.</p>
+
+   <h3>Plan profitability forecast</h3>
+   <p>A separate panel below the table above — not the generic template economics, but the
+   profitability of the ALREADY BUILT plan: the real number of colonies and factories from
+   the calculation, monthly, at full chain throughput with no downtime. Unlike the "most
+   profitable to produce" table, this one accounts for POCO tax — on both export and import
+   at every move between planets in the chain, not only on the final sale.</p>
+   <p>POCO rates by planet type are entered by hand next to "Deposit depletion margin" — by
+   type, not by a specific planet: the real rate changes in-game at any time, and a typical
+   rate is more honest than a snapshot that would go stale silently. An empty field means
+   "no rate entered" — the calculation honestly excludes that planet rather than treating it
+   as tax-free. Net profit is only shown once every needed price is available and every
+   needed rate is entered — a partial sum would look more accurate than it really is.</p>
 
    <h3>Top bar indicators</h3>
    <p>The "ESI" chip shows online players from a server snapshot; an amber dot means the
@@ -3986,7 +4135,7 @@ async function calculate(allowSingle, surplusMining){
   lastWarnings=d.warnings||[]; lastAssumptions=d.assumptions||[];
   renderMessages();
   renderDecision(d);
-  renderAnswers(); renderTable(); renderDash(); renderCrew(); renderShopping(); renderProfit();
+  renderAnswers(); renderTable(); renderDash(); renderCrew(); renderShopping(); renderProfit(); renderPocoProfit();
   // При упоре в размер планет остаёмся в настройках: выбор делать там,
   // а пустой дашборд ничего не объясняет.
   show(d.needs_user_decision ? 'setup' : 'dash');
@@ -4317,7 +4466,7 @@ setTheme(store.get('pi-theme','dark'));
 lang=store.get('pi-lang','ru');
 
 measureTopbar(); measureTools();
-boot(); loadMeta(); loadCrew(); loadProfit(); loadColonies(); loadSaved(); applyLang();
+boot(); loadMeta(); loadCrew(); loadProfit(); loadColonies(); loadSaved(); renderPocoRateInputs(); applyLang();
 // Онлайн меняется медленно; снимок обновляет фоновый сборщик,
 // поэтому опрашиваем раз в минуту и только читаем готовое.
 setInterval(loadMeta, 60000);

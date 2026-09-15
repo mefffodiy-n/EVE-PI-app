@@ -442,6 +442,123 @@ class TestColoniesIsolation:
         assert client.get("/api/colonies").get_json()["colonies"] == []
 
 
+class TestPlanProfitability:
+    """
+    POST /api/plan-profitability (docs/ROADMAP.md, Фаза 9, 16.09.2026) —
+    прибыльность УЖЕ ПОСТРОЕННОГО плана с учётом налога POCO (и на
+    экспорт, и на импорт — domain/poco_tax.py). Числа те же, что в
+    tests/test_poco_tax.py — здесь проверяется HTTP-контракт (валидация,
+    снимок цен), не арифметика.
+    """
+
+    MINING_ROW = {
+        "role_key": "mine", "res_out": "Water", "planet_type": "Barren",
+        "structures_detail": [{"kind": "basic_industry_facility", "count": 8}],
+    }
+    PROCESSING_ROW = {
+        "role_key": "proc", "res_out": "Coolant", "planet_type": "Temperate",
+        "structures_detail": [{"kind": "advanced_industry_facility", "count": 12}],
+    }
+
+    def _mock_prices(self, monkeypatch, prices: dict[str, float]):
+        import api.blueprints.market as market
+
+        monkeypatch.setattr(market, "_load_snapshot", lambda: {
+            "prices": {name: {"buy_max": price} for name, price in prices.items()}
+        })
+
+    def _mock_schematics(self, monkeypatch):
+        """
+        Настоящие Water/Coolant из data/schematics.json — не те числа, на
+        которых построены ожидаемые суммы теста (см. tests/test_poco_tax.py) —
+        подменяем на контролируемые, чтобы проверять HTTP-контракт, а не
+        переоткрывать арифметику, уже покрытую доменными тестами.
+        """
+        import domain.poco_tax as poco_tax
+        from domain.throughput import Schematic
+
+        monkeypatch.setattr(poco_tax, "load_schematics", lambda: {
+            "Water": Schematic(product="Water", facility="basic_industry_facility",
+                                inputs={}, output_qty=100.0, cycle_minutes=30.0),
+            "Coolant": Schematic(product="Coolant", facility="advanced_industry_facility",
+                                  inputs={"Water": 50.0}, output_qty=10.0, cycle_minutes=60.0),
+        })
+
+    def test_computes_revenue_and_both_tax_directions(self, monkeypatch):
+        self._mock_prices(monkeypatch, {"Water": 10.0, "Coolant": 100.0})
+        self._mock_schematics(monkeypatch)
+        from api import create_app
+
+        with create_app({"TESTING": True}).test_client() as client:
+            r = client.post("/api/plan-profitability", json={
+                "rows": [self.MINING_ROW, self.PROCESSING_ROW],
+                "target_products": ["Coolant"],
+                "poco_rates": {"Barren": 0.10, "Temperate": 0.05},
+            })
+        assert r.status_code == 200
+        body = r.get_json()
+        assert body["monthly_revenue"] == 8_640_000.0
+        assert body["monthly_export_tax"] == 1_584_000.0
+        assert body["monthly_import_tax"] == 216_000.0
+        assert body["monthly_net_profit"] == 6_840_000.0
+        assert body["hours_per_month"] == 720.0
+
+    def test_missing_price_reported_not_hidden(self, monkeypatch):
+        self._mock_prices(monkeypatch, {"Coolant": 100.0})  # Water без цены
+        self._mock_schematics(monkeypatch)
+        from api import create_app
+
+        with create_app({"TESTING": True}).test_client() as client:
+            r = client.post("/api/plan-profitability", json={
+                "rows": [self.MINING_ROW, self.PROCESSING_ROW],
+                "target_products": ["Coolant"],
+                "poco_rates": {"Barren": 0.10, "Temperate": 0.05},
+            })
+        body = r.get_json()
+        assert "Water" in body["missing_prices"]
+        assert body["monthly_net_profit"] is None  # картина неполная — не выдаём частичную
+
+    def test_rejects_non_numeric_rate(self, monkeypatch):
+        self._mock_prices(monkeypatch, {})
+        from api import create_app
+
+        with create_app({"TESTING": True}).test_client() as client:
+            r = client.post("/api/plan-profitability", json={
+                "rows": [], "target_products": [],
+                "poco_rates": {"Barren": "ten percent"},
+            })
+        assert r.status_code == 400
+
+    def test_rejects_rate_above_100_percent(self, monkeypatch):
+        self._mock_prices(monkeypatch, {})
+        from api import create_app
+
+        with create_app({"TESTING": True}).test_client() as client:
+            r = client.post("/api/plan-profitability", json={
+                "rows": [], "target_products": [],
+                "poco_rates": {"Barren": 1.5},
+            })
+        assert r.status_code == 400
+
+    def test_works_without_market_snapshot(self, monkeypatch):
+        """Правило 3: эндпоинт не ходит наружу и отвечает даже без снимка цен."""
+        import api.blueprints.market as market
+
+        monkeypatch.setattr(market, "_load_snapshot", lambda: {})
+        self._mock_schematics(monkeypatch)
+        from api import create_app
+
+        with create_app({"TESTING": True}).test_client() as client:
+            r = client.post("/api/plan-profitability", json={
+                "rows": [self.MINING_ROW],
+                "target_products": ["Water"],
+                "poco_rates": {"Barren": 0.10},
+            })
+        assert r.status_code == 200
+        assert r.get_json()["monthly_revenue"] is None
+        assert "Water" in r.get_json()["missing_prices"]
+
+
 class TestMarket:
     def test_market_never_calls_external_service(self, client):
         """
