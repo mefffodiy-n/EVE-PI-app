@@ -641,6 +641,19 @@ def main(client=None) -> int:
         print("Нет таблиц БД — выполните `python -m alembic upgrade head`.")
         return 0
 
+    # Только для наглядности (roadmap.md, Фаза 9, 16.09.2026) — не влияет
+    # на решение продолжать или остановиться: реактивный Retry-After по
+    # 429 уже защищает от этого лимита, здесь просто видно в логе, куда
+    # упирается бюджет заранее.
+    limits = client.token_limits
+    if limits:
+        summary = ", ".join(
+            f"{group}: {info['remaining']}"
+            + (f"/{info['limit']}" if "limit" in info else "")
+            for group, info in sorted(limits.items())
+        )
+        print(f"Остаток лимита токенов ESI по группам маршрутов: {summary}")
+
     return 1 if errors else 0
 
 

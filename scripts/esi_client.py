@@ -31,7 +31,20 @@
 
 4. Ответ 429 с Retry-After. Новый лимит по токенам работает скользящим
    окном на пару «приложение + персонаж». Retry-After говорит, через
-   сколько секунд запрос пройдёт; повторяем не раньше.
+   сколько секунд запрос пройдёт; повторяем не раньше — это и есть
+   защита от этого лимита, полная и достаточная сама по себе (см. п. 4а).
+
+4а. X-Ratelimit-Remaining/Limit/Group — читаются заранее, ТОЛЬКО для
+   наглядности, не для защиты (roadmap.md, Фаза 9, 16.09.2026: посчитано
+   по реальным цифрам прода — при масштабе в десятки-сотни пользователей
+   этот лимит считается НА ПЕРСОНАЖА, а не общий на приложение, как
+   старый лимит ошибок, поэтому не размывается ростом числа
+   пользователей и не нуждается в проактивной блокировке — реактивного
+   Retry-After по 429 уже достаточно). Последнее увиденное значение по
+   каждой группе маршрутов хранится в `EsiClient.token_limits` и печатается
+   сборщиком колоний (`sync_colony_status.py::main()`) в свой лог по
+   итогам прогона — просто чтобы было видно, куда упирается бюджет,
+   раньше, чем он реально исчерпается.
 
 5. ETag. Ответ 304 не тратит трафик и не считается ошибкой. Для данных,
    которые меняются редко, это дешевле повторной выкачки.
@@ -149,6 +162,7 @@ class EsiClient:
         self._opener = opener            # для тестов, чтобы не ходить в сеть
         self._blocked_until = 0.0
         self._errors_remaining: int | None = None
+        self._token_limits: dict[str, dict] = {}
         self._etags = self._load_etags()
 
     # ── Хранение ETag + Expires ──────────────────────────────────
@@ -212,20 +226,50 @@ class EsiClient:
         """Сколько секунд осталось до снятия самоблокировки."""
         return max(0, int(self._blocked_until - time.time()))
 
+    @property
+    def token_limits(self) -> dict:
+        """
+        Последнее увиденное состояние лимита токенов (X-Ratelimit-*) по
+        каждой группе маршрутов — {group: {"remaining": int, "limit": int}}.
+
+        Только для наглядности (см. докстринг модуля, п. 4а): в отличие
+        от лимита ошибок это НЕ повод для проактивной самоблокировки —
+        бюджет считается на пару (группа, персонаж), не общий на
+        приложение, и реактивного Retry-After по 429 уже достаточно.
+        Пустой словарь, если ESI ни разу не прислал эти заголовки
+        (публичные маршруты их не отдают).
+        """
+        return dict(self._token_limits)
+
     def _note_limits(self, headers: dict) -> None:
         remain = headers.get("X-ESI-Error-Limit-Remain")
         reset = headers.get("X-ESI-Error-Limit-Reset")
-        if remain is None:
+        if remain is not None:
+            try:
+                self._errors_remaining = int(remain)
+                seconds = int(reset) if reset is not None else 60
+            except (TypeError, ValueError):
+                pass
+            else:
+                if self._errors_remaining <= ERROR_LIMIT_FLOOR:
+                    # Не дожидаемся нуля: ноль означает 420 на всех маршрутах.
+                    self._blocked_until = time.time() + seconds
+
+        self._note_token_limits(headers)
+
+    def _note_token_limits(self, headers: dict) -> None:
+        group = headers.get("X-Ratelimit-Group")
+        token_remaining = headers.get("X-Ratelimit-Remaining")
+        token_limit = headers.get("X-Ratelimit-Limit")
+        if not group or token_remaining is None:
             return
         try:
-            self._errors_remaining = int(remain)
-            seconds = int(reset) if reset is not None else 60
+            entry = {"remaining": int(token_remaining)}
+            if token_limit is not None:
+                entry["limit"] = int(token_limit)
         except (TypeError, ValueError):
             return
-
-        if self._errors_remaining <= ERROR_LIMIT_FLOOR:
-            # Не дожидаемся нуля: ноль означает 420 на всех маршрутах.
-            self._blocked_until = time.time() + seconds
+        self._token_limits[group] = entry
 
     # ── Запрос ───────────────────────────────────────────────────
     def get(self, path: str, use_etag: bool = True, token: str | None = None) -> EsiResponse:
