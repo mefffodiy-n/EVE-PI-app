@@ -173,3 +173,15 @@ class TestHonesty:
             assert "MIT" in text
             assert "github.com/mefffodiy-n" in text
             assert "mefffodiy-n" in text
+
+    def test_about_credits_dalshooth_templates(self):
+        """
+        Игровые JSON-шаблоны застройки (data/templates/) — не наши,
+        взяты из стороннего репозитория (DalShooth/EVE_PI_Templates,
+        см. CLAUDE.md/data/README.md) — «О проекте» должно называть
+        автора и давать ссылку, а не просто «игровые шаблоны».
+        """
+        for lang in ("ru", "en"):
+            text = _section("about", lang)
+            assert "DalShooth" in text
+            assert "github.com/DalShooth/EVE_PI_Templates" in text

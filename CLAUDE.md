@@ -212,7 +212,8 @@ alembic.ini       конфиг Alembic (URL берётся из infra.config, н
 
 ## Что известно точно, а что нет
 
-**Проверено по четырём источникам** (шаблоны DalShooth, их README,
+**Проверено по четырём источникам** (шаблоны DalShooth —
+<https://github.com/DalShooth/EVE_PI_Templates>, их README,
 eve-webtools.com, вики EVE University): рецепты и количества, стоимости
 структур, ёмкость командных центров, длительности циклов, модель линков
 `L = 0.012·radius + 1`, `cpu = 15 + 0.2·L`, `pg = 10 + 0.15·L`.
