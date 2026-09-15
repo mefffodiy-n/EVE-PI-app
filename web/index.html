@@ -1664,22 +1664,27 @@ function orb(row,size,showPilot=true){
     const info=producedInfo(row);
     const pin=launchpadPin(row);
     const fillPct=launchpadFillPct(row);
-    // Причал забит под завязку — добыче дальше складывать некуда, это
-    // требует внимания не меньше, чем истекающая программа (см. attnN в
-    // renderColonies()). Кольцо переключается с синего «заполненность» на
-    // мигающее красное — тот же сигнал, что и .badge.hot у таймера.
-    const full=isLaunchpadFull(row);
+    // Причал забит под завязку — сигнал ТОЛЬКО для добычи: складывать
+    // больше некуда, это требует внимания не меньше, чем истекающая
+    // программа (см. attnN в renderColonies()). У переработки полный
+    // причал — запас сырья на будущее, скорее хорошо, не тревога
+    // (переопределено 16.09.2026, docs/ROADMAP.md, Фаза 9) — кольцо для
+    // неё остаётся обычным синим «заполненность», не переключается на
+    // мигающее красное; сама проверка isLaunchpadFull() не меняется, она
+    // используется и там, где роль не при чём (подсказка при наведении).
+    const launchpadAlarm=!isProc&&isLaunchpadFull(row);
     // «Требует внимания» — то же условие, что и в attnN сводки: программа
-    // экстрактора кончилась или причал забит. Центральная иконка ресурса
-    // в этом случае уступает место красному «запрету» — как в игре;
-    // это своя иконка (UI-состояние, не тип предмета из игры), поэтому
-    // рисуется SVG, а не берётся с images.evetech.net. Дефицит добычи —
-    // отдельная категория (см. deficitN в renderColonies()), не смешана
-    // сюда: иначе одна причина маскировала бы другую в общем счёте, а у
-    // дефицита и так свой явный маркер (.def-mark) и подсказка.
+    // экстрактора кончилась (добыча) или причал забит (только добыча).
+    // Центральная иконка ресурса в этом случае уступает место красному
+    // «запрету» — как в игре; это своя иконка (UI-состояние, не тип
+    // предмета из игры), поэтому рисуется SVG, а не берётся с
+    // images.evetech.net. Дефицит добычи — отдельная категория (см.
+    // deficitN в renderColonies()), не смешана сюда: иначе одна причина
+    // маскировала бы другую в общем счёте, а у дефицита и так свой явный
+    // маркер (.def-mark) и подсказка.
     const deficient=isColonyDeficient(row);
     const deficitRisk=deficient?colonyDeficitRisk(row):[];
-    const attention=over||full;
+    const attention=over||launchpadAlarm;
     const noEntry=`<svg class="cargo alert" viewBox="0 0 24 24">
         <circle cx="12" cy="12" r="9.5"/><line x1="5.3" y1="18.7" x2="18.7" y2="5.3"/>
       </svg>`;
@@ -1698,9 +1703,9 @@ function orb(row,size,showPilot=true){
               onclick="openColony('${row.matchId}')"
               aria-label="${row.character} · ${row.system} ${row.planet}">
       <div class="disc">${planetId?`<img src="${ICON(planetId,128)}" alt="">`:''}</div>
-      ${fillPct!=null?`<svg class="ring${full?' full':''}" viewBox="0 0 ${size} ${size}">
+      ${fillPct!=null?`<svg class="ring${launchpadAlarm?' full':''}" viewBox="0 0 ${size} ${size}">
         <circle class="track" cx="${size/2}" cy="${size/2}" r="${r}"/>
-        <circle cx="${size/2}" cy="${size/2}" r="${r}" stroke="var(${full?'--alarm':'--ring-infra'})"
+        <circle cx="${size/2}" cy="${size/2}" r="${r}" stroke="var(${launchpadAlarm?'--alarm':'--ring-infra'})"
           stroke-dasharray="${c*fillPct/100} ${c}" stroke-linecap="round"/>
       </svg>`:''}
       ${attention?noEntry:(info.iconId?`<img class="cargo" src="${ICON(info.iconId)}" alt="">`:'')}
@@ -2153,10 +2158,18 @@ function simulateColonyFactories(pins, routes, gameLastUpdateIso){
 function isColonyIdle(p){
   if(p.role_key==='mine') return !p.nearest_expiry;
   if(p.role_key==='proc'){
+    // Переопределено 16.09.2026 (docs/ROADMAP.md, Фаза 9): раньше —
+    // «ВСЕ фабрики находятся в состоянии idle по pinCycleInfo()», прокси
+    // на честный сигнал, которого тогда не было. Теперь честный сигнал
+    // есть — sim.depletionMs (время до исчерпания сырья в причале,
+    // simulateColonyFactories()) — и «простаивает» означает буквально
+    // «сырьё в причале уже кончилось» (depletionMs<=0), а не то, что все
+    // фабрики синхронно не крутят цикл (это могло быть верно и при живом
+    // снабжении — просто фаза цикла у всех совпала).
     const factories=(p.pins||[]).filter(pin=>pin.kind&&pin.kind.endsWith('industry_facility'));
+    if(!factories.length) return false;
     const sim=simulateColonyFactories(p.pins,p.routes,p.game_last_update);
-    return factories.length>0 && factories.every(pin=>
-      pinCycleInfo(pin,p.game_last_update,sim&&sim.get(pin.pin_id)).idle);
+    return !!(sim && sim.depletionMs!=null && sim.depletionMs<=0);
   }
   return false;
 }
@@ -2715,17 +2728,20 @@ function renderColonies(){
     body=`<div class="grid">${rows.map(p=>orb(p,58)).join('')}</div>`;
   }
   const idleN=rows.filter(isColonyIdle).length;
-  // «Требует внимания» — программа экстрактора кончилась или кончается
-  // меньше чем через 2 ч, либо причал забит (обе причины показывают
-  // красный запрет вместо иконки ресурса на круге, см. orb()). Дефицит
+  // «Требует внимания» — переопределено 16.09.2026 (docs/ROADMAP.md,
+  // Фаза 9, решение пользователя): только «причал полон», без
+  // заблаговременного 2-часового предупреждения об истечении программы
+  // экстрактора — «только когда уже встала» (та ситуация — категория
+  // idleN, не эта; счётчики независимые, колония может попасть в ОБА
+  // сразу, не одно ИЛИ другое). Причал полон — сигнал ТОЛЬКО для добычи:
+  // складывать больше некуда — плохо; у переработки полный причал —
+  // запас сырья на будущее, скорее хорошо, не «требует внимания» (сама
+  // проверка `isLaunchpadFull()` не трогается — тот же процент нужен и
+  // для честного кольца заполненности независимо от роли). Дефицит
   // добычи — своя категория рядом, не смешана сюда: колония в дефиците
   // всё ещё работает (просто ниже DEFICIT_UNITS_PER_HOUR), это другая по
   // смыслу проблема, и у неё свой маркер (.def-mark), не «запрет».
-  const attnN=rows.filter(p=>{
-    const soon=p.role_key==='mine'&&p.nearest_expiry
-      &&Date.parse(p.nearest_expiry)-Date.now()<7200000;
-    return soon||isLaunchpadFull(p);
-  }).length;
+  const attnN=rows.filter(p=>p.role_key==='mine'&&isLaunchpadFull(p)).length;
   const deficitN=rows.filter(isColonyDeficient).length;
   const summary=`${pl(rows.length,'pPlanetN')} · ${idleN} ${t('coloniesIdle')} · ${attnN} ${t('coloniesAttention')}`
     + ` · ${deficitN} ${t('coloniesDeficit')}`;
@@ -3355,9 +3371,13 @@ const DOC={
    <h3>Мои колонии в игре</h3>
    <p>Отдельный блок на дашборде: что у персонажей реально построено — снимок
    из игры, а не расчётный план. Сводная строка над блоком считает четыре
-   категории: сколько колоний простаивает, сколько требуют внимания (программа
-   экстрактора кончается меньше чем через два часа или причал забит под
-   завязку), сколько в дефиците добычи, и общее число планет.</p>
+   категории: сколько колоний простаивает (у добычи — программа экстрактора
+   уже закончилась; у переработки — закончилось сырьё в причале), сколько
+   требуют внимания (только у добычи — причал забит под завязку, у
+   переработки полный причал не тревога, а запас на будущее), сколько в
+   дефиците добычи, и общее число планет. Простаивает и требует внимания —
+   независимые категории: колония, где программа кончилась И причал полон
+   одновременно, попадает в обе сразу, не в одну на выбор.</p>
    <p>Карточка колонии выглядит как у расчётного плана — та же полоса иконок
    структур, только состав берётся из настоящих пинов на планете, а не из
    шаблона застройки. Кнопка «Детали» открывает полную панель: причал, склад
@@ -3544,9 +3564,13 @@ const DOC={
    <h3>My in-game colonies</h3>
    <p>A separate dashboard panel: what your characters have actually built — a live
    snapshot from the game, not the computed plan. The summary line above it counts four
-   things: how many colonies are idle, how many need attention (extractor program ending
-   in under two hours, or a launchpad packed full), how many are in extraction deficit,
-   and the total planet count.</p>
+   things: how many colonies are idle (extraction — the extractor program has already
+   ended; processing — the launchpad has run out of raw material), how many need
+   attention (extraction only — the launchpad is packed full; for processing a full
+   launchpad isn't a warning, it's a buffer for later), how many are in extraction
+   deficit, and the total planet count. Idle and needs-attention are independent: a
+   colony whose program ended AND whose launchpad is full counts in both, not one or
+   the other.</p>
    <p>A colony card looks like a plan card — the same strip of structure icons — except
    the composition comes from the real pins on the planet, not a building template. The
    Details button opens the full panel: launchpad, storage and the command centre's own
