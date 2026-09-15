@@ -459,6 +459,173 @@ class TestUnlink:
         assert calls == []
 
 
+class TestGroupCharacters:
+    """
+    Постоянная группа «основной + альты» (docs/ROADMAP.md, Фаза 9,
+    16.09.2026) — независимая от cookie-сессии account_id. Создаётся
+    явно через /api/auth/group из персонажей, уже вошедших в этот визит;
+    основного выбирает пользователь, не автоматика.
+    """
+
+    def _login_as(self, client, account_id):
+        with client.session_transaction() as sess:
+            sess["account_id"] = account_id
+
+    def _add_character(self, cid, account_id, primary=None):
+        with session_scope() as s:
+            s.add(Character(character_id=cid, name=f"Pilot {cid}",
+                            command_center_upgrades_level=5,
+                            interplanetary_consolidation_level=4,
+                            source="esi", account_id=account_id,
+                            primary_character_id=primary))
+
+    def test_group_shares_deterministic_account_id(self, client):
+        self._add_character(1001, "acct-x")
+        self._add_character(1002, "acct-x")
+        self._login_as(client, "acct-x")
+
+        r = client.post("/api/auth/group", json={"primary_character_id": 1001})
+        assert r.status_code == 200
+        assert r.get_json()["members"] == [1001, 1002]
+
+        with session_scope() as s:
+            a, b = s.get(Character, 1001), s.get(Character, 1002)
+            assert (a.primary_character_id, a.account_id) == (1001, "char:1001")
+            assert (b.primary_character_id, b.account_id) == (1001, "char:1001")
+
+        # Визит сам переключился на групповой id — следующий запрос уже
+        # видит группу целиком, не только персонажа, которым только что
+        # что-то делали.
+        with client.session_transaction() as sess:
+            assert sess["account_id"] == "char:1001"
+
+    def test_primary_must_belong_to_this_visit(self, client):
+        self._add_character(1003, "acct-y")
+        self._login_as(client, "acct-y")
+
+        r = client.post("/api/auth/group", json={"primary_character_id": 9999})
+        assert r.status_code == 400
+        with session_scope() as s:
+            assert s.get(Character, 1003).primary_character_id is None
+
+    def test_can_redesignate_primary_within_the_same_existing_group(self, client):
+        """
+        Оба персонажа УЖЕ в одной и той же группе (primary=1006 у обоих) —
+        повторный вызов с другим primary_id (1007, тоже участник) должен
+        просто переназначить основного, а не считаться конфликтом: это
+        не слияние двух чужих групп, а повтор той же операции.
+        """
+        self._add_character(1006, "char:1006", primary=1006)
+        self._add_character(1007, "char:1006", primary=1006)
+        self._login_as(client, "char:1006")
+
+        r = client.post("/api/auth/group", json={"primary_character_id": 1007})
+        assert r.status_code == 200
+
+        with session_scope() as s:
+            a, b = s.get(Character, 1006), s.get(Character, 1007)
+            assert (a.primary_character_id, a.account_id) == (1007, "char:1007")
+            assert (b.primary_character_id, b.account_id) == (1007, "char:1007")
+
+    def test_cannot_group_characters_already_in_different_groups(self, client):
+        """
+        Оба персонажа этого визита уже состоят каждый в СВОЕЙ постоянной
+        группе (заведены отдельно на разных устройствах раньше) — молча
+        объединять их в одну новую группу нельзя, это стёрло бы прежнюю
+        привязку без явного согласия пользователя.
+        """
+        self._add_character(1004, "acct-z", primary=1004)
+        self._add_character(1005, "acct-z", primary=1005)
+        self._login_as(client, "acct-z")
+
+        r = client.post("/api/auth/group", json={"primary_character_id": 1004})
+        assert r.status_code == 409
+        with session_scope() as s:
+            assert s.get(Character, 1005).primary_character_id == 1005  # не тронут
+
+
+class TestLoginGroupConflict:
+    """Вход персонажем из ДРУГОЙ постоянной группы, чем уже активна визитом."""
+
+    def _login(self, client):
+        url = client.get("/api/auth/login-url").get_json()["url"]
+        q = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+        return q["state"][0]
+
+    def test_login_refused_when_conflicting_with_active_session_group(
+        self, client, sso_env, _rsa_key, monkeypatch
+    ):
+        import api.blueprints.auth as auth_module
+
+        monkeypatch.setattr(auth_module, "_sync_first_login_async", lambda cid: None)
+
+        # Персонаж 2001 уже состоит в СВОЕЙ установленной группе (заведена
+        # на другом устройстве раньше).
+        with session_scope() as s:
+            s.add(Character(character_id=2001, name="Established",
+                            command_center_upgrades_level=5,
+                            interplanetary_consolidation_level=4, source="esi",
+                            account_id="char:2001", primary_character_id=2001))
+        # Текущий визит уже сгруппирован вокруг ДРУГОГО персонажа.
+        with session_scope() as s:
+            s.add(Character(character_id=3001, name="Active",
+                            command_center_upgrades_level=5,
+                            interplanetary_consolidation_level=4, source="esi",
+                            account_id="char:3001", primary_character_id=3001))
+        with client.session_transaction() as sess:
+            sess["account_id"] = "char:3001"
+
+        access = _make_jwt(_rsa_key, sub="CHARACTER:EVE:2001")
+        import scripts.esi_sso as mod
+
+        mod._post_form = lambda *a, **k: {
+            "access_token": access, "refresh_token": "r", "expires_in": 1199,
+        }
+
+        state = self._login(client)
+        r = client.get(f"/api/auth/callback?code=abc&state={state}")
+        assert r.status_code == 302
+        assert "reason=group_conflict" in r.headers["Location"]
+
+        # Персонаж из другой группы не тронут — не перезаписан на визит.
+        with session_scope() as s:
+            assert s.get(Character, 2001).account_id == "char:2001"
+
+    def test_login_by_second_alt_of_the_same_group_succeeds(
+        self, client, sso_env, _rsa_key, monkeypatch
+    ):
+        """Логин ВТОРЫМ персонажем ТОЙ ЖЕ группы — не конфликт, обычный вход."""
+        import api.blueprints.auth as auth_module
+
+        monkeypatch.setattr(auth_module, "_sync_first_login_async", lambda cid: None)
+
+        with session_scope() as s:
+            s.add(Character(character_id=4001, name="Primary",
+                            command_center_upgrades_level=5,
+                            interplanetary_consolidation_level=4, source="esi",
+                            account_id="char:4001", primary_character_id=4001))
+            s.add(Character(character_id=4002, name="Alt",
+                            command_center_upgrades_level=5,
+                            interplanetary_consolidation_level=4, source="esi",
+                            account_id=None, primary_character_id=4001))
+
+        access = _make_jwt(_rsa_key, sub="CHARACTER:EVE:4002", name="Alt")
+        import scripts.esi_sso as mod
+
+        mod._post_form = lambda *a, **k: {
+            "access_token": access, "refresh_token": "r", "expires_in": 1199,
+        }
+
+        state = self._login(client)
+        r = client.get(f"/api/auth/callback?code=abc&state={state}")
+        assert r.status_code == 302 and "auth=ok" in r.headers["Location"]
+
+        with session_scope() as s:
+            assert s.get(Character, 4002).account_id == "char:4001"
+        with client.session_transaction() as sess:
+            assert sess["account_id"] == "char:4001"
+
+
 def test_verify_rejects_missing_eve_online_audience(sso_env, _rsa_key, monkeypatch):
     from scripts.esi_sso import SsoError, verify_access_token
 

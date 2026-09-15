@@ -27,10 +27,24 @@ import time
 
 from flask import Blueprint, current_app, redirect, request
 
-from api.cache import json_error, json_ok
+from api.cache import json_error, json_ok, parse_json_body
 from infra import config
 
 bp = Blueprint("auth", __name__)
+
+
+class GroupConflict(RuntimeError):
+    """
+    Персонаж, которым сейчас входят, состоит в постоянной группе
+    «основной + альты» (Character.primary_character_id), отличной от той,
+    что уже активна в этом визите — не сливаем и не перезаписываем молча
+    (решение пользователя 16.09.2026, docs/ROADMAP.md, Фаза 9), честно
+    отказываем: настоящий конфликт identity, а не обычная перепривязка.
+    """
+
+
+def _group_account_id(primary_character_id: int) -> str:
+    return f"char:{primary_character_id}"
 
 # state -> (code_verifier, created_at). В памяти процесса: flow занимает
 # секунды, а нескольких воркеров на self-hosted инструменте нет. Рестарт
@@ -94,6 +108,9 @@ def callback():
         claims = verify_access_token(tokens["access_token"])
         character_id, name = character_from_claims(claims)
         _store(character_id, name, tokens, claims)
+    except GroupConflict as exc:
+        current_app.logger.info("Вход отклонён (конфликт постоянных групп): %s", exc)
+        return redirect("/?auth=error&reason=group_conflict")
     except Exception as exc:  # noqa: BLE001 — сбой SSO не должен ронять сервер
         current_app.logger.warning("EVE SSO callback не удался: %s", exc)
         return redirect("/?auth=error&reason=exchange")
@@ -171,8 +188,20 @@ def _store(character_id: int, name: str, tokens: dict, claims: dict) -> None:
     видели персонажей и колонии друг друга). Повторный вход тем же
     персонажем из другого браузера/сессии ПЕРЕВЯЗЫВАЕТ его новому визиту
     — это ожидаемо: доступ туда, откуда только что подтверждён логин.
+
+    ИСКЛЮЧЕНИЕ (docs/ROADMAP.md, Фаза 9, 16.09.2026): если у персонажа
+    заведена постоянная группа (`primary_character_id`,
+    `group_characters()` ниже), account_id для него — НЕ случайный
+    account_id текущей сессии, а детерминированный `f"char:{primary}"`,
+    одинаковый на любом устройстве/браузере — визит переключается на всю
+    группу целиком (`set_account_id`), а не остаётся при своём случайном
+    id. Если в этом же визите уже есть персонажи ИЗ ДРУГОЙ группы —
+    честный отказ (`GroupConflict`), не слияние и не молчаливая
+    перезапись.
     """
-    from api.session import ensure_account_id
+    from sqlalchemy import select
+
+    from api.session import ensure_account_id, set_account_id
     from infra.credentials import save_tokens
     from infra.db import session_scope
     from infra.models import Character
@@ -183,6 +212,24 @@ def _store(character_id: int, name: str, tokens: dict, claims: dict) -> None:
 
     with session_scope() as session:
         char = session.get(Character, character_id)
+        primary_id = char.primary_character_id if char is not None else None
+
+        if primary_id is not None:
+            already_in_session = session.scalars(
+                select(Character).where(Character.account_id == account_id)
+            ).all()
+            conflicting = {
+                c.primary_character_id for c in already_in_session
+                if c.primary_character_id is not None and c.primary_character_id != primary_id
+            }
+            if conflicting:
+                raise GroupConflict(
+                    f"Персонаж {name} состоит в другой постоянной группе, чем "
+                    "уже вошедшие в этом визите — сначала отвяжите их."
+                )
+            account_id = _group_account_id(primary_id)
+            set_account_id(account_id)
+
         if char is None:
             # Уровни скиллов пока неизвестны — их заполнит будущий
             # sync_character_skills. 0 честнее выдуманного значения.
@@ -198,6 +245,68 @@ def _store(character_id: int, name: str, tokens: dict, claims: dict) -> None:
             char.account_id = account_id
 
         save_tokens(session, character_id, tokens, scopes)
+
+
+@bp.post("/auth/group")
+def group_characters():
+    """
+    Создать постоянную группу «основной + альты» из персонажей, уже
+    видимых в ЭТОМ визите (docs/ROADMAP.md, Фаза 9, 16.09.2026) — чтобы
+    на новом устройстве/браузере вход ЛЮБЫМ из них подтягивал всех
+    остальных, а не оставлял их невидимыми до отдельного входа каждым.
+
+    Пользователь явно выбирает primary_character_id из уже вошедших —
+    не автоматически первый и не молча при обычном входе: иначе
+    случайный первый вход мог бы незапланированно закрепиться навсегда
+    как «основной» (решение пользователя, см. docs/ROADMAP.md).
+    """
+    from sqlalchemy import select
+
+    from api.session import current_account_id, set_account_id
+    from infra.db import session_scope
+    from infra.models import Character
+
+    payload, error = parse_json_body({"primary_character_id": int})
+    if error:
+        return json_error(error)
+    primary_id = payload["primary_character_id"]
+
+    account_id = current_account_id()
+    if account_id is None:
+        return json_error("Нет персонажей этого визита — сначала войдите через EVE SSO", 400)
+
+    with session_scope() as session:
+        members = session.scalars(
+            select(Character).where(Character.account_id == account_id, Character.source == "esi")
+        ).all()
+        member_ids = sorted(c.character_id for c in members)
+        if primary_id not in member_ids:
+            return json_error(
+                "Указанный персонаж не входит в число вошедших в этом визите", 400
+            )
+
+        # Конфликт — это ДВЕ РАЗНЫЕ уже существующие группы среди этих
+        # персонажей (например, каждый заведён «основным» отдельно на
+        # разных устройствах раньше), не сам факт, что выбранный
+        # primary_id отличается от текущего значения: переназначить
+        # основного ВНУТРИ одной и той же группы — это ожидаемый повторный
+        # вызов той же операции, не слияние чужого. Сравниваем участников
+        # ДРУГ С ДРУГОМ, а не каждого с новым primary_id.
+        existing_groups = {
+            c.primary_character_id for c in members if c.primary_character_id is not None
+        }
+        if len(existing_groups) > 1:
+            return json_error(
+                "Часть этих персонажей уже состоит в разных постоянных группах — "
+                "сначала отвяжите их и войдите заново", 409
+            )
+
+        for c in members:
+            c.primary_character_id = primary_id
+            c.account_id = _group_account_id(primary_id)
+
+    set_account_id(_group_account_id(primary_id))
+    return json_ok(primary_character_id=primary_id, members=member_ids)
 
 
 @bp.post("/auth/unlink/<int:character_id>")

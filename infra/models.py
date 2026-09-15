@@ -54,6 +54,17 @@ class Character(Base):
     # не перелогинится.
     account_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
+    # Постоянная привязка к группе «основной + альты» (docs/ROADMAP.md,
+    # Фаза 9, 16.09.2026) — НЕЗАВИСИМАЯ от account_id/cookie-сессии
+    # браузера, в отличие от него. NULL — персонаж не состоит ни в какой
+    # группе (обычное поведение по умолчанию, группу создают явно, см.
+    # api/blueprints/auth.py::group_characters()). Внутри группы у ВСЕХ
+    # персонажей (включая основного — он ссылается сам на себя) одно и то
+    # же значение — character_id основного; от него детерминированно
+    # строится account_id (f"char:{primary_character_id}"), одинаковый
+    # при входе с любого устройства/браузера, а не случайный на сессию.
+    primary_character_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     updated_at: Mapped[datetime] = mapped_column(
         UtcDateTime, default=_utcnow, onupdate=_utcnow
     )
