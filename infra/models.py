@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, Integer, String
+from sqlalchemy import JSON, BigInteger, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from infra.db import Base, UtcDateTime
@@ -225,7 +225,14 @@ class ExtractionSample(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     character_id: Mapped[int] = mapped_column(Integer, index=True)
     planet_id: Mapped[int] = mapped_column(Integer, index=True)
-    pin_id: Mapped[int] = mapped_column(Integer)
+    # BigInteger, не Integer: ESI отдаёт pin_id из своего собственного,
+    # намного большего пространства id (реальные значения — 13-значные,
+    # напр. 1053137617427), в отличие от character_id/planet_id, которые
+    # пока укладываются в 32 бита. SQLite не проверяет ширину (INTEGER —
+    # только приближение типа), поэтому это молчало на dev — обнаружилось
+    # только на переносе данных в Postgres (15.09.2026):
+    # NumericValueOutOfRange на первой же реальной строке.
+    pin_id: Mapped[int] = mapped_column(BigInteger)
 
     product_type_id: Mapped[int | None] = mapped_column(nullable=True)
     qty_per_cycle: Mapped[int | None] = mapped_column(nullable=True)
