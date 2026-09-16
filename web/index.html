@@ -210,7 +210,7 @@ button { font-family:inherit; }
 /* jumpTo() (см. JS) целится в верх этих блоков — без отступа заголовок
    оказывался под обеими липкими панелями (.topbar + .tools), см. их
    измерение в measureTopbar()/measureTools(). */
-#dashBody, #colonies, #shopping { scroll-margin-top: calc(var(--topbar-h,46px) + var(--tools-h,44px)); }
+#dashBody, #coloniesProfit, #colonies, #shopping { scroll-margin-top: calc(var(--topbar-h,46px) + var(--tools-h,44px)); }
 .tool { width:30px; height:26px; display:grid; place-items:center; cursor:pointer;
         background:none; border:1px solid transparent; color:var(--dim); border-radius:3px; }
 .tool:hover { color:var(--read); background:var(--hover); }
@@ -1041,7 +1041,7 @@ body.light .rolebadge.excess { background:rgba(154,107,18,.12); }
             data-i18n="export">Экспорт в Excel</button>
     <button class="mini" id="jumpPlan" onclick="jumpTo('dashBody')" style="margin-left:6px;display:none"
             data-i18n="jumpPlan">↑ План</button>
-    <button class="mini" id="jumpColonies" onclick="jumpTo('colonies')" style="margin-left:6px;display:none"
+    <button class="mini" id="jumpColonies" onclick="jumpTo('coloniesProfit')" style="margin-left:6px;display:none"
             data-i18n="jumpColonies">↓ Мои колонии</button>
     <button class="mini" id="jumpShopping" onclick="jumpTo('shopping')" style="margin-left:6px;display:none"
             data-i18n="jumpShopping">↓ Список закупки</button>
@@ -2815,7 +2815,13 @@ function sortedColonies(){
    (position:sticky), поэтому кнопки прыжка там всегда под рукой, даже
    когда план прокручен на много колоний вниз. Видимость переключается
    в renderColonies()/renderShopping() — кнопка есть, только пока в
-   соответствующем блоке действительно есть что показать. */
+   соответствующем блоке действительно есть что показать.
+   «↓ Мои колонии» целится в #coloniesProfit, не в #colonies (решение
+   пользователя, 16.09.2026): панель прибыльности по факту стоит прямо
+   над списком колоний, так кнопка сразу показывает и её; когда панели
+   нечего показать (нет ни одной колонии с известной ролью), пустой
+   #coloniesProfit не занимает места, и прокрутка визуально совпадает
+   со списком колоний, как раньше. */
 function jumpTo(id){
   document.getElementById(id).scrollIntoView({behavior:'smooth', block:'start'});
 }
