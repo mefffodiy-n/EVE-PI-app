@@ -159,14 +159,16 @@ _CATALOG: dict[str, dict[str, str]] = {
     },
     "site_p4_launchpad_caveat": {
         "ru": "Замечание: порог для двойного P4-шаблона опирается на "
-              "неразрешённое расхождение в источнике по стоимости второго "
-              "причала (7200 против 5200 CPU). Взято консервативное значение; "
-              "если проверка в игре покажет 5200, предел вырастет примерно "
-              "с 9 600 до 61 700 км и это предупреждение станет излишним.",
-        "en": "Note: the double-P4 threshold rests on an unresolved source conflict "
-              "over the second launchpad's cost (7200 vs 5200 CPU). The conservative "
-              "value is used; if in-game testing shows 5200, the limit rises from "
-              "about 9,600 to 61,700 km and this warning becomes moot.",
+              "расхождение в источнике по стоимости второго причала (7200 "
+              "против 5200 CPU). Взято консервативное значение; в загруженном "
+              "регионе нет планеты, на которой это можно проверить в игре "
+              "(с 5200 предел вырос бы примерно с 9 600 до 61 700 км), поэтому "
+              "порог остаётся консервативным.",
+        "en": "Note: the double-P4 threshold rests on a source conflict over the "
+              "second launchpad's cost (7200 vs 5200 CPU). The conservative value "
+              "is used; the loaded region has no planet to test this in-game (5200 "
+              "would raise the limit from about 9,600 to 61,700 km), so the "
+              "threshold stays conservative.",
     },
     "site_unplaced": {
         "ru": "В системе {system} не удалось разместить {remaining} шаблонов "
