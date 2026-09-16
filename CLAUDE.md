@@ -159,6 +159,7 @@ scripts/          всё, что ходит в сеть или готовит д
   diagnose.py              самодиагностика
   check_templates.py       разбор набора шаблонов
   resolve_pi_structure_type_ids.py  разово: type_id структур PI по типам планет
+  backfill_type_volumes.py разово: объём (м³) каждого продукта PI заранее
   cleanup.py               уборка от файлов прошлых этапов
 
 deploy/           службы Windows (NSSM), nginx, задание бэкапа — README + образцы
