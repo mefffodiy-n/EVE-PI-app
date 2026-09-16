@@ -1200,7 +1200,7 @@ const charIdOf=name=>{ const c=crew.find(x=>x.name===name); return c?c.character
 const avatarImg=characterId=>characterId
   ? `<img src="${PORTRAIT(characterId)}" alt="" onerror="this.remove()">` : '';
 
-let ids={}, recipeInputs={}, schematics={}, plan=[], staffing={}, view='details', sortBy='load';
+let ids={}, recipeInputs={}, schematics={}, typeVolumes={}, plan=[], staffing={}, view='details', sortBy='load';
 let lang='ru', crew=[], meta={};
 let regions={}, systemCounts={}, allProducts=[], allConstellations=[];
 let dataCounts=null;  // {bases, products} — для чипа data, перерисовывается при смене языка
@@ -1519,22 +1519,36 @@ function producedInfo(row){
 }
 
 /* Пин причала/склада с известным объёмом (используется и для процента
-   заполнения, и для текста в подсказке круга — см. orb()). */
-function launchpadPin(row){
+   заполнения, и для текста в подсказке круга — см. orb()). sim
+   (необязательно, results simulateColonyFactories()) — если пин там
+   есть с известной projected usedM3, объём считается известным и по
+   ней, даже когда сам снимок пина used_m3 ещё null или устарел. */
+function launchpadPin(row, sim){
   const pins=row.pins||[];
-  return pins.find(p=>p.kind==='launchpad'&&p.used_m3!=null)
-    || pins.find(p=>p.kind==='storage_facility'&&p.used_m3!=null) || null;
+  const known=p=>p.used_m3!=null||(sim&&sim.get(p.pin_id)&&sim.get(p.pin_id).usedM3!=null);
+  return pins.find(p=>p.kind==='launchpad'&&known(p))
+    || pins.find(p=>p.kind==='storage_facility'&&known(p)) || null;
 }
 
 /* Заполненность причала (в крайнем случае — склада) в процентах от
-   ёмкости — реальный объём содержимого (used_m3) против игровой
-   константы (capacity_m3), обе с сервера (scripts/sync_colony_status.py).
+   ёмкости — по умолчанию реальный объём содержимого (used_m3) против
+   игровой константы (capacity_m3), оба с сервера
+   (scripts/sync_colony_status.py). Если передан sim (проекция
+   simulateColonyFactories() на «сейчас») и в нём есть usedM3 для этого
+   пина — используется он: занятый объём меняется со временем (сырьё
+   убывает, продукция копится, а у них обычно разный объём на единицу),
+   и статичный снимок с последней синхронизации не поспевает за этим
+   (найдено пользователем 17.09.2026 — кольцо заполненности на круге
+   колонии стояло на месте, хотя реальный объём в игре заметно менялся).
    null, если пины ещё не пересинхронизированы или объём хоть одного
-   предмета не удалось узнать у ESI — тогда кольцо не рисуется вовсе,
-   а не рисуется пустым/полным наугад (правило 1). */
-function launchpadFillPct(row){
-  const pin=launchpadPin(row);
-  return pin?Math.min(100,100*pin.used_m3/pin.capacity_m3):null;
+   предмета не удалось узнать — тогда кольцо не рисуется вовсе, а не
+   рисуется пустым/полным наугад (правило 1). */
+function launchpadFillPct(row, sim){
+  const pin=launchpadPin(row, sim);
+  if(!pin) return null;
+  const pinSim=sim&&sim.get(pin.pin_id);
+  const usedM3=(pinSim&&pinSim.usedM3!=null)?pinSim.usedM3:pin.used_m3;
+  return usedM3!=null?Math.min(100,100*usedM3/pin.capacity_m3):null;
 }
 
 // 99%, не 100: объём считается из объёма-на-единицу с округлением (ESI
@@ -1542,8 +1556,8 @@ function launchpadFillPct(row){
 // практически всегда означает «добывать больше некуда» так же, как
 // ровно полный — ждать точного 100% ради индикатора не нужно.
 const LAUNCHPAD_FULL_PCT=99;
-function isLaunchpadFull(row){
-  const pct=launchpadFillPct(row);
+function isLaunchpadFull(row, sim){
+  const pct=launchpadFillPct(row, sim);
   return pct!=null&&pct>=LAUNCHPAD_FULL_PCT;
 }
 
@@ -1776,9 +1790,12 @@ function orb(row,size,showPilot=true){
     // персонажам — только в панели «Детали» (обнаружено пользователем
     // 16.09.2026 по скриншотам обоих видов).
     const isProc=row.role_key==='proc';
+    // Считается один раз на орб и переиспользуется и для бейджа истощения
+    // (только переработка), и для кольца заполненности причала ниже
+    // (любая роль) — не пересчитывать одну и ту же симуляцию дважды.
+    const sim=simulateColonyFactories(row.pins,row.routes,row.game_last_update);
     const exp=isProc
-      ? (()=>{ const sim=simulateColonyFactories(row.pins,row.routes,row.game_last_update);
-                const ms=sim&&sim.depletionMs; return ms!=null?Date.now()+ms:null; })()
+      ? (()=>{ const ms=sim&&sim.depletionMs; return ms!=null?Date.now()+ms:null; })()
       : (row.nearest_expiry?Date.parse(row.nearest_expiry):null);
     const left=exp!=null?exp-Date.now():null;
     const over=left!=null&&left<=0;
@@ -1791,8 +1808,14 @@ function orb(row,size,showPilot=true){
     const showBadge=exp!=null||!isProc;
     const badgeTxt=exp!=null?fmtBadgeLeft(left):t('cycIdle');
     const info=producedInfo(row);
-    const pin=launchpadPin(row);
-    const fillPct=launchpadFillPct(row);
+    const pin=launchpadPin(row, sim);
+    const fillPct=launchpadFillPct(row, sim);
+    // Та же проекция, что и у fillPct — иначе полоса в подсказке
+    // показывала бы честный (пересчитанный) процент, а число рядом с ней
+    // оставалось от статичного снимка синхронизации, что противоречило
+    // бы само себе.
+    const pinSimForTip=pin&&sim&&sim.get(pin.pin_id);
+    const pinUsedM3=(pinSimForTip&&pinSimForTip.usedM3!=null)?pinSimForTip.usedM3:(pin&&pin.used_m3);
     // Причал забит под завязку — сигнал ТОЛЬКО для добычи: складывать
     // больше некуда, это требует внимания не меньше, чем истекающая
     // программа (см. attnN в renderColonies()). У переработки полный
@@ -1801,7 +1824,7 @@ function orb(row,size,showPilot=true){
     // неё остаётся обычным синим «заполненность», не переключается на
     // мигающее красное; сама проверка isLaunchpadFull() не меняется, она
     // используется и там, где роль не при чём (подсказка при наведении).
-    const launchpadAlarm=!isProc&&isLaunchpadFull(row);
+    const launchpadAlarm=!isProc&&isLaunchpadFull(row, sim);
     // «Требует внимания» — то же условие, что и в attnN сводки: программа
     // экстрактора кончилась (добыча) или причал забит (только добыча).
     // Центральная иконка ресурса в этом случае уступает место красному
@@ -1824,7 +1847,7 @@ function orb(row,size,showPilot=true){
         <span><b>${info.extracted?t('extractsW'):t('producesW')}</b><br>${info.name}</span></div>`:''}
       ${pin?`<div class="tip-label">${sname(pin.kind)}</div>
         <div class="tip-bar"><i style="width:${fillPct.toFixed(0)}%"></i></div>
-        <div class="tip-meta">${nloc(Math.round(pin.used_m3))}/${nloc(pin.capacity_m3)} m³</div>`:''}
+        <div class="tip-meta">${nloc(Math.round(pinUsedM3))}/${nloc(pin.capacity_m3)} m³</div>`:''}
       <div class="tip-planet">${row.system} ${row.planet}</div>
       <div class="tip-meta">${row.planet_type} ${(T[lang]||T.ru).pPlanetN[0]}</div>
     </div>`;
@@ -2188,7 +2211,7 @@ function simulateColonyFactories(pins, routes, gameLastUpdateIso){
   // Горизонт расписания — далеко за «сейчас» (раньше останавливался
   // ровно на nowMs): депletion причала теперь ищется тем же самым точным
   // событийным движком, что и «сейчас»-состояние ниже, а не отдельной
-  // формулой «остаток/скорость» — см. подробности у firstFutureIdle и
+  // формулой «остаток/скорость» — см. подробности у lastFutureIdle и
   // results.depletionMs в конце функции. 90 дней — дальше уже не всё
   // равно, и MAX_EVENTS ниже в любом случае оборвёт раньше на настоящих
   // колониях с их обычным числом пинов.
@@ -2258,18 +2281,45 @@ function simulateColonyFactories(pins, routes, gameLastUpdateIso){
         // и уже произведённый, но ещё не вывезенный продукт, если для
         // него задан исходящий маршрут сюда.
         const contents=[];
+        // used_m3 по проекции, не по снимку: состав со временем сдвигается
+        // от сырья к готовой продукции, а объём единицы у них обычно
+        // разный (найдено пользователем 17.09.2026: заполненность в
+        // интерфейсе стояла на месте, хотя реальный объём в игре заметно
+        // падал по мере убывания «тяжёлого» сырья). typeVolumes —
+        // /api/initial-data, тот же объём на единицу, которым сервер
+        // считает used_m3 из настоящего снимка (scripts/sync_colony_status
+        // ::type_volume()). Честно null, если объём хоть одного предмета
+        // не узнать — частичная сумма выглядела бы точнее, чем есть.
+        let usedM3=0, volumeKnown=true;
         entry.buf.forEach((amount,typeId)=>{
           if(amount<0.5) return; // меньше единицы — то же самое, что «ничего»
           contents.push({name:nameOfType.get(typeId)||null, type_id:typeId, amount:Math.round(amount)});
+          const vol=typeVolumes[String(typeId)];
+          if(vol==null){ volumeKnown=false; return; }
+          usedM3+=vol*amount;
         });
-        snap.set(pinId, {contents});
+        snap.set(pinId, {contents, usedM3:volumeKnown?Math.round(usedM3*100)/100:null});
       }
     }
     return snap;
   };
 
   let results=null;
-  let firstFutureIdle=null;
+  // Момент, когда ВСТАЛА ПОСЛЕДНЯЯ (не первая) из фабрик, до этого
+  // работавших — решение пользователя (17.09.2026), после разбора
+  // реального случая: 12 фабрик на одном причале, при частичной нехватке
+  // (остатка хватает не на все сразу) бо́льшая часть фабрик всё равно
+  // получает своё и работает ещё цикл, прежде чем причал закончится
+  // окончательно. «Первая фабрика встала» занижало бы время — колония
+  // не «встала», просто временно недосчиталась одной-двух фабрик.
+  // Каждое присвоение — событие t, обрабатываемое строго по возрастанию
+  // (события всегда выбираются как минимум из очереди), поэтому
+  // последнее присвоение за весь проход и есть истинный максимум.
+  // Ограничение (честно, не молчком): если в колонии несколько НЕЗАВИСИМЫХ
+  // причалов/цепочек, встаёт последняя из них — общая цифра для колонии,
+  // не по каждой цепочке отдельно, см. docstring выше про несколько
+  // (причал, вид сырья) пар.
+  let lastFutureIdle=null;
   let iterations=0;
   const MAX_EVENTS=50000; // защита от зависания на аномальных данных
   while(events.length && iterations++<MAX_EVENTS){
@@ -2342,10 +2392,12 @@ function simulateColonyFactories(pins, routes, gameLastUpdateIso){
       entry.active=false;
       if(entry.idleSinceMs==null) entry.idleSinceMs=t;
       // Переход «работала — встала», случившийся ПОСЛЕ «сейчас» (а не
-      // текущее состояние, унаследованное из прошлого) — самый ранний
-      // такой переход в колонии и есть момент, когда производство
-      // реально останавливается, см. results.depletionMs ниже.
-      if(t>nowMs && wasActive && firstFutureIdle==null) firstFutureIdle=t;
+      // текущее состояние, унаследованное из прошлого) — запоминаем
+      // каждый такой переход, не только первый: события идут строго по
+      // возрастанию t, поэтому последнее присвоение к концу прохода и
+      // есть момент, когда встала ПОСЛЕДНЯЯ из работавших фабрик (то
+      // есть колония в целом), см. results.depletionMs ниже.
+      if(t>nowMs && wasActive) lastFutureIdle=t;
       // Не перепланируем сами — разбудит push() при следующей поставке.
     }
   }
@@ -2366,17 +2418,24 @@ function simulateColonyFactories(pins, routes, gameLastUpdateIso){
   // раньше — как будто пропускает тот цикл фабрик, когда сырья в
   // причале уже не будет, но фабрики уйдут на последний цикл»).
   //
-  // ТЕПЕРЬ это не формула, а прямое чтение firstFutureIdle из того же
-  // точного событийного движка, что считает «сейчас»-состояние выше —
-  // момент, когда КАКАЯ-ТО фабрика, только что работавшая, впервые не
-  // смогла набрать полный цикл (сразу по всем своим входам, включая
-  // случай нескольких входов с разных причалов). При нескольких
-  // независимых цепочках в одной колонии первая же встающая фабрика и
-  // даёт нужный минимум сама по себе — отдельный перебор «по каждому
-  // причалу и виду сырья» (как было раньше) не нужен: он приближённо
-  // пытался сделать то же самое поштучно там, где точный движок уже
-  // учитывает совместное истощение нескольких входов одной фабрики.
-  results.depletionMs = firstFutureIdle!=null ? firstFutureIdle-nowMs : null;
+  // ТЕПЕРЬ это не формула, а прямое чтение из того же точного событийного
+  // движка, что считает «сейчас»-состояние выше.
+  //
+  // ПЕРЕСМОТРЕНО ЕЩЁ РАЗ В ТОТ ЖЕ ДЕНЬ (17.09.2026, решение
+  // пользователя после разбора реального случая: 12 фабрик на одном
+  // причале). Первая версия брала момент, когда ПЕРВАЯ работавшая
+  // фабрика не набрала полный цикл — но при частичной нехватке (остатка
+  // хватает не всем сразу) это занижает время: причал ещё способен
+  // прокормить большинство фабрик ещё один полный цикл, колония не
+  // «встала», просто на секунду недосчиталась одной-двух фабрик из
+  // двенадцати. Теперь берётся момент, когда встала ПОСЛЕДНЯЯ из
+  // работавших — то есть когда причал перестаёт кормить вообще кого бы
+  // то ни было, а не первого пострадавшего. При нескольких НЕЗАВИСИМЫХ
+  // причалах/цепочках в одной колонии это означает «когда встанет самая
+  // живучая из них», не «когда любая из них» — честное ограничение,
+  // отдельный учёт по каждой цепочке потребовал бы знать заранее, какие
+  // факторы вообще связаны общим источником, а не просто общей колонией.
+  results.depletionMs = lastFutureIdle!=null ? lastFutureIdle-nowMs : null;
   return results;
 }
 
@@ -3004,7 +3063,8 @@ function renderColonies(){
   // добычи — своя категория рядом, не смешана сюда: колония в дефиците
   // всё ещё работает (просто ниже DEFICIT_UNITS_PER_HOUR), это другая по
   // смыслу проблема, и у неё свой маркер (.def-mark), не «запрет».
-  const attnN=rows.filter(p=>p.role_key==='mine'&&isLaunchpadFull(p)).length;
+  const attnN=rows.filter(p=>p.role_key==='mine'
+    &&isLaunchpadFull(p, simulateColonyFactories(p.pins,p.routes,p.game_last_update))).length;
   const deficitN=rows.filter(isColonyDeficient).length;
   const summary=`${pl(rows.length,'pPlanetN')} · ${idleN} ${t('coloniesIdle')} · ${attnN} ${t('coloniesAttention')}`
     + ` · ${deficitN} ${t('coloniesDeficit')}`;
@@ -3301,23 +3361,29 @@ function contentsHTML(list){
    ещё не пересинхронизированы новым кодом или объём хоть одного
    предмета не узнать у ESI — тогда честно «нет данных», а не 0%.
 
-   projectedContents (necязательно) — то же содержимое, но досчитанное
-   вперёд до «сейчас» simulateColonyFactories() (см. её snapshotResults):
-   расход сырья фабриками и накопление готовой продукции по маршрутам,
-   а не статичный снимок ESI с последней синхронизации (найдено
-   пользователем 17.09.2026: список не менялся между синхронизациями, а
-   готовый продукт, ожидающий вывоза, не показывался вовсе). Ёмкость в
-   м³ по-прежнему из снимка — объём одной единицы товара знает только
-   сервер (type_volume()), на фронтенде считать не из чего; сам список
-   товаров при этом ужé живой. */
-function storageBlockHTML(pin, projectedContents){
-  const known=pin&&pin.used_m3!=null&&pin.capacity_m3!=null;
-  const pct=known?Math.min(100,100*pin.used_m3/pin.capacity_m3):0;
+   projectedContents/projectedUsedM3 (необязательно) — то же самое, но
+   досчитанное вперёд до «сейчас» simulateColonyFactories() (см. её
+   snapshotResults): расход сырья фабриками и накопление готовой
+   продукции по маршрутам, а не статичный снимок ESI с последней
+   синхронизации (найдено пользователем 17.09.2026: список не менялся
+   между синхронизациями, готовый продукт не показывался вовсе, а
+   заполненность в м³ стояла на месте, хотя состав со временем сдвигается
+   от «тяжёлого» сырья к более «лёгкой» готовой продукции и реальный
+   занятый объём заметно падает). Объём на единицу товара теперь тоже
+   известен фронту (typeVolumes, /api/initial-data — тот же кэш, которым
+   сервер считает used_m3 из настоящего снимка, type_volume()), поэтому
+   считать можно и на фронтенде; честный null в projectedUsedM3, если
+   объём хоть одного предмета в проекции неизвестен — используется тогда
+   статичный pin.used_m3 из последнего снимка, как и раньше. */
+function storageBlockHTML(pin, projectedContents, projectedUsedM3){
+  const usedM3=projectedUsedM3!=null?projectedUsedM3:(pin?pin.used_m3:null);
+  const known=usedM3!=null&&pin&&pin.capacity_m3!=null;
+  const pct=known?Math.min(100,100*usedM3/pin.capacity_m3):0;
   const contents=projectedContents!=null?projectedContents:(pin?pin.contents:null);
   return `<div class="cols2">
     <div><div class="lbl">${t('capCap')}${known?`: ${pct.toFixed(0)}%`:''}</div>
       <div class="meter"><i class="ok" style="width:${pct}%;background:var(--ring-infra)"></i></div>
-      <div class="val">${known?`${nloc(Math.round(pin.used_m3))} / ${nloc(pin.capacity_m3)} m³`:t('noData')}</div></div>
+      <div class="val">${known?`${nloc(Math.round(usedM3))} / ${nloc(pin.capacity_m3)} m³`:t('noData')}</div></div>
     <div><div class="lbl">${t('capContent')}</div>${contentsHTML(contents)}</div>
   </div>`;
 }
@@ -3333,7 +3399,7 @@ function structureUnitFields(kind, ctx){
     // скриншотом игрового клиента, ESI ёмкость структур не отдаёт) —
     // независимо от того, посчиталась ли загрузка CPU/Power: contents
     // приходит с тем же пином, что и всегда.
-    const storage=`<div style="margin-top:10px">${storageBlockHTML(pin, ctx.sim&&ctx.sim.contents)}</div>`;
+    const storage=`<div style="margin-top:10px">${storageBlockHTML(pin, ctx.sim&&ctx.sim.contents, ctx.sim&&ctx.sim.usedM3)}</div>`;
     if(!ctx.hasLoad){
       return `<div class="cols2">
         <div><div class="lbl">CPU</div>
@@ -3366,7 +3432,7 @@ function structureUnitFields(kind, ctx){
   }
 
   if(isStore){
-    return storageBlockHTML(pin, ctx.sim&&ctx.sim.contents);
+    return storageBlockHTML(pin, ctx.sim&&ctx.sim.contents, ctx.sim&&ctx.sim.usedM3);
   }
 
   if(isECU){
@@ -3855,19 +3921,23 @@ const DOC={
    <p>Для перерабатывающих колоний та же проекция считает, через сколько
    закончится сырьё в причале: в отличие от добычи, где его пополняет
    экстрактор, сюда сырьё привозит только игрок, и запас конечный.
-   Плашка показывает время до первого исчерпавшегося вида сырья (если их
-   несколько — до самого раннего), а не одно усреднённое число на весь
-   причал сразу. Момент считается по тому же точному циклу фабрик, что и
-   их «в производстве»/«простаивает» — не по среднему расходу в час:
-   фабрика забирает сырьё целиком в момент старта цикла, поэтому
-   последний цикл, на старт которого сырья ещё хватило, всё равно
-   докручивается до конца (17.09.2026, исправлено — раньше усреднённая
-   оценка показывала окончание запаса раньше настоящего момента). Список
-   содержимого причала/склада в панели «Детали» — тоже не застывший
+   Плашка показывает время, когда встанет ПОСЛЕДНЯЯ из работавших фабрик
+   на этом причале — если сырья временно хватает не на все фабрики сразу,
+   часть из них всё равно продолжает работать ещё цикл-другой, и колония
+   не считается вставшей, пока не остановится последняя (17.09.2026,
+   уточнено по разбору настоящей колонии с 12 фабриками на одном
+   причале). Момент считается по тому же точному циклу фабрик, что и их
+   «в производстве»/«простаивает» — не по среднему расходу в час: фабрика
+   забирает сырьё целиком в момент старта цикла, поэтому последний цикл,
+   на старт которого сырья ещё хватило, всё равно докручивается до конца.
+   Список содержимого причала/склада в панели «Детали», как и заполненность
+   в м³ (в том числе кольцо на самом круге колонии), — тоже не застывший
    снимок с последней синхронизации: расход сырья и накопление ещё не
-   вывезенной готовой продукции пересчитываются вперёд той же проекцией
-   (объём в м³ по-прежнему из снимка — сервер не отдаёт объём одной
-   единицы товара на фронтенд).</p>
+   вывезенной готовой продукции пересчитываются вперёд той же проекцией, а
+   объём в м³ — по объёму одной единицы каждого товара, который теперь тоже
+   знает фронтенд (тот же кэш, которым сервер считает объём из настоящего
+   снимка), поэтому и заполненность честно меняется по мере того, как более
+   «тяжёлое» сырьё расходуется, а более «лёгкая» продукция копится.</p>
    <p>Колония, добывающая меньше 48 000 ед./ч, помечена как дефицитная —
    фиксированный порог: на такой скорости ресурса не хватит на всю цепочку,
    и его придётся дублировать дополнительной добычей. Дефицит — отдельная
@@ -4100,16 +4170,20 @@ const DOC={
    <p>For processing colonies the same projection also works out how long until the
    launchpad runs out of raw material: unlike extraction, where the extractor keeps
    refilling it, here only the player brings material in, so the stock is finite. The badge
-   shows time until the first material type runs out (if there are several, the earliest
-   one) — not one averaged number for the whole launchpad. The moment is worked out from
-   the same exact factory-cycle timing as "in production"/"idle", not an average hourly
+   shows time until the LAST of that launchpad's factories stops — if the remaining stock
+   temporarily covers most but not all of them, some keep running for another cycle or two,
+   and the colony isn't considered stopped until the last one is (refined 2026-09-17, after
+   working through a real 12-factory colony sharing one launchpad). The moment is worked out
+   from the same exact factory-cycle timing as "in production"/"idle", not an average hourly
    rate: a factory takes its input all at once when a cycle starts, so the last cycle that
-   still had enough stock to start still runs to completion (fixed 2026-09-17 — the
-   averaged estimate used to show the stock running out earlier than it really would). The
-   launchpad/storage contents list in the Details panel isn't a frozen snapshot from the
-   last sync either anymore: material use and unshipped finished product are projected
-   forward by the same simulation (the m³ figure still comes from the snapshot — the
-   server, not the frontend, knows a single unit's volume).</p>
+   still had enough stock to start still runs to completion. The launchpad/storage contents
+   list in the Details panel, and the m³ fill level (including the ring on the colony's own
+   circle), aren't a frozen snapshot from the last sync either: material use and unshipped
+   finished product are projected forward by the same simulation, and the m³ figure is
+   recomputed from each item's per-unit volume, which the frontend now also knows (the same
+   cache the server uses to compute the figure from a real snapshot) — so the fill level
+   honestly shifts as "heavier" raw material is used up and "lighter" finished product piles
+   up.</p>
    <p>A colony extracting under 48,000 units/hour is flagged as in deficit — a fixed
    threshold: at that rate the resource won't cover the whole chain, so it needs
    duplicating with extra extraction. Deficit is its own category — the colony keeps
@@ -4353,6 +4427,7 @@ async function boot(){
     ids=d.product_ids||{};
     recipeInputs=d.recipe_inputs||{};
     schematics=d.schematics||{};
+    typeVolumes=d.type_volumes||{};
     allConstellations=d.bases||[];
     allProducts=d.products||[];
     regions=d.regions||{};

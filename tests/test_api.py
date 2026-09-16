@@ -68,6 +68,44 @@ class TestReference:
         assert "Broadcast Node" in products    # P4
         assert "Water" not in products         # P1
 
+    def test_initial_data_includes_type_volumes(self, client, monkeypatch, tmp_path):
+        """
+        Объём одной единицы товара по type_id — тем же кэшем, которым
+        сервер считает used_m3 из реального снимка (scripts/
+        sync_colony_status.py::type_volume()). Нужен фронту, чтобы
+        досчитывать вперёд занятость причала в панели «Детали»
+        (simulateColonyFactories(), web/index.html) — состав со временем
+        сдвигается от сырья к готовой продукции, а объём на единицу у
+        них обычно разный (17.09.2026).
+        """
+        import json
+
+        import api.blueprints.reference as reference
+
+        cache_file = tmp_path / "type_volumes.json"
+        cache_file.write_text(json.dumps({"2401": 0.38, "9828": 0.15}), encoding="utf-8")
+        monkeypatch.setattr(reference, "TYPE_VOLUMES_PATH", cache_file)
+        reference._type_volumes.cache_clear()
+        reference._initial_payload.cache_clear()
+
+        body = client.get("/api/initial-data").get_json()
+        assert body["type_volumes"] == {"2401": 0.38, "9828": 0.15}
+
+        reference._type_volumes.cache_clear()
+
+    def test_initial_data_type_volumes_empty_without_cache_file(self, client, monkeypatch, tmp_path):
+        """Файл кэша ещё не создан (сборщик ни разу не запускался) — честно пусто, не ошибка."""
+        import api.blueprints.reference as reference
+
+        monkeypatch.setattr(reference, "TYPE_VOLUMES_PATH", tmp_path / "missing.json")
+        reference._type_volumes.cache_clear()
+        reference._initial_payload.cache_clear()
+
+        body = client.get("/api/initial-data").get_json()
+        assert body["type_volumes"] == {}
+
+        reference._type_volumes.cache_clear()
+
     def test_initial_data_returns_304_on_repeat(self, client):
         """
         ETag — самый дешёвый способ снять нагрузку: на повторный запрос
