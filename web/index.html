@@ -1048,6 +1048,7 @@ body.light .rolebadge.excess { background:rgba(154,107,18,.12); }
     <div class="counts" id="counts" data-i18n="counts0">план не построен</div>
   </div>
   <div id="dashBody"><div class="empty" data-i18n="noPlanLong">План не построен. Откройте вкладку «Настройки», выберите продукты и постройте план.</div></div>
+  <div id="coloniesProfit"></div>
   <div id="colonies"></div>
   <div id="shopping"></div>
   <div class="colony-page" id="colonyPage"></div>
@@ -1238,6 +1239,9 @@ const T={
   pocoMissingPrices:'Нет цены: {list}',pocoMissingRates:'Не введена ставка POCO: {list}',
   pocoIncomplete:'Чистая прибыль не считается, пока не введены все ставки и не собраны все цены — частичная сумма выглядела бы точнее, чем есть на самом деле.',
   pocoAssumption:'Оценка при полной загрузке цепочки без простоев и истощения месторождений, {hours} часов в месяце. Налог — и на вывоз, и на ввоз на каждом перемещении между планетами по цепочке.',
+  coloniesProfitTitle:'Прогноз прибыльности по факту',
+  coloniesProfitMissingOutput:'Неизвестна текущая скорость: {list}',
+  coloniesProfitAssumption:'По реальной текущей скорости каждой колонии (с поправкой на затухание добычи и простой фабрик), не по теоретическому максимуму. Налог — только на вывоз с самой планеты, без учёта того, куда сырьё едет дальше между разными колониями: этой связи ESI не отдаёт.',
   chipJobs:'сборщики',jobsOk:'ок',jobsStale:'застряли',jobsFailing:'падают',
   jobsNever:'ни разу не запускался',jobsFailingCount:'падает {n}-й раз подряд',
   jobServerStatus:'Статус сервера',jobMarketPrices:'Рыночные цены',
@@ -1311,6 +1315,9 @@ const T={
   pocoMissingPrices:'No price: {list}',pocoMissingRates:'POCO rate not entered: {list}',
   pocoIncomplete:'Net profit is not shown until every rate is entered and every price is available — a partial sum would look more accurate than it really is.',
   pocoAssumption:'Estimate at full chain throughput, no downtime, no deposit depletion, {hours} hours per month. Tax applies on both export and import at every hop between planets in the chain.',
+  coloniesProfitTitle:'Actual profitability forecast',
+  coloniesProfitMissingOutput:'Current rate unknown: {list}',
+  coloniesProfitAssumption:'By each colony’s real current rate (adjusted for extraction decay and factory downtime), not the theoretical maximum. Tax only on what leaves the planet itself — not tracked further between different colonies, since ESI does not report that link.',
   chipJobs:'jobs',jobsOk:'ok',jobsStale:'stuck',jobsFailing:'failing',
   jobsNever:'never ran',jobsFailingCount:'failing {n} time(s) in a row',
   jobServerStatus:'Server status',jobMarketPrices:'Market prices',
@@ -1379,7 +1386,7 @@ function applyLang(){
   document.querySelectorAll('.lang button').forEach(b=>b.classList.toggle('on',b.dataset.lang===lang));
   store.set('pi-lang',lang);
   renderDataChip(); renderMeta();
-  buildSortMenu(); renderCrew(); renderDash(); renderShopping(); renderProfit(); renderPocoProfit(); renderColonies(); renderSaved();
+  buildSortMenu(); renderCrew(); renderDash(); renderShopping(); renderProfit(); renderPocoProfit(); renderColonies(); renderColoniesProfit(); renderSaved();
   if(allProducts.length){ renderProducts(); renderConstellations(); } if(plan.length){renderAnswers(); renderTable();}
   if(document.getElementById('modal').classList.contains('on')) openModal(currentModal);
   if(currentColony && document.getElementById('colonyPage').classList.contains('on')) openColony(currentColony);
@@ -1477,21 +1484,32 @@ function dominantStructureIconId(row){
    если у колонии почему-то нет собственной фабрики (не должно
    случаться для настоящего шаблона miner_00, но пины могут быть ещё
    не полностью пересинхронизированы). */
-function producedInfo(row){
+/* Пин, чей продукт колония фактически отдаёт дальше (не обязательно тот
+   же, что добывает экстрактор — см. producedInfo). Вынесено отдельно от
+   producedInfo(), чтобы colonyOutputRatePerHour() (прибыльность настоящих
+   колоний, docs/ROADMAP.md, Фаза 9, 16.09.2026) могла взять именно этот
+   пин для расчёта текущей скорости — не пересобирать логику дважды. */
+function colonyOutputFlow(row){
   const pins=row.pins||[];
   if(row.role_key==='mine'){
     const factory=pins.find(p=>p.kind==='basic_industry_facility'&&p.product);
-    if(factory) return {iconId:ids[factory.product], name:factory.product, extracted:false};
+    if(factory) return {pin:factory, extracted:false};
     const extractors=pins.filter(p=>p.kind==='extractor_control_unit'&&p.product);
     const match=extractors.find(p=>p.expiry_time===row.nearest_expiry)||extractors[0];
-    if(match) return {iconId:ids[match.product], name:match.product, extracted:true};
+    if(match) return {pin:match, extracted:true};
   } else if(row.role_key==='proc'){
     const priority=['high_tech_industry_facility','advanced_industry_facility','basic_industry_facility'];
     for(const kind of priority){
       const pin=pins.find(p=>p.kind===kind&&p.product);
-      if(pin) return {iconId:ids[pin.product], name:pin.product};
+      if(pin) return {pin, extracted:false};
     }
   }
+  return null;
+}
+
+function producedInfo(row){
+  const flow=colonyOutputFlow(row);
+  if(flow) return {iconId:ids[flow.pin.product], name:flow.pin.product, extracted:flow.extracted};
   return {iconId:dominantStructureIconId(row), name:null};
 }
 
@@ -1568,6 +1586,37 @@ function extractorRatePerHour(pin){
   const qty=extractorDecayedQty(pin.qty_per_cycle, pin.install_time, pin.cycle_seconds, Date.now());
   if(qty==null) return null;
   return qty*3600/pin.cycle_seconds;
+}
+
+/* Текущая скорость выхода КОЛОНИИ — то же самое, что физически покидает
+   планету (см. colonyOutputFlow), для прибыльности настоящих колоний
+   (docs/ROADMAP.md, Фаза 9, 16.09.2026). Не теоретический максимум, а
+   факт прямо сейчас — прямое решение пользователя:
+   - добыча без своей фабрики: затухшая скорость экстрактора
+     (extractorRatePerHour) — уже реальная величина, ничего досчитывать
+     не нужно;
+   - добыча со своей фабрикой и переработка: номинальная скорость схемы
+     (data/schematics.json, правило 2), но ТОЛЬКО если pinCycleInfo (с
+     учётом simulateColonyFactories — тех же данных, что красят кольцо
+     на кружке пина) подтверждает, что цикл идёт СЕЙЧАС — простаивающая
+     фабрика честно даёт 0, а не номинал. Если состояние неизвестно
+     (снимок устарел, симуляции нет) — честный null, не 0 и не номинал:
+     это ровно то же самое различие, что pinCycleInfo уже проводит между
+     idle/unknown для самого кружка пина.
+   simResult вычисляется один раз на колонию и передаётся вызывающей
+   стороной (как и в structOrbsForRow) — не пересчитывать симуляцию
+   на каждый вызов. */
+function colonyOutputRatePerHour(row, simResult){
+  const flow=colonyOutputFlow(row);
+  if(!flow) return null;
+  if(flow.extracted) return extractorRatePerHour(flow.pin);
+  const info=pinCycleInfo(flow.pin, row.game_last_update, simResult&&simResult.get(flow.pin.pin_id));
+  if(info.unknown || info.unknownSince) return null;
+  if(info.idle) return 0;
+  const typeId=ids[flow.pin.product];
+  const schem=typeId!=null && schematics[String(typeId)];
+  if(!schem || !flow.pin.cycle_minutes) return null;
+  return schem.output_qty*60/flow.pin.cycle_minutes;
 }
 
 // Средняя скорость по накопленной истории (extraction_history — копится
@@ -2659,7 +2708,7 @@ let coloniesData=[];
 async function loadColonies(){
   try{ coloniesData=(await (await fetch(`${API}/colonies`)).json()).colonies||[]; }
   catch(e){ coloniesData=[]; }
-  renderColonies();
+  renderColonies(); renderColoniesProfit();
 }
 
 function fmtLeft(ms){
@@ -2917,7 +2966,7 @@ function renderPocoRateInputs(){
     return `<label class="poco-rate-item"><span>${pt}</span>
       <input type="number" class="poco-rate" data-planet-type="${pt}"
         min="0" max="100" step="1" placeholder="—" value="${pct}"
-        oninput="savePocoRates();renderPocoProfit()"></label>`;
+        oninput="savePocoRates();renderPocoProfit();renderColoniesProfit()"></label>`;
   }).join('');
 }
 
@@ -2970,6 +3019,67 @@ async function renderPocoProfit(){
     ${gaps.length?`<div class="poco-profit-note">${gaps.join(' · ')}</div>`:''}
     ${!netKnown&&(d.monthly_revenue!=null||d.monthly_tax!=null)?`<div class="poco-profit-note">${t('pocoIncomplete')}</div>`:''}
     <div class="poco-profit-note">${fmtPlain(t('pocoAssumption'),{hours:d.hours_per_month})}</div>
+  </div>`;
+}
+
+/* ── Прибыльность НАСТОЯЩИХ колоний с учётом POCO (docs/ROADMAP.md,
+   Фаза 9, 16.09.2026, пункт после версии для плана) ─────────────────
+   В отличие от плана: скорость каждой колонии — реальная текущая
+   (colonyOutputRatePerHour, с поправкой на затухание/простой), не
+   теоретический максимум; налог — только экспортный, поколонийно, без
+   графа между колониями (ESI не отдаёт, куда игрок физически везёт
+   сырьё МЕЖДУ разными колониями). Ставки POCO — тот же ввод, что и у
+   плана, одна настройка на обе функции. Показывается агрегированной
+   строкой над списком «Мои колонии в игре» (решение пользователя), не
+   на карточке каждой колонии по отдельности. */
+async function renderColoniesProfit(){
+  const box=document.getElementById('coloniesProfit'); if(!box) return;
+  const rows=realRows().filter(r=>r.role_key);
+  if(!rows.length){ box.innerHTML=''; return; }
+
+  const sims=new Map(rows.map(r=>[r, r.pins&&r.pins.length?simulateColonyFactories(r.pins,r.routes,r.game_last_update):null]));
+  const colonies=rows.map(r=>{
+    const flow=colonyOutputFlow(r);
+    return {
+      label:`${r.character} · ${r.system} ${r.planet}`,
+      product: flow?flow.pin.product:null,
+      units_per_hour: flow?colonyOutputRatePerHour(r, sims.get(r)):null,
+      planet_type: r.planet_type,
+    };
+  });
+
+  let d;
+  try{
+    const r=await fetch(`${API}/colonies-profitability`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({colonies, poco_rates:pocoRatesFromInputs()}),
+    });
+    d=await r.json();
+  }catch(e){ box.innerHTML=''; return; }
+  if(!d || d.status!=='success'){ box.innerHTML=''; return; }
+
+  const gaps=[];
+  if(d.missing_output && d.missing_output.length)
+    gaps.push(fmtPlain(t('coloniesProfitMissingOutput'),{list:d.missing_output.join(', ')}));
+  if(d.missing_prices && d.missing_prices.length)
+    gaps.push(fmtPlain(t('pocoMissingPrices'),{list:d.missing_prices.join(', ')}));
+  if(d.missing_rates && d.missing_rates.length)
+    gaps.push(fmtPlain(t('pocoMissingRates'),{list:d.missing_rates.join(', ')}));
+
+  const netKnown=d.monthly_net_profit!=null;
+  box.innerHTML=`<div class="poco-profit">
+    <div class="profit-head"><h3>${t('coloniesProfitTitle')}</h3></div>
+    <div class="figures">
+      <div class="figure"><div class="lbl">${t('pocoRevenue')}</div>
+        <div class="val${d.monthly_revenue==null?' dim':''}">${d.monthly_revenue==null?t('noData'):isk(d.monthly_revenue)}</div></div>
+      <div class="figure"><div class="lbl">${t('pocoTax')}</div>
+        <div class="val${d.monthly_tax==null?' dim':''}">${d.monthly_tax==null?t('noData'):isk(d.monthly_tax)}</div></div>
+      <div class="figure net"><div class="lbl">${t('pocoNetProfit')}</div>
+        <div class="val${netKnown?'':' dim'}">${netKnown?isk(d.monthly_net_profit):t('noData')}</div></div>
+    </div>
+    ${gaps.length?`<div class="poco-profit-note">${gaps.join(' · ')}</div>`:''}
+    ${!netKnown&&(d.monthly_revenue!=null||d.monthly_tax!=null)?`<div class="poco-profit-note">${t('pocoIncomplete')}</div>`:''}
+    <div class="poco-profit-note">${t('coloniesProfitAssumption')}</div>
   </div>`;
 }
 
@@ -3597,6 +3707,18 @@ const DOC={
    Если у персонажа истёк или отозван доступ ESI (сменили пароль, отозвали
    приложение), рядом с ним появляется красная кнопка «Перезайти» — колонии
    и скиллы перестают обновляться до повторного входа тем же персонажем.</p>
+   <p><b>Прогноз прибыльности по факту</b> — строка над списком колоний,
+   учитывает налог POCO так же, как и в расчётном плане, но по-другому:
+   скорость каждой колонии — настоящая текущая (с той же поправкой на
+   затухание добычи и то же честное «простаивает»/«в производстве» для
+   фабрик, что и выше), не теоретический максимум. Налог считается по
+   каждой колонии отдельно — с того, что физически покидает именно эту
+   планету, по ставке её типа: связи «какая колония кормит какую» ESI не
+   отдаёт, поэтому налог на ввоз между разными колониями не считается
+   (в отличие от прогноза для плана). Ставки POCO — тот же ввод по типам
+   планет, общий с прогнозом для плана. Колония с неизвестной текущей
+   скоростью выхода честно перечисляется отдельно, а не считается нулевой
+   или полной.</p>
 
    <h3>Чего программа пока не знает</h3>
    <p>Загрузка CPU/Power командного центра колонии за пределами загруженного
@@ -3806,6 +3928,15 @@ const DOC={
    been revoked (password changed, app access revoked), a red "Reconnect" button appears
    next to them: colonies and skills stop updating until you log in again with that same
    character.</p>
+   <p><b>Actual profitability forecast</b> — a line above the colony list, accounting for
+   POCO tax the same way the plan version does, but differently: each colony's rate is its
+   real current one (the same decay correction and the same honest "idle"/"producing"
+   factory state as above), not the theoretical maximum. Tax is calculated per colony on
+   its own — on whatever physically leaves that specific planet, at its own planet type's
+   rate: ESI doesn't report which colony feeds which, so import tax between different
+   colonies isn't counted (unlike the plan forecast). POCO rates are the same per-type
+   input shared with the plan forecast. A colony whose current output rate is unknown is
+   listed honestly on its own, not treated as zero or full.</p>
 
    <h3>What the program does not know yet</h3>
    <p>CPU/Power load for a colony outside the loaded region (no row in the planet file —

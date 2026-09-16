@@ -8,7 +8,11 @@ domain/poco_tax.py: прибыльность построенного плана
 
 from __future__ import annotations
 
-from domain.poco_tax import HOURS_PER_MONTH, evaluate_plan_profitability
+from domain.poco_tax import (
+    HOURS_PER_MONTH,
+    evaluate_colonies_profitability,
+    evaluate_plan_profitability,
+)
 from domain.throughput import Schematic
 
 
@@ -141,6 +145,93 @@ class TestHonestGaps:
         assert result.monthly_net_profit is None
         assert result.missing_prices == set()
         assert result.missing_rates == set()
+
+
+class TestColoniesProfitability:
+    """
+    evaluate_colonies_profitability() — тот же расчёт, что и для плана,
+    но по факту (docs/ROADMAP.md, Фаза 9, 16.09.2026): скорость каждой
+    колонии уже посчитана фронтендом (никаких "на полную"), налог —
+    только экспортный, поколонийно, без графа между колониями.
+    """
+
+    def test_revenue_and_tax_summed_per_colony(self):
+        result = evaluate_colonies_profitability(
+            colonies=[
+                {"label": "A", "product": "Water", "units_per_hour": 1000.0, "planet_type": "Barren"},
+                {"label": "B", "product": "Coolant", "units_per_hour": 10.0, "planet_type": "Temperate"},
+            ],
+            prices={"Water": 10.0, "Coolant": 100.0},
+            poco_rates={"Barren": 0.10, "Temperate": 0.05},
+        )
+        assert result.monthly_revenue == 7_920_000.0
+        assert result.monthly_tax == 756_000.0
+        assert result.monthly_net_profit == 7_164_000.0
+
+    def test_idle_colony_contributes_zero_not_missing(self):
+        """Простаивающая колония — честный 0, а не пробел: состояние известно."""
+        result = evaluate_colonies_profitability(
+            colonies=[{"label": "A", "product": "Water", "units_per_hour": 0.0, "planet_type": "Barren"}],
+            prices={"Water": 10.0},
+            poco_rates={"Barren": 0.10},
+        )
+        assert result.missing_output == []
+        assert result.monthly_revenue == 0.0
+        assert result.monthly_net_profit == 0.0
+
+    def test_unknown_current_rate_is_missing_output_not_zeroed(self):
+        result = evaluate_colonies_profitability(
+            colonies=[
+                {"label": "A", "product": "Water", "units_per_hour": None, "planet_type": "Barren"},
+                {"label": "B", "product": "Coolant", "units_per_hour": 10.0, "planet_type": "Temperate"},
+            ],
+            prices={"Water": 10.0, "Coolant": 100.0},
+            poco_rates={"Barren": 0.10, "Temperate": 0.05},
+        )
+        assert result.missing_output == ["A"]
+        assert result.monthly_revenue == 720_000.0  # только колония B
+        assert result.monthly_net_profit is None  # картина неполная
+
+    def test_missing_price_excluded_not_zeroed(self):
+        result = evaluate_colonies_profitability(
+            colonies=[{"label": "A", "product": "Water", "units_per_hour": 1000.0, "planet_type": "Barren"}],
+            prices={},
+            poco_rates={"Barren": 0.10},
+        )
+        assert "Water" in result.missing_prices
+        assert result.monthly_revenue is None
+        assert result.monthly_tax is None
+
+    def test_missing_rate_excluded_not_zeroed(self):
+        result = evaluate_colonies_profitability(
+            colonies=[{"label": "A", "product": "Water", "units_per_hour": 1000.0, "planet_type": "Barren"}],
+            prices={"Water": 10.0},
+            poco_rates={},
+        )
+        assert "Barren" in result.missing_rates
+        assert result.monthly_revenue == 7_200_000.0  # выручка не зависит от ставки
+        assert result.monthly_tax is None
+        assert result.monthly_net_profit is None
+
+    def test_no_colonies_returns_all_none(self):
+        result = evaluate_colonies_profitability(colonies=[], prices={}, poco_rates={})
+        assert result.monthly_revenue is None
+        assert result.monthly_tax is None
+        assert result.monthly_net_profit is None
+        assert result.missing_output == []
+
+    def test_to_dict_shape(self):
+        result = evaluate_colonies_profitability(
+            colonies=[{"label": "A", "product": "Water", "units_per_hour": 1000.0, "planet_type": "Barren"}],
+            prices={"Water": 10.0},
+            poco_rates={"Barren": 0.10},
+        )
+        body = result.to_dict()
+        assert body["hours_per_month"] == 720.0
+        assert body["monthly_net_profit"] == 6_480_000.0
+        assert body["missing_prices"] == []
+        assert body["missing_rates"] == []
+        assert body["missing_output"] == []
 
 
 class TestToDict:

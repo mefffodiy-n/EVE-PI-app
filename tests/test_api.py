@@ -559,6 +559,92 @@ class TestPlanProfitability:
         assert "Water" in r.get_json()["missing_prices"]
 
 
+class TestColoniesProfitability:
+    """
+    POST /api/colonies-profitability (docs/ROADMAP.md, Фаза 9,
+    16.09.2026) — прибыльность НАСТОЯЩИХ синхронизированных колоний.
+    Числа — в tests/test_poco_tax.py; здесь только HTTP-контракт.
+    """
+
+    def _mock_prices(self, monkeypatch, prices: dict[str, float]):
+        import api.blueprints.market as market
+
+        monkeypatch.setattr(market, "_load_snapshot", lambda: {
+            "prices": {name: {"buy_max": price} for name, price in prices.items()}
+        })
+
+    def test_computes_revenue_and_tax(self, monkeypatch):
+        self._mock_prices(monkeypatch, {"Water": 10.0})
+        from api import create_app
+
+        with create_app({"TESTING": True}).test_client() as client:
+            r = client.post("/api/colonies-profitability", json={
+                "colonies": [
+                    {"label": "A", "product": "Water", "units_per_hour": 1000.0, "planet_type": "Barren"},
+                ],
+                "poco_rates": {"Barren": 0.10},
+            })
+        assert r.status_code == 200
+        body = r.get_json()
+        assert body["monthly_revenue"] == 7_200_000.0
+        assert body["monthly_tax"] == 720_000.0
+        assert body["monthly_net_profit"] == 6_480_000.0
+        assert body["hours_per_month"] == 720.0
+
+    def test_unknown_current_rate_reported_not_hidden(self, monkeypatch):
+        self._mock_prices(monkeypatch, {"Water": 10.0})
+        from api import create_app
+
+        with create_app({"TESTING": True}).test_client() as client:
+            r = client.post("/api/colonies-profitability", json={
+                "colonies": [
+                    {"label": "A", "product": "Water", "units_per_hour": None, "planet_type": "Barren"},
+                ],
+                "poco_rates": {"Barren": 0.10},
+            })
+        body = r.get_json()
+        assert body["missing_output"] == ["A"]
+        assert body["monthly_net_profit"] is None
+
+    def test_rejects_non_dict_colony(self, monkeypatch):
+        self._mock_prices(monkeypatch, {})
+        from api import create_app
+
+        with create_app({"TESTING": True}).test_client() as client:
+            r = client.post("/api/colonies-profitability", json={
+                "colonies": ["not a dict"], "poco_rates": {},
+            })
+        assert r.status_code == 400
+
+    def test_rejects_rate_above_100_percent(self, monkeypatch):
+        self._mock_prices(monkeypatch, {})
+        from api import create_app
+
+        with create_app({"TESTING": True}).test_client() as client:
+            r = client.post("/api/colonies-profitability", json={
+                "colonies": [], "poco_rates": {"Barren": 1.5},
+            })
+        assert r.status_code == 400
+
+    def test_works_without_market_snapshot(self, monkeypatch):
+        """Правило 3: эндпоинт не ходит наружу и отвечает даже без снимка цен."""
+        import api.blueprints.market as market
+
+        monkeypatch.setattr(market, "_load_snapshot", lambda: {})
+        from api import create_app
+
+        with create_app({"TESTING": True}).test_client() as client:
+            r = client.post("/api/colonies-profitability", json={
+                "colonies": [
+                    {"label": "A", "product": "Water", "units_per_hour": 1000.0, "planet_type": "Barren"},
+                ],
+                "poco_rates": {"Barren": 0.10},
+            })
+        assert r.status_code == 200
+        assert r.get_json()["monthly_revenue"] is None
+        assert "Water" in r.get_json()["missing_prices"]
+
+
 class TestMarket:
     def test_market_never_calls_external_service(self, client):
         """
