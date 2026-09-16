@@ -227,5 +227,15 @@ FEATURES = FEATURES + (
 )
 
 
+FEATURES = FEATURES + (
+    Feature(
+        "colonies_poco_profitability", "Прогноз прибыльности настоящих колоний по факту с учётом налога POCO",
+        ("прогноз прибыльности по факту",),
+        ("actual profitability forecast",),
+        "0.10.4", "help",
+    ),
+)
+
+
 def by_section(section: str) -> tuple[Feature, ...]:
     return tuple(f for f in FEATURES if f.where == section)

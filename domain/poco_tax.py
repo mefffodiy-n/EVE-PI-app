@@ -119,6 +119,110 @@ class PlanProfitability:
         }
 
 
+@dataclass
+class ColonyProfitability:
+    """
+    Прибыльность НАСТОЯЩИХ синхронизированных колоний («Мои колонии в
+    игре»), не расчётного плана — см. docs/ROADMAP.md, Фаза 9,
+    16.09.2026, пункт после `evaluate_plan_profitability`.
+
+    Отличия от версии для плана, обе — прямое решение пользователя:
+      - скорость выхода КАЖДОЙ колонии — реальная текущая (с поправкой
+        на затухание экстрактора и фактическое простаивание/работу
+        фабрик), не теоретическая «на полную»; честно `None`, если
+        текущее состояние колонии неизвестно — не подставляется ни 0,
+        ни номинал;
+      - налог — ТОЛЬКО экспортный, поколонийно: то, что физически
+        покидает ИМЕННО ЭТУ планету (ставка по ЕЁ типу), без графа
+        между колониями — ESI не отдаёт, куда игрок везёт сырьё дальше
+        МЕЖДУ РАЗНЫМИ колониями (в отличие от связей между пинами
+        ОДНОЙ колонии, которые есть и уже используются в
+        `simulateColonyFactories()` на фронтенде).
+    """
+
+    monthly_revenue: float | None
+    monthly_tax: float | None
+    monthly_net_profit: float | None
+    missing_prices: list[str]
+    missing_rates: list[str]
+    missing_output: list[str]
+
+    def to_dict(self) -> dict:
+        return {
+            "hours_per_month": HOURS_PER_MONTH,
+            "monthly_revenue": self.monthly_revenue,
+            "monthly_tax": self.monthly_tax,
+            "monthly_net_profit": self.monthly_net_profit,
+            "missing_prices": sorted(self.missing_prices),
+            "missing_rates": sorted(self.missing_rates),
+            "missing_output": sorted(self.missing_output),
+        }
+
+
+def evaluate_colonies_profitability(
+    colonies: list[dict],
+    prices: dict[str, float],
+    poco_rates: dict[str, float],
+) -> ColonyProfitability:
+    """
+    colonies — по одной записи на настоящую синхронизированную колонию:
+    `label` (для честного перечисления пробелов), `product` (что именно
+    покидает планету — P0 экстрактора без своей фабрики или P1/P2/P3
+    её собственной фабрики, фронтенд уже решает это в `colonyOutputFlow()`),
+    `units_per_hour` (текущая скорость ЭТОГО потока, `None` — состояние
+    неизвестно, `0` — колония простаивает, это тоже честный факт, не
+    пробел) и `planet_type` — тот же общий ввод ставок, что и у плана.
+
+    Колония без известного текущего потока (`units_per_hour is None`
+    или `product is None`) — в `missing_output`, не участвует ни в одной
+    сумме (не 0, честный пробел). Цена/ставка не найдены — та же логика
+    честных пробелов, что и в `evaluate_plan_profitability`.
+    """
+    revenue = 0.0
+    tax = 0.0
+    missing_prices: set[str] = set()
+    missing_rates: set[str] = set()
+    missing_output: list[str] = []
+    any_revenue = False
+    any_tax = False
+
+    for colony in colonies:
+        label = str(colony.get("label") or colony.get("product") or "?")
+        units = colony.get("units_per_hour")
+        product = colony.get("product")
+
+        if units is None or product is None:
+            missing_output.append(label)
+            continue
+
+        planet_type = colony.get("planet_type")
+        price = prices.get(product)
+        rate = poco_rates.get(planet_type) if planet_type else None
+
+        if price is None:
+            missing_prices.add(product)
+        else:
+            monthly_output = units * HOURS_PER_MONTH
+            revenue += monthly_output * price
+            any_revenue = True
+            if rate is not None:
+                tax += monthly_output * price * rate
+                any_tax = True
+
+        if rate is None:
+            missing_rates.add(str(planet_type or "?"))
+
+    complete = not missing_prices and not missing_rates and not missing_output
+    return ColonyProfitability(
+        monthly_revenue=revenue if any_revenue else None,
+        monthly_tax=tax if any_tax else None,
+        monthly_net_profit=revenue - tax if (any_revenue and complete) else None,
+        missing_prices=missing_prices,
+        missing_rates=missing_rates,
+        missing_output=missing_output,
+    )
+
+
 def evaluate_plan_profitability(
     rows: list[dict],
     target_products: list[str],

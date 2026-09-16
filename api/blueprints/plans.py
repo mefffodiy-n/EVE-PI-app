@@ -160,6 +160,33 @@ def advice():
 MAX_POCO_RATE = 1.0  # 100% — выше физически бессмысленно, явный признак опечатки
 
 
+def _parse_poco_rates(raw: dict) -> tuple[dict[str, float] | None, str | None]:
+    """Общая валидация ставок POCO — используется и планом, и настоящими колониями."""
+    rates: dict[str, float] = {}
+    for planet_type, rate in raw.items():
+        if not isinstance(rate, (int, float)):
+            return None, f"Ставка POCO для «{planet_type}» должна быть числом"
+        if not (0 <= rate <= MAX_POCO_RATE):
+            return None, f"Ставка POCO для «{planet_type}» должна быть от 0 до {MAX_POCO_RATE:.0%}"
+        rates[str(planet_type)] = float(rate)
+    return rates, None
+
+
+def _load_prices() -> dict[str, float]:
+    """Тот же снимок рыночных цен, что и у /api/market/best-product (правило 3 — только чтение)."""
+    try:
+        from api.blueprints.market import _load_snapshot
+
+        raw = (_load_snapshot() or {}).get("prices") or {}
+        return {
+            name: entry["buy_max"]
+            for name, entry in raw.items()
+            if isinstance(entry, dict) and entry.get("buy_max")
+        }
+    except Exception:
+        return {}
+
+
 @bp.post("/plan-profitability")
 def plan_profitability():
     """
@@ -189,30 +216,45 @@ def plan_profitability():
 
     targets = [str(t) for t in payload["target_products"]]
 
-    rates: dict[str, float] = {}
-    for planet_type, rate in payload["poco_rates"].items():
-        if not isinstance(rate, (int, float)):
-            return json_error(f"Ставка POCO для «{planet_type}» должна быть числом")
-        if not (0 <= rate <= MAX_POCO_RATE):
-            return json_error(
-                f"Ставка POCO для «{planet_type}» должна быть от 0 до {MAX_POCO_RATE:.0%}"
-            )
-        rates[str(planet_type)] = float(rate)
+    rates, error = _parse_poco_rates(payload["poco_rates"])
+    if error:
+        return json_error(error)
 
-    prices: dict[str, float] = {}
-    try:
-        from api.blueprints.market import _load_snapshot
+    result = evaluate_plan_profitability(rows, targets, _load_prices(), rates)
+    return json_ok(**result.to_dict())
 
-        raw = (_load_snapshot() or {}).get("prices") or {}
-        prices = {
-            name: entry["buy_max"]
-            for name, entry in raw.items()
-            if isinstance(entry, dict) and entry.get("buy_max")
-        }
-    except Exception:
-        prices = {}
 
-    result = evaluate_plan_profitability(rows, targets, prices, rates)
+@bp.post("/colonies-profitability")
+def colonies_profitability():
+    """
+    Прибыльность НАСТОЯЩИХ синхронизированных колоний («Мои колонии в
+    игре») с учётом налога POCO (docs/ROADMAP.md, Фаза 9, 16.09.2026,
+    пункт после plan-profitability) — тот же характер расчёта, что и у
+    плана, но по факту, а не по теории: скорость выхода каждой колонии
+    фронтенд уже посчитал с поправкой на реальное состояние (затухание
+    экстрактора, простой/работа фабрик — `colonyOutputRatePerHour()`,
+    `web/index.html`), налог — только экспортный, поколонийно, без графа
+    между разными колониями (см. domain/poco_tax.py::ColonyProfitability).
+
+    colonies — по одной записи на колонию: label, product, units_per_hour
+    (`null` — текущее состояние неизвестно), planet_type. Ставки POCO —
+    тот же ручной ввод, что и у плана (одна настройка на обе функции).
+    """
+    from domain.poco_tax import evaluate_colonies_profitability
+
+    payload, error = parse_json_body({"colonies": list, "poco_rates": dict})
+    if error:
+        return json_error(error)
+
+    colonies = payload["colonies"]
+    if not all(isinstance(c, dict) for c in colonies):
+        return json_error("Каждая колония должна быть объектом")
+
+    rates, error = _parse_poco_rates(payload["poco_rates"])
+    if error:
+        return json_error(error)
+
+    result = evaluate_colonies_profitability(colonies, _load_prices(), rates)
     return json_ok(**result.to_dict())
 
 
