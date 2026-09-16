@@ -32,6 +32,9 @@ bp = Blueprint("reference", __name__)
 
 TYPE_IDS_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "type_ids.json"
 SCHEMATICS_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "schematics.json"
+TYPE_VOLUMES_PATH = (
+    Path(__file__).resolve().parent.parent.parent / "data" / "cache" / "type_volumes.json"
+)
 
 PROCESSING_TIERS = ("P2", "P3", "P4")
 
@@ -77,6 +80,40 @@ def _schematics_by_output() -> dict[str, dict]:
 
 
 @lru_cache(maxsize=1)
+def _type_volumes() -> dict[str, float]:
+    """
+    Объём одной единицы предмета (м³) по type_id — то же самое, чем
+    сервер уже переводит содержимое причала в used_m3 (см.
+    scripts/sync_colony_status.py::type_volume()), только сюда, фронту.
+
+    ЗАЧЕМ. simulateColonyFactories() (web/index.html) досчитывает
+    содержимое причала вперёд по времени — сырьё убывает, продукт
+    прибывает, — но старое used_m3/capacity_m3 остаётся статичным
+    снимком с последней синхронизации: с течением времени объём в
+    причале на самом деле меняется (сырьё обычно «тяжелее» готовой
+    продукции на единицу), а показанный процент — нет (найдено
+    пользователем 17.09.2026). Без объёма на единицу фронту нечем
+    пересчитать used_m3 под спроецированное содержимое.
+
+    Кэш файла (data/cache/type_volumes.json) РАСТЁТ во время работы
+    процесса — каждый новый тип предмета, встреченный sync_colony_status,
+    дописывается в файл. `lru_cache` здесь означает то же самое
+    ограничение, что и у _type_ids()/_schematics_by_output(): свежие
+    типы, узнанные ПОСЛЕ старта этого процесса, попадут во фронт только
+    после его перезапуска. До тех пор для них честно «нет данных»
+    (simulateColonyFactories() пропускает used_m3 при первом же
+    неизвестном типе, правило 1) — деградация, а не поломка.
+    """
+    if not TYPE_VOLUMES_PATH.is_file():
+        return {}
+    try:
+        raw = json.loads(TYPE_VOLUMES_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return {k: v for k, v in raw.items() if isinstance(v, (int, float))}
+
+
+@lru_cache(maxsize=1)
 def _initial_payload() -> dict:
     """
     Считается один раз на процесс.
@@ -113,6 +150,7 @@ def _initial_payload() -> dict:
         "product_ids": ids,
         "recipe_inputs": recipe_inputs,
         "schematics": _schematics_by_output(),
+        "type_volumes": _type_volumes(),
         "bases": [],
         "regions": {},
         "system_counts": {},
