@@ -2185,8 +2185,16 @@ function simulateColonyFactories(pins, routes, gameLastUpdateIso){
   };
 
   let events=[]; // {pinId,t} — линейный поиск минимума: пинов в колонии мало
+  // Горизонт расписания — далеко за «сейчас» (раньше останавливался
+  // ровно на nowMs): депletion причала теперь ищется тем же самым точным
+  // событийным движком, что и «сейчас»-состояние ниже, а не отдельной
+  // формулой «остаток/скорость» — см. подробности у firstFutureIdle и
+  // results.depletionMs в конце функции. 90 дней — дальше уже не всё
+  // равно, и MAX_EVENTS ниже в любом случае оборвёт раньше на настоящих
+  // колониях с их обычным числом пинов.
+  const HORIZON_MS=nowMs+1000*60*60*24*90;
   const schedule=(pinId,t)=>{
-    if(t==null||t>nowMs) return;
+    if(t==null||t>HORIZON_MS) return;
     const existing=events.find(e=>e.pinId===pinId);
     if(existing){ if(t<existing.t) existing.t=t; return; }
     events.push({pinId,t});
@@ -2216,12 +2224,67 @@ function simulateColonyFactories(pins, routes, gameLastUpdateIso){
     }
   }
 
+  // typeId -> имя продукта — обратное к ids (имя -> id), нужно только
+  // здесь, чтобы отрисовать buf() из симуляции тем же форматом
+  // {name, amount}, что и настоящий pin.contents (contents ESI приходит
+  // с именем, уже резолвленным сервером).
+  const nameOfType=new Map();
+  for(const name in ids) if(typeof ids[name]==='number') nameOfType.set(ids[name], name);
+
+  // Снимок «сейчас» — состояние st на тот момент событийной ленты, когда
+  // она впервые переходит через nowMs (до этого момента состояние ещё
+  // совпадает с настоящим снимком ESI + тем, что дальше досчитала
+  // симуляция). Вызывается ровно один раз, см. ниже.
+  const snapshotResults=()=>{
+    const snap=new Map();
+    for(const [pinId,entry] of st){
+      if(entry.isFactory && !entry.unsupported){
+        if(entry.active){
+          const elapsed=Math.max(0, nowMs-entry.lastRun);
+          snap.set(pinId, {cycle:100*Math.min(elapsed,entry.cycleMs)/entry.cycleMs, idle:false,
+            remainingMs:entry.cycleMs-Math.min(elapsed,entry.cycleMs)});
+        } else {
+          snap.set(pinId, {cycle:null, idle:true,
+            idleMs:Math.max(0, nowMs-(entry.idleSinceMs!=null?entry.idleSinceMs:entry.lastRun))});
+        }
+      } else if(entry.isStorage){
+        // Проекция содержимого причала/склада/хранилища КЦ на «сейчас» —
+        // тот же buf, что расходуют фабрики, а не статичный снимок ESI с
+        // последней синхронизации: раньше список содержимого в панели
+        // «Детали» не менялся между синхронизациями вовсе (сырьё не
+        // убывало на глазах), а готовая продукция, ожидающая вывоза, в
+        // нём не появлялась совсем, даже когда маршрут для неё есть
+        // (найдено пользователем 17.09.2026). Содержит и остаток сырья,
+        // и уже произведённый, но ещё не вывезенный продукт, если для
+        // него задан исходящий маршрут сюда.
+        const contents=[];
+        entry.buf.forEach((amount,typeId)=>{
+          if(amount<0.5) return; // меньше единицы — то же самое, что «ничего»
+          contents.push({name:nameOfType.get(typeId)||null, type_id:typeId, amount:Math.round(amount)});
+        });
+        snap.set(pinId, {contents});
+      }
+    }
+    return snap;
+  };
+
+  let results=null;
+  let firstFutureIdle=null;
   let iterations=0;
   const MAX_EVENTS=50000; // защита от зависания на аномальных данных
   while(events.length && iterations++<MAX_EVENTS){
     let idx=0;
     for(let i=1;i<events.length;i++) if(events[i].t<events[idx].t) idx=i;
     const {pinId,t}=events[idx];
+
+    // Первое событие, шагнувшее за «сейчас» — состояние ДО его обработки
+    // и есть настоящее «сейчас»-состояние (события с t<=nowMs уже все
+    // применены, это ещё нет). Дальше события продолжают обрабатываться
+    // тем же движком — уже как проекция в будущее, только для поиска
+    // depletionMs (см. ниже), возвращаемые results это не меняет: они
+    // уже сняты.
+    if(results===null && t>nowMs) results=snapshotResults();
+
     events.splice(idx,1);
     const entry=st.get(pinId);
 
@@ -2250,6 +2313,7 @@ function simulateColonyFactories(pins, routes, gameLastUpdateIso){
       entry.buf.set(r.typeId, (entry.buf.get(r.typeId)||0)+amt);
     }
 
+    const wasActive=entry.active;
     let canConsume=true;
     for(const [typeId,need] of entry.demands){
       if((entry.buf.get(typeId)||0)<need){ canConsume=false; break; }
@@ -2262,54 +2326,42 @@ function simulateColonyFactories(pins, routes, gameLastUpdateIso){
     } else {
       entry.active=false;
       if(entry.idleSinceMs==null) entry.idleSinceMs=t;
+      // Переход «работала — встала», случившийся ПОСЛЕ «сейчас» (а не
+      // текущее состояние, унаследованное из прошлого) — самый ранний
+      // такой переход в колонии и есть момент, когда производство
+      // реально останавливается, см. results.depletionMs ниже.
+      if(t>nowMs && wasActive && firstFutureIdle==null) firstFutureIdle=t;
       // Не перепланируем сами — разбудит push() при следующей поставке.
     }
   }
-
-  const results=new Map();
-  for(const [pinId,entry] of st){
-    if(!entry.isFactory || entry.unsupported) continue;
-    if(entry.active){
-      const elapsed=Math.max(0, nowMs-entry.lastRun);
-      results.set(pinId, {cycle:100*Math.min(elapsed,entry.cycleMs)/entry.cycleMs, idle:false,
-        remainingMs:entry.cycleMs-Math.min(elapsed,entry.cycleMs)});
-    } else {
-      results.set(pinId, {cycle:null, idle:true,
-        idleMs:Math.max(0, nowMs-(entry.idleSinceMs!=null?entry.idleSinceMs:entry.lastRun))});
-    }
-  }
+  if(results===null) results=snapshotResults(); // весь горизонт уместился до «сейчас» — редкий случай (колонию давно не синхронизировали)
 
   // Время до исчерпания сырья в причале (только для переработки — у
   // добычи буфер пополняет сам экстрактор, у переработки его пополняет
   // только игрок вручную привозом, значит запас конечный и ничем сам не
-  // растёт). Причал/склад — не «сырьё» само по себе: тот же buf хранит
-  // и уже готовую продукцию, ждущую вывоза (ESI не помечает предмет как
-  // «вход» или «выход» — это просто type_id с количеством), поэтому
-  // расход считается ТОЛЬКО для типов, которые реально потребляет
-  // какая-то фабрика по исходящим маршрутам отсюда (entry.demands) —
-  // готовая продукция, для которой потребителя нет, в расход не попадает
-  // сама по себе. Совместное истощение нескольких видов сырья сразу:
-  // фабрика встаёт по ПЕРВОМУ кончившемуся, поэтому по колонии в целом
-  // берётся минимум по каждой паре (причал, вид сырья), а не одно число
-  // на весь причал разом.
-  let depletionMs=null;
-  for(const [pinId,entry] of st){
-    if(!entry.isStorage) continue;
-    if(entry.pin.kind!=='launchpad' && entry.pin.kind!=='storage_facility') continue;
-    const perHourByType=new Map();
-    for(const r of (outRoutes.get(pinId)||[])){
-      const dest=st.get(r.dest);
-      if(!dest||!dest.isFactory||dest.unsupported||!dest.demands||!dest.demands.has(r.typeId)) continue;
-      const perHour=dest.demands.get(r.typeId)/(dest.cycleMs/3600000);
-      perHourByType.set(r.typeId, (perHourByType.get(r.typeId)||0)+perHour);
-    }
-    for(const [typeId,perHour] of perHourByType){
-      if(perHour<=0) continue;
-      const ms=(entry.buf.get(typeId)||0)/perHour*3600000;
-      if(depletionMs==null||ms<depletionMs) depletionMs=ms;
-    }
-  }
-  results.depletionMs=depletionMs;
+  // растёт).
+  //
+  // РАНЬШЕ считалось формулой «остаток / расход в час» — непрерывным
+  // приближением поверх ПО СУТИ дискретного потребления: фабрика
+  // забирает вход целиком в момент старта цикла, а не размазывает
+  // расход по всей его длительности, поэтому формула занижала время —
+  // последний цикл, на старт которого сырья ещё хватило, в игре всё
+  // равно докручивается до конца (пользователь заметил на практике
+  // 17.09.2026: «время почти точное, но показывает окончание на час
+  // раньше — как будто пропускает тот цикл фабрик, когда сырья в
+  // причале уже не будет, но фабрики уйдут на последний цикл»).
+  //
+  // ТЕПЕРЬ это не формула, а прямое чтение firstFutureIdle из того же
+  // точного событийного движка, что считает «сейчас»-состояние выше —
+  // момент, когда КАКАЯ-ТО фабрика, только что работавшая, впервые не
+  // смогла набрать полный цикл (сразу по всем своим входам, включая
+  // случай нескольких входов с разных причалов). При нескольких
+  // независимых цепочках в одной колонии первая же встающая фабрика и
+  // даёт нужный минимум сама по себе — отдельный перебор «по каждому
+  // причалу и виду сырья» (как было раньше) не нужен: он приближённо
+  // пытался сделать то же самое поштучно там, где точный движок уже
+  // учитывает совместное истощение нескольких входов одной фабрики.
+  results.depletionMs = firstFutureIdle!=null ? firstFutureIdle-nowMs : null;
   return results;
 }
 
@@ -2439,8 +2491,9 @@ function colonyTail(p){
     return {lbl:t('progEnds'), cls, exp, val:left==null?t('cycIdle'):fmtLeft(left)};
   }
   if(p.role_key==='proc'){
-    // Честный расчёт (не догадка): sim.depletionMs — минимум по всем
-    // (причал, вид сырья) от simulateColonyFactories(), null если считать
+    // Честный расчёт (не догадка): sim.depletionMs — момент, когда первая
+    // же фабрика встанет из-за нехватки сырья в причале, от того же
+    // событийного движка simulateColonyFactories(), null если считать
     // нечем (нет маршрутов/схем/снимка) — тогда как и раньше «нет данных».
     const sim=simulateColonyFactories(p.pins,p.routes,p.game_last_update);
     const depletionMs=sim&&sim.depletionMs;
@@ -3231,15 +3284,26 @@ function contentsHTML(list){
    константы ёмкости, оба с сервера, см. scripts/sync_colony_status.py
    ::pin_detail) и список содержимого. used_m3 бывает null, если пины
    ещё не пересинхронизированы новым кодом или объём хоть одного
-   предмета не узнать у ESI — тогда честно «нет данных», а не 0%. */
-function storageBlockHTML(pin){
+   предмета не узнать у ESI — тогда честно «нет данных», а не 0%.
+
+   projectedContents (necязательно) — то же содержимое, но досчитанное
+   вперёд до «сейчас» simulateColonyFactories() (см. её snapshotResults):
+   расход сырья фабриками и накопление готовой продукции по маршрутам,
+   а не статичный снимок ESI с последней синхронизации (найдено
+   пользователем 17.09.2026: список не менялся между синхронизациями, а
+   готовый продукт, ожидающий вывоза, не показывался вовсе). Ёмкость в
+   м³ по-прежнему из снимка — объём одной единицы товара знает только
+   сервер (type_volume()), на фронтенде считать не из чего; сам список
+   товаров при этом ужé живой. */
+function storageBlockHTML(pin, projectedContents){
   const known=pin&&pin.used_m3!=null&&pin.capacity_m3!=null;
   const pct=known?Math.min(100,100*pin.used_m3/pin.capacity_m3):0;
+  const contents=projectedContents!=null?projectedContents:(pin?pin.contents:null);
   return `<div class="cols2">
     <div><div class="lbl">${t('capCap')}${known?`: ${pct.toFixed(0)}%`:''}</div>
       <div class="meter"><i class="ok" style="width:${pct}%;background:var(--ring-infra)"></i></div>
       <div class="val">${known?`${nloc(Math.round(pin.used_m3))} / ${nloc(pin.capacity_m3)} m³`:t('noData')}</div></div>
-    <div><div class="lbl">${t('capContent')}</div>${contentsHTML(pin?pin.contents:null)}</div>
+    <div><div class="lbl">${t('capContent')}</div>${contentsHTML(contents)}</div>
   </div>`;
 }
 
@@ -3254,7 +3318,7 @@ function structureUnitFields(kind, ctx){
     // скриншотом игрового клиента, ESI ёмкость структур не отдаёт) —
     // независимо от того, посчиталась ли загрузка CPU/Power: contents
     // приходит с тем же пином, что и всегда.
-    const storage=`<div style="margin-top:10px">${storageBlockHTML(pin)}</div>`;
+    const storage=`<div style="margin-top:10px">${storageBlockHTML(pin, ctx.sim&&ctx.sim.contents)}</div>`;
     if(!ctx.hasLoad){
       return `<div class="cols2">
         <div><div class="lbl">CPU</div>
@@ -3287,7 +3351,7 @@ function structureUnitFields(kind, ctx){
   }
 
   if(isStore){
-    return storageBlockHTML(pin);
+    return storageBlockHTML(pin, ctx.sim&&ctx.sim.contents);
   }
 
   if(isECU){
@@ -3778,7 +3842,17 @@ const DOC={
    экстрактор, сюда сырьё привозит только игрок, и запас конечный.
    Плашка показывает время до первого исчерпавшегося вида сырья (если их
    несколько — до самого раннего), а не одно усреднённое число на весь
-   причал сразу.</p>
+   причал сразу. Момент считается по тому же точному циклу фабрик, что и
+   их «в производстве»/«простаивает» — не по среднему расходу в час:
+   фабрика забирает сырьё целиком в момент старта цикла, поэтому
+   последний цикл, на старт которого сырья ещё хватило, всё равно
+   докручивается до конца (17.09.2026, исправлено — раньше усреднённая
+   оценка показывала окончание запаса раньше настоящего момента). Список
+   содержимого причала/склада в панели «Детали» — тоже не застывший
+   снимок с последней синхронизации: расход сырья и накопление ещё не
+   вывезенной готовой продукции пересчитываются вперёд той же проекцией
+   (объём в м³ по-прежнему из снимка — сервер не отдаёт объём одной
+   единицы товара на фронтенд).</p>
    <p>Колония, добывающая меньше 48 000 ед./ч, помечена как дефицитная —
    фиксированный порог: на такой скорости ресурса не хватит на всю цепочку,
    и его придётся дублировать дополнительной добычей. Дефицит — отдельная
@@ -4012,7 +4086,15 @@ const DOC={
    launchpad runs out of raw material: unlike extraction, where the extractor keeps
    refilling it, here only the player brings material in, so the stock is finite. The badge
    shows time until the first material type runs out (if there are several, the earliest
-   one) — not one averaged number for the whole launchpad.</p>
+   one) — not one averaged number for the whole launchpad. The moment is worked out from
+   the same exact factory-cycle timing as "in production"/"idle", not an average hourly
+   rate: a factory takes its input all at once when a cycle starts, so the last cycle that
+   still had enough stock to start still runs to completion (fixed 2026-09-17 — the
+   averaged estimate used to show the stock running out earlier than it really would). The
+   launchpad/storage contents list in the Details panel isn't a frozen snapshot from the
+   last sync either anymore: material use and unshipped finished product are projected
+   forward by the same simulation (the m³ figure still comes from the snapshot — the
+   server, not the frontend, knows a single unit's volume).</p>
    <p>A colony extracting under 48,000 units/hour is flagged as in deficit — a fixed
    threshold: at that rate the resource won't cover the whole chain, so it needs
    duplicating with extra extraction. Deficit is its own category — the colony keeps
