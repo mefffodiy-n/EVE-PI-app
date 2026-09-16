@@ -1857,7 +1857,7 @@ function orb(row,size,showPilot=true){
         stroke-dasharray="${c*Math.min(peak,100)/100} ${c}" stroke-linecap="round"/>
     </svg>
     <div class="badge${peak>=95?' hot':''}">${peak.toFixed(0)}%</div>
-    ${showPilot?`<div class="pilot" title="${row.character}">${initials(row.character)}</div>`:''}
+    ${showPilot?`<div class="pilot" title="${row.character}">${initials(row.character)}${avatarImg(charIdOf(row.character))}</div>`:''}
   </div>`;
 }
 
