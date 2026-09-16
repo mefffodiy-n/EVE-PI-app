@@ -210,7 +210,7 @@ button { font-family:inherit; }
 /* jumpTo() (см. JS) целится в верх этих блоков — без отступа заголовок
    оказывался под обеими липкими панелями (.topbar + .tools), см. их
    измерение в measureTopbar()/measureTools(). */
-#dashBody, #coloniesProfit, #colonies, #shopping { scroll-margin-top: calc(var(--topbar-h,46px) + var(--tools-h,44px)); }
+#pocoProfit, #dashBody, #coloniesProfit, #colonies, #shopping { scroll-margin-top: calc(var(--topbar-h,46px) + var(--tools-h,44px)); }
 .tool { width:30px; height:26px; display:grid; place-items:center; cursor:pointer;
         background:none; border:1px solid transparent; color:var(--dim); border-radius:3px; }
 .tool:hover { color:var(--read); background:var(--hover); }
@@ -1039,7 +1039,7 @@ body.light .rolebadge.excess { background:rgba(154,107,18,.12); }
     </div>
     <button class="mini" id="exportBtn" onclick="exportPlan()" style="margin-left:10px"
             data-i18n="export">Экспорт в Excel</button>
-    <button class="mini" id="jumpPlan" onclick="jumpTo('dashBody')" style="margin-left:6px;display:none"
+    <button class="mini" id="jumpPlan" onclick="jumpTo('pocoProfit')" style="margin-left:6px;display:none"
             data-i18n="jumpPlan">↑ План</button>
     <button class="mini" id="jumpColonies" onclick="jumpTo('coloniesProfit')" style="margin-left:6px;display:none"
             data-i18n="jumpColonies">↓ Мои колонии</button>
@@ -1047,6 +1047,7 @@ body.light .rolebadge.excess { background:rgba(154,107,18,.12); }
             data-i18n="jumpShopping">↓ Список закупки</button>
     <div class="counts" id="counts" data-i18n="counts0">план не построен</div>
   </div>
+  <div id="pocoProfit"></div>
   <div id="dashBody"><div class="empty" data-i18n="noPlanLong">План не построен. Откройте вкладку «Настройки», выберите продукты и постройте план.</div></div>
   <div id="coloniesProfit"></div>
   <div id="colonies"></div>
@@ -1164,7 +1165,6 @@ body.light .rolebadge.excess { background:rgba(154,107,18,.12); }
       <div id="decision"></div>
       <div id="messages" style="padding:12px 14px 0"></div>
       <div id="profit"></div>
-      <div id="pocoProfit"></div>
       <div id="tableWrap"><div class="empty" data-i18n="noPlan">План не построен.</div></div>
     </main>
   </div>
@@ -2821,7 +2821,13 @@ function sortedColonies(){
    над списком колоний, так кнопка сразу показывает и её; когда панели
    нечего показать (нет ни одной колонии с известной ролью), пустой
    #coloniesProfit не занимает места, и прокрутка визуально совпадает
-   со списком колоний, как раньше. */
+   со списком колоний, как раньше.
+   Той же симметрии ради «↑ План» целится в #pocoProfit, не в #dashBody:
+   «Прогноз прибыльности плана» (перенесён на дашборд с «Настроек»,
+   16.09.2026) стоит прямо НАД карточками плана, а не под ними — цель
+   для прыжка должна быть верхом всего блока «план», иначе прыжок вверх
+   молча пропускал бы панель прибыльности. Пустой #pocoProfit (план ещё
+   не построен) так же не занимает места. */
 function jumpTo(id){
   document.getElementById(id).scrollIntoView({behavior:'smooth', block:'start'});
 }
@@ -3609,7 +3615,9 @@ const DOC={
    <p>Налог POCO, доставка и биржевые сборы не учтены, поэтому числа — верхняя оценка.</p>
 
    <h3>Прогноз прибыльности плана</h3>
-   <p>Отдельная панель под таблицей выше — не обобщённая экономика шаблона, а
+   <p>Отдельная панель на дашборде, сразу над построенным планом (перенесена
+   туда с «Настроек» 16.09.2026 — прогноз относится к самому плану, а не к
+   вводу параметров) — не обобщённая экономика шаблона выше, а
    прибыльность УЖЕ ПОСТРОЕННОГО плана: настоящее число колоний и фабрик из
    расчёта, помесячно, при полной загруженности цепочки без простоев. В
    отличие от таблицы «Что выгоднее производить», здесь учтён налог POCO — и
@@ -3842,7 +3850,9 @@ const DOC={
    <p>POCO tax, hauling and broker fees are not included, so the figures are an upper bound.</p>
 
    <h3>Plan profitability forecast</h3>
-   <p>A separate panel below the table above — not the generic template economics, but the
+   <p>A separate panel on the dashboard, right above the built plan (moved there from Settings
+   on 2026-09-16 — the forecast belongs with the plan itself, not with the input controls) —
+   not the generic template economics above, but the
    profitability of the ALREADY BUILT plan: the real number of colonies and factories from
    the calculation, monthly, at full chain throughput with no downtime. Unlike the "most
    profitable to produce" table, this one accounts for POCO tax — on both export and import
