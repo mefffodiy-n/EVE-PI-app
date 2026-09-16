@@ -2451,7 +2451,7 @@ function renderDash(){
     box.innerHTML=Object.entries(byPilot).map(([name,items])=>`
       <div class="pilot-row">
         <div class="who">
-          <div class="pilot-lg" style="margin-bottom:4px">${initials(name)}${avatarImg(charIdOf(name))}</div>
+          <div class="pilot-lg" style="width:52px;height:52px;font-size:16px;margin-bottom:4px">${initials(name)}${avatarImg(charIdOf(name))}</div>
           <div class="pilot-name" style="font-size:12px">${name}</div>
           <div class="sub" style="font-size:11px">${pl(items.length,'pColony')}</div>
         </div>
