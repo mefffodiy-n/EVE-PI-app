@@ -1463,17 +1463,28 @@ function dominantStructureIconId(row){
 
 /* То, ЧТО колония производит (иконка + имя, а не иконка постройки) — по
    реальным данным пинов (row.pins, см. scripts/sync_colony_status.py::
-   pin_detail): у добычи — сырьё активного/ближайшего экстрактора, у
-   переработки — продукт самой старшей по тиру фабрики (high-tech, иначе
-   advanced, иначе basic) — она и даёт конечный продукт цепочки на этой
-   колонии. Если пины ещё не пересинхронизированы новым кодом (row.pins
-   пуст) — честный откат на иконку постройки без имени, как раньше. */
+   pin_detail): у добычи — выход её СОБСТВЕННОЙ фабрики (basic_industry_
+   facility) — P1-продукт, тот же, что показан на кружочке этого пина
+   в детальном виде колонии (structOrbsForRow()), а не сырьё P0, которое
+   тянет экстрактор с земли и которое на этой же планете сразу
+   перерабатывается в P1 (миф "добывающая колония продаёт сырьё" —
+   найдено пользователем 16.09.2026, до этого кружок показывал P0).
+   У переработки — продукт самой старшей по тиру фабрики (high-tech,
+   иначе advanced, иначе basic) — она и даёт конечный продукт цепочки
+   на этой колонии. Если пины ещё не пересинхронизированы новым кодом
+   (row.pins пуст) — честный откат на иконку постройки без имени, как
+   раньше; для добычи — дополнительный откат на сырьё экстрактора,
+   если у колонии почему-то нет собственной фабрики (не должно
+   случаться для настоящего шаблона miner_00, но пины могут быть ещё
+   не полностью пересинхронизированы). */
 function producedInfo(row){
   const pins=row.pins||[];
   if(row.role_key==='mine'){
+    const factory=pins.find(p=>p.kind==='basic_industry_facility'&&p.product);
+    if(factory) return {iconId:ids[factory.product], name:factory.product, extracted:false};
     const extractors=pins.filter(p=>p.kind==='extractor_control_unit'&&p.product);
     const match=extractors.find(p=>p.expiry_time===row.nearest_expiry)||extractors[0];
-    if(match) return {iconId:ids[match.product], name:match.product};
+    if(match) return {iconId:ids[match.product], name:match.product, extracted:true};
   } else if(row.role_key==='proc'){
     const priority=['high_tech_industry_facility','advanced_industry_facility','basic_industry_facility'];
     for(const kind of priority){
@@ -1756,7 +1767,7 @@ function orb(row,size,showPilot=true){
       ${attention?`<div class="tip-head">${t('needsAttention')}</div>`:''}
       ${deficient?`<div class="tip-meta" style="color:var(--amber)">⚠ ${deficitText(deficitRisk,false)}</div>`:''}
       ${info.name?`<div class="tip-row">${info.iconId?`<img src="${ICON(info.iconId)}" alt="">`:''}
-        <span><b>${row.role_key==='mine'?t('extractsW'):t('producesW')}</b><br>${info.name}</span></div>`:''}
+        <span><b>${info.extracted?t('extractsW'):t('producesW')}</b><br>${info.name}</span></div>`:''}
       ${pin?`<div class="tip-label">${sname(pin.kind)}</div>
         <div class="tip-bar"><i style="width:${fillPct.toFixed(0)}%"></i></div>
         <div class="tip-meta">${nloc(Math.round(pin.used_m3))}/${nloc(pin.capacity_m3)} m³</div>`:''}
