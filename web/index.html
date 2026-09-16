@@ -3511,12 +3511,16 @@ const DOC={
    рецептов, затем число фабрик переводится в число шаблонов застройки и колоний.
    Если выбрано несколько продуктов, общие компоненты учитываются один раз
    с суммарной потребностью, а не по максимуму.</p>
+   <p><b>Данные по планетам сейчас загружены только для региона Fountain.</b>
+   Созвездия, системы и плотности сырья для добычи доступны только в его
+   пределах — расчёт для других регионов New Eden недоступен, пока для них
+   нет такого же файла данных.</p>
 
    <h3>Как пользоваться</h3>
    <ol>
     <li>На вкладке «Настройки» отметьте целевые продукты. Можно выбрать несколько
     сразу — список с поиском и иконками, отмеченное показано внизу.</li>
-    <li>Отметьте созвездия для добычи. Кнопка «Весь регион» отмечает все сразу;
+    <li>Отметьте созвездия для добычи (все — в регионе Fountain). Кнопка «Весь регион» отмечает все сразу;
     если в выгрузке есть колонка региона, созвездия сгруппированы по ним.</li>
     <li>Задайте запас на истощение месторождений, если нужен. Это не расчёт,
     а поправка: плотность сырья у нас статичная, а в игре месторождения истощаются.</li>
@@ -3735,6 +3739,12 @@ const DOC={
    или полной.</p>
 
    <h3>Чего программа пока не знает</h3>
+   <p><b>Регион.</b> Данные о планетах есть только для Fountain — ни ESI,
+   ни статический дамп CCP плотность сырья по планетам не отдают вообще
+   (сервер считает её процедурно и не публикует), единственный способ
+   получить такие данные для другого региона — сканирование в игре или
+   сторонняя проверенная база. Расчёт плана для любого другого региона
+   New Eden сейчас невозможен, не только неточен.</p>
    <p>Загрузка CPU/Power командного центра колонии за пределами загруженного
    региона (нет строки в файле планет — ESI радиус тоже не отдаёт, взять
    неоткуда) не считается: оценка без настоящего радиуса была бы
@@ -3749,13 +3759,18 @@ const DOC={
    <p>It works top-down: the target product is expanded to raw materials through the
    recipe tree, then factory counts become template and colony counts. With several
    targets, shared components are counted once with summed demand, not by maximum.</p>
+   <p><b>Planet data is currently loaded for the Fountain region only.</b>
+   Constellations, systems and extraction densities are only available within
+   it — the plan cannot be calculated for any other New Eden region until the
+   same kind of data file exists for it.</p>
 
    <h3>How to use it</h3>
    <ol>
     <li>On the Settings tab tick your target products. Several products at once is fine —
     the list has search and icons, and your picks are shown below it.</li>
-    <li>Tick the constellations you extract from. “Whole region” ticks them all; if your
-    export has a region column, constellations are grouped by region.</li>
+    <li>Tick the constellations you extract from (all of them are in Fountain). “Whole
+    region” ticks them all; if your export has a region column, constellations are
+    grouped by region.</li>
     <li>Set a depletion safety margin if you need one. It is not a calculation but a
     correction: our resource density is static, while deposits deplete in game.</li>
     <li>Pick a home system for the factories. Processing goes on the smallest-radius
@@ -3955,6 +3970,11 @@ const DOC={
    listed honestly on its own, not treated as zero or full.</p>
 
    <h3>What the program does not know yet</h3>
+   <p><b>Region.</b> Planet data only exists for Fountain — neither ESI nor CCP's static
+   dump exposes resource density for planets at all (the server computes it procedurally
+   and never publishes it), so the only way to get such data for another region is
+   in-game scanning or a verified third-party database. Building a plan for any other
+   New Eden region isn't just inaccurate right now, it's impossible.</p>
    <p>CPU/Power load for a colony outside the loaded region (no row in the planet file —
    ESI doesn't expose the radius either, so there's nowhere left to get it) isn't computed
    at all: an estimate without a real radius would be a misleading number. Instead of an
@@ -3983,6 +4003,9 @@ const DOC={
    дала ноль расхождений.</p>
    <p>При споре о составе продукта приоритет у шаблонов застройки: их маршруты ссылаются
    на игровые type_id, а не на названия, в которых встречаются опечатки.</p>
+   <p>Плотности сырья и радиусы планет — отдельный источник, охватывающий только регион
+   Fountain: такие данные не отдаёт ни ESI, ни статический дамп CCP, единственный способ
+   их получить — сканирование планет в игре.</p>
 
    <h3>Обращения к игре</h3>
    <p>Приложение не обращается к ESI по действию пользователя. Всё, что требует сети,
@@ -4020,6 +4043,9 @@ const DOC={
    68 products against the wiki found zero discrepancies.</p>
    <p>When sources disagree on a product's inputs, the colony templates win: their routes
    reference game type_ids rather than names, and names carry typos.</p>
+   <p>Resource densities and planet radii are a separate source covering the Fountain
+   region only: neither ESI nor CCP's static dump exposes that data, the only way to get
+   it is scanning planets in-game.</p>
 
    <h3>Calls to the game</h3>
    <p>The application never calls ESI in response to a user action. Everything that needs
