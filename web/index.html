@@ -2299,19 +2299,22 @@ function simulateColonyFactories(pins, routes, gameLastUpdateIso){
       continue;
     }
 
-    // Фабрика: сначала забрать то, что уже накопилось на складах,
-    // маршрутизированных сюда — покрывает запас, лежавший на складе
-    // ЕЩЁ ДО начала проекции.
-    for(const r of (inRoutes.get(pinId)||[])){
-      const src=st.get(r.src);
-      if(!src || !src.isStorage) continue;
-      const have=src.buf.get(r.typeId)||0;
-      if(have<=0) continue;
-      const amt=Math.min(have, r.qty, canAccept(entry, r.typeId, have));
-      if(amt<=0) continue;
-      src.buf.set(r.typeId, have-amt);
-      entry.buf.set(r.typeId, (entry.buf.get(r.typeId)||0)+amt);
-    }
+    // Забрать то, что накопилось на складах, маршрутизированных сюда —
+    // покрывает и запас, лежавший на складе ЕЩЁ ДО начала проекции, и
+    // пополнение буфера фабрики под следующий цикл (см. вызов ниже).
+    const pullFromStorage=()=>{
+      for(const r of (inRoutes.get(pinId)||[])){
+        const src=st.get(r.src);
+        if(!src || !src.isStorage) continue;
+        const have=src.buf.get(r.typeId)||0;
+        if(have<=0) continue;
+        const amt=Math.min(have, r.qty, canAccept(entry, r.typeId, have));
+        if(amt<=0) continue;
+        src.buf.set(r.typeId, have-amt);
+        entry.buf.set(r.typeId, (entry.buf.get(r.typeId)||0)+amt);
+      }
+    };
+    pullFromStorage();
 
     const wasActive=entry.active;
     let canConsume=true;
@@ -2322,6 +2325,18 @@ function simulateColonyFactories(pins, routes, gameLastUpdateIso){
       for(const [typeId,need] of entry.demands) entry.buf.set(typeId, entry.buf.get(typeId)-need);
       entry.active=true; entry.idleSinceMs=null; entry.lastRun=t;
       push(pinId, entry.outputTypeId, entry.outputQty, t, 0);
+      // Игра резервирует вход СЛЕДУЮЩЕГО цикла в момент, когда кончился
+      // текущий (найдено 17.09.2026 на реальных данных прода — у каждой
+      // фабрики уже был предзагружен ровно один цикл сырья в её
+      // собственном buf на момент синхронизации, а склад расходовался
+      // только на цикл ПОЗЖЕ, чем должен был: 12 фабрик × 40 ед. лишних
+      // на каждый вид сырья — ровно один пропущенный «забор» со склада
+      // на весь горизонт проекции). Без этого повторного вызова забор
+      // происходил бы только на СЛЕДУЮЩЕМ событии этой фабрики (через
+      // целый cycleMs) — склад в проекции пустел на цикл позже
+      // настоящего, и заодно расход по складу отставал от уже
+      // учтённого выпуска продукции на тот же один цикл.
+      pullFromStorage();
       schedule(pinId, t+entry.cycleMs);
     } else {
       entry.active=false;
