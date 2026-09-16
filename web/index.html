@@ -298,14 +298,19 @@ button { font-family:inherit; }
 .orb .pilot img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
 
 /* Подсказка при наведении — то же самое, что в игровом обзоре колоний:
-   что добывается/производится, заполненность причала, планета. Чистый
-   CSS (:hover), без JS: данные уже в разметке, лишний слушатель не нужен. */
-.orb .tip { position:absolute; left:50%; bottom:calc(100% + 8px); transform:translateX(-50%) translateY(4px);
+   что добывается/производится, заполненность причала, планета. Центр
+   подсказки — сама .orb (50%), --tip-shift донастраивает её вбок, когда
+   центрирование вывело бы подсказку за край экрана (см. fixTipOverflow
+   в JS, docs/ROADMAP.md, Фаза 9/10, 16.09.2026 — крайние левые круги в
+   сетке «Мои колонии» обрезались о левый край, пользователь нашёл). */
+.orb .tip { position:absolute; left:50%; bottom:calc(100% + 8px);
+            transform:translateX(calc(-50% + var(--tip-shift,0px))) translateY(4px);
             width:170px; background:var(--hull); border:1px solid var(--seam); border-radius:4px;
             padding:8px 10px; font-size:11px; color:var(--read); text-align:left; z-index:30;
             opacity:0; visibility:hidden; pointer-events:none; transition:opacity .12s, transform .12s;
             box-shadow:0 4px 16px rgba(0,0,0,.35); }
-.orb:hover .tip, .orb:focus-within .tip { opacity:1; visibility:visible; transform:translateX(-50%) translateY(0); }
+.orb:hover .tip, .orb:focus-within .tip { opacity:1; visibility:visible;
+            transform:translateX(calc(-50% + var(--tip-shift,0px))) translateY(0); }
 .tip-head { color:var(--alarm); font-weight:600; text-transform:uppercase; font-size:10px;
             letter-spacing:.04em; margin-bottom:6px; }
 .tip-row { display:flex; gap:6px; align-items:center; margin-bottom:6px; }
@@ -1861,6 +1866,61 @@ function orb(row,size,showPilot=true){
   </div>`;
 }
 
+/* Подсказка .orb .tip центрирована под кругом (см. CSS) — у крайних левых/
+   правых кругов сетки центр выводит её за край экрана, часть текста не
+   видна (16.09.2026, найдено пользователем на «Мои колонии в игре», вид
+   «Сетка»). Число колонок сетки зависит от ширины окна (flex-wrap), поэтому
+   заранее CSS-правилом не определить, какой круг крайний — сдвиг считается
+   в JS через getBoundingClientRect() и кладётся в CSS-переменную --tip-shift
+   (её читает transform и базового, и :hover/:focus-within состояния —
+   сдвиг по X одинаков в обоих, меняется только Y и прозрачность).
+   Считается СРАЗУ ПОСЛЕ вставки кругов в DOM (fixTipOverflowIn), а не по
+   событию наведения: `transform` в CSS участвует в transition вместе с
+   translateY-подъёмом при ховере, и если менять --tip-shift уже ВО ВРЕМЯ
+   этого перехода (как было в первой версии правки — слушатель на
+   pointerover/focusin), getBoundingClientRect() читает межкадровое,
+   недоехавшее до конца значение transform, и сдвиг получается неверным
+   (проверено вручную: 50px вместо нужных, потом 25px на том же круге).
+   Сразу после вставки в DOM transition ещё не запускался (браузер не
+   анимирует самое первое вычисление стиля нового узла) — значение
+   транформа уже финальное для текущего --tip-shift (0px), измерение
+   надёжно. */
+const TIP_EDGE_MARGIN=8;
+function fixTipOverflow(orb){
+  const tip=orb.querySelector(':scope > .tip'); if(!tip) return;
+  orb.style.removeProperty('--tip-shift');
+  const rect=tip.getBoundingClientRect();
+  let shift=0;
+  if(rect.left<TIP_EDGE_MARGIN) shift=TIP_EDGE_MARGIN-rect.left;
+  else if(rect.right>innerWidth-TIP_EDGE_MARGIN) shift=(innerWidth-TIP_EDGE_MARGIN)-rect.right;
+  if(shift) orb.style.setProperty('--tip-shift', `${shift}px`);
+}
+function fixTipOverflowIn(container){
+  container.querySelectorAll(':scope .orb').forEach(fixTipOverflow);
+}
+function fixTipOverflowEverywhere(){
+  ['dashBody','colonies','colonyPage'].forEach(id=>{
+    const el=document.getElementById(id); if(el) fixTipOverflowIn(el);
+  });
+}
+// Изменение ширины окна меняет число колонок в сетке (flex-wrap) — какие
+// круги крайние, тоже меняется. Пересчитываем по всем уже отрисованным
+// местам разом; сам renderDash()/renderColonies() тут не трогаем (виды
+// плана/колоний не пересобираются заново только из-за resize).
+let tipOverflowResizeTimer=null;
+window.addEventListener('resize', ()=>{
+  clearTimeout(tipOverflowResizeTimer);
+  tipOverflowResizeTimer=setTimeout(fixTipOverflowEverywhere, 150);
+});
+// Шрифты подключены с font-display:swap (см. @font-face выше) — до их
+// подгрузки текст рисуется запасным шрифтом с другой шириной, и когда
+// настоящий шрифт подменяет его, ширина топбара/карточек чуть меняется,
+// а с ней и то, какой круг сетки крайний. Пересчитываем один раз, когда
+// все шрифты странице точно готовы (обнаружено вручную при проверке
+// этой самой правки: сразу после рендера отступ был верным, а через
+// секунду-две — уже нет, из-за одной этой подмены шрифта).
+document.fonts && document.fonts.ready.then(fixTipOverflowEverywhere);
+
 /* Маленький круг структуры внутри колонии. */
 function structOrb(kind,count,planetType,opts){
   opts=opts||{};
@@ -2465,6 +2525,7 @@ function renderDash(){
   document.getElementById('counts').innerHTML=
     `<b>${pl(plan.length,'pColony')}</b>`
     + (strained?` · <span class="idle">${strained} ${t('noReserve')}</span>`:` · ${t('reserveOk')}`);
+  fixTipOverflowIn(box);
 }
 
 /* ── Пороговые радиусы ────────────────────────────────────────
@@ -2880,6 +2941,7 @@ function renderColonies(){
   const summary=`${pl(rows.length,'pPlanetN')} · ${idleN} ${t('coloniesIdle')} · ${attnN} ${t('coloniesAttention')}`
     + ` · ${deficitN} ${t('coloniesDeficit')}`;
   box.innerHTML=`<div class="colonies"><h3>${t('inGameColonies')} <span class="colsum">${summary}</span></h3>${body}</div>`;
+  fixTipOverflowIn(box);
 }
 
 /* Живой отсчёт: перерисовываем только числа, не весь блок. Работает
@@ -3426,6 +3488,7 @@ function openColony(id){
     ${(p.shared_extraction_count||1)>1?`<div class="msg" style="margin:0 16px 8px">
       ${t('sharedExtract').replace('{n}',p.shared_extraction_count)}</div>`:''}
     ${body}`;
+  fixTipOverflowIn(document.getElementById('colonyPage'));
 
   document.getElementById('dashBody').style.display='none';
   document.getElementById('shopping').style.display='none';
@@ -3478,6 +3541,7 @@ function openRealColonyDetail(id){
       <button class="back" onclick="closeColony()">${t('back')}</button>
     </div>
     ${body}`;
+  fixTipOverflowIn(document.getElementById('colonyPage'));
 
   document.getElementById('dashBody').style.display='none';
   document.getElementById('shopping').style.display='none';
