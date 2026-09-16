@@ -2450,10 +2450,8 @@ function renderDash(){
     rows.forEach(p=>(byPilot[p.character]=byPilot[p.character]||[]).push(p));
     box.innerHTML=Object.entries(byPilot).map(([name,items])=>`
       <div class="pilot-row">
-        <div class="who">
-          <div class="pilot-lg" style="width:52px;height:52px;font-size:16px;margin-bottom:4px">${initials(name)}${avatarImg(charIdOf(name))}</div>
-          <div class="pilot-name" style="font-size:12px">${name}</div>
-          <div class="sub" style="font-size:11px">${pl(items.length,'pColony')}</div>
+        <div class="who" title="${name} · ${pl(items.length,'pColony')}">
+          <div class="pilot-lg" style="width:52px;height:52px;font-size:16px">${initials(name)}${avatarImg(charIdOf(name))}</div>
         </div>
         <div class="orbs">${items.map(p=>orb(p,52,false)).join('')}</div>
       </div>`).join('');
