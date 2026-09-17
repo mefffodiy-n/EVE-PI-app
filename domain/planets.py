@@ -43,7 +43,6 @@ IGNORED_CONSTELLATION_VALUES = {"max P2"}
 
 RADIUS_COLUMN = "Radius [km]"
 POCO_RATE_COLUMN = "POCO Tax Rate [%]"
-POCO_TYPE_COLUMN = "Type"
 
 # Дата, на которую сделана выгрузка data/planet_industry.csv — не поле
 # из самого файла (в нём такой метки нет), а дата последнего изменения
@@ -166,15 +165,13 @@ class PlanetBook:
         Ставка POCO (доля 0..1) КОНКРЕТНОЙ планеты — из data/
         planet_industry.csv, статичный снимок на POCO_SNAPSHOT_DATE.
 
-        Точнее ручного ввода «по типу планеты» (см. domain/poco_tax.py):
-        внутри одного типа реальная ставка не всегда одинаковая (в
-        загруженном регионе у Barren, например, часть планет на 3%,
-        часть — на 1%), а здесь берётся значение именно ЭТОЙ планеты, не
-        приближение. Не «живая» ставка — владелец POCO может сменить её
-        в игре в любой момент без предупреждения, а сама структура
-        сменить владельца после войны за суверенитет, поэтому ручной
-        ввод пользователя остаётся приоритетнее там, где он есть (на
-        случай, если реальность успела разойтись со снимком).
+        Единственный источник ставки (17.09.2026 — ручной ввод по типу
+        планеты убран решением пользователя при переходе к
+        мультирегиональности: с несколькими регионами переопределение
+        «по типу» перестаёт быть однозначным и только усложняет ввод).
+        Не «живая» ставка — владелец POCO может сменить её в игре в
+        любой момент без предупреждения, а сама структура сменить
+        владельца после войны за суверенитет.
 
         None, если планеты нет в этом файле или ставка не указана —
         как и у radius_km(), не оценка «шире региона», а честный пробел.
@@ -193,30 +190,6 @@ class PlanetBook:
             return float(value) / 100.0
         except (TypeError, ValueError):
             return None
-
-    def poco_rate_breakdown(self) -> dict[str, dict[str, int]]:
-        """
-        Для каждого типа планеты — сколько планет на какой ставке POCO,
-        по тому же статичному снимку (POCO_SNAPSHOT_DATE).
-
-        Нужно фронтенду, чтобы честно показать: «по типу» — не то, что
-        реально в файле, там для мешаных типов несколько разных ставок
-        сразу (правило 1 — не подставлять единое число за приближение,
-        когда есть настоящий разброс). Точная ставка для КОНКРЕТНОЙ
-        планеты плана/колонии берётся отдельно, см. poco_rate() выше;
-        это — только информационная сводка для ручного ввода-переопределения.
-        """
-        result: dict[str, dict[str, int]] = {}
-        if POCO_RATE_COLUMN not in self._df.columns or POCO_TYPE_COLUMN not in self._df.columns:
-            return result
-        rates = pd.to_numeric(self._df[POCO_RATE_COLUMN], errors="coerce")
-        for ptype, group in rates.groupby(self._df[POCO_TYPE_COLUMN]):
-            counts: dict[str, int] = {}
-            for rate, count in group.value_counts(dropna=True).items():
-                counts[f"{rate:g}"] = int(count)
-            if counts:
-                result[str(ptype)] = counts
-        return result
 
     def factory_candidates(self, system: str, preferred_only: bool = False) -> pd.DataFrame:
         """
