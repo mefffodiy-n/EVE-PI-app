@@ -462,9 +462,9 @@ class TestUnlink:
 class TestGroupCharacters:
     """
     Постоянная группа «основной + альты» (docs/ROADMAP.md, Фаза 9,
-    16.09.2026) — независимая от cookie-сессии account_id. Создаётся
-    явно через /api/auth/group из персонажей, уже вошедших в этот визит;
-    основного выбирает пользователь, не автоматика.
+    16.09.2026) — независимая от cookie-сессии account_id. С 17.09.2026
+    заводится автоматически при входе (см. TestAutoGrouping ниже);
+    /api/auth/group теперь — ручная поправка того, кто уже основной.
     """
 
     def _login_as(self, client, account_id):
@@ -624,6 +624,102 @@ class TestLoginGroupConflict:
             assert s.get(Character, 4002).account_id == "char:4001"
         with client.session_transaction() as sess:
             assert sess["account_id"] == "char:4001"
+
+
+class TestAutoGrouping:
+    """
+    Автогруппировка при входе (17.09.2026, Фаза 11, п.3) — заменила
+    ручной первый вызов /api/auth/group: первый персонаж визита основной
+    сам себе, следующий вход в ТОМ ЖЕ визите подтягивается автоматически.
+    """
+
+    def _login(self, client):
+        url = client.get("/api/auth/login-url").get_json()["url"]
+        q = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+        return q["state"][0]
+
+    def test_first_login_becomes_primary_of_self(self, client, sso_env, _rsa_key, monkeypatch):
+        import api.blueprints.auth as auth_module
+
+        monkeypatch.setattr(auth_module, "_sync_first_login_async", lambda cid: None)
+
+        access = _make_jwt(_rsa_key, sub="CHARACTER:EVE:5001", name="Solo")
+        import scripts.esi_sso as mod
+        mod._post_form = lambda *a, **k: {
+            "access_token": access, "refresh_token": "r", "expires_in": 1199,
+        }
+
+        state = self._login(client)
+        r = client.get(f"/api/auth/callback?code=abc&state={state}")
+        assert r.status_code == 302 and "auth=ok" in r.headers["Location"]
+
+        with session_scope() as s:
+            char = s.get(Character, 5001)
+            assert char.primary_character_id == 5001
+            assert char.account_id == "char:5001"
+
+    def test_second_login_in_same_visit_auto_joins_first(self, client, sso_env, _rsa_key, monkeypatch):
+        import api.blueprints.auth as auth_module
+
+        monkeypatch.setattr(auth_module, "_sync_first_login_async", lambda cid: None)
+        import scripts.esi_sso as mod
+
+        access1 = _make_jwt(_rsa_key, sub="CHARACTER:EVE:6001", name="First")
+        mod._post_form = lambda *a, **k: {
+            "access_token": access1, "refresh_token": "r", "expires_in": 1199,
+        }
+        state1 = self._login(client)
+        client.get(f"/api/auth/callback?code=abc&state={state1}")
+
+        access2 = _make_jwt(_rsa_key, sub="CHARACTER:EVE:6002", name="Second")
+        mod._post_form = lambda *a, **k: {
+            "access_token": access2, "refresh_token": "r", "expires_in": 1199,
+        }
+        state2 = self._login(client)
+        r = client.get(f"/api/auth/callback?code=abc&state={state2}")
+        assert r.status_code == 302 and "auth=ok" in r.headers["Location"]
+
+        with session_scope() as s:
+            first, second = s.get(Character, 6001), s.get(Character, 6002)
+            assert first.primary_character_id == 6001
+            assert second.primary_character_id == 6001
+            assert second.account_id == "char:6001"
+
+    def test_migration_case_joins_existing_ungrouped_session_member(
+        self, client, sso_env, _rsa_key, monkeypatch
+    ):
+        """
+        Персонаж, вошедший ДО этой правки, может иметь обычный account_id
+        визита, но primary_character_id ещё не установлен — новый вход
+        другим персонажем в ТОМ ЖЕ визите должен подтянуться к нему, а не
+        завести отдельную группу сам на себя.
+        """
+        import api.blueprints.auth as auth_module
+
+        monkeypatch.setattr(auth_module, "_sync_first_login_async", lambda cid: None)
+
+        with client.session_transaction() as sess:
+            sess["account_id"] = "legacy-visit"
+        with session_scope() as s:
+            s.add(Character(character_id=7001, name="Legacy",
+                             command_center_upgrades_level=5,
+                             interplanetary_consolidation_level=4,
+                             source="esi", account_id="legacy-visit",
+                             primary_character_id=None))
+
+        import scripts.esi_sso as mod
+        access = _make_jwt(_rsa_key, sub="CHARACTER:EVE:7002", name="New alt")
+        mod._post_form = lambda *a, **k: {
+            "access_token": access, "refresh_token": "r", "expires_in": 1199,
+        }
+        state = self._login(client)
+        r = client.get(f"/api/auth/callback?code=abc&state={state}")
+        assert r.status_code == 302 and "auth=ok" in r.headers["Location"]
+
+        with session_scope() as s:
+            new_alt = s.get(Character, 7002)
+            assert new_alt.primary_character_id == 7001
+            assert new_alt.account_id == "char:7001"
 
 
 def test_verify_rejects_missing_eve_online_audience(sso_env, _rsa_key, monkeypatch):

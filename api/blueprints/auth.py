@@ -198,6 +198,18 @@ def _store(character_id: int, name: str, tokens: dict, claims: dict) -> None:
     id. Если в этом же визите уже есть персонажи ИЗ ДРУГОЙ группы —
     честный отказ (`GroupConflict`), не слияние и не молчаливая
     перезапись.
+
+    АВТОГРУППИРОВКА (17.09.2026, Фаза 11, п.3, по прямому запросу
+    пользователя): персонаж БЕЗ постоянной группы (первый вход вообще,
+    `primary_id is None`) больше не остаётся ungrouped до отдельного
+    вызова `/api/auth/group` — группа собирается сама. Первый персонаж,
+    вошедший в этом визите, становится основным сам себе; каждый
+    следующий вход в ТОМ ЖЕ визите автоматически подтягивается к уже
+    установленному основному этого визита (или к наименьшему
+    character_id среди уже вошедших, если у них у самих ещё нет
+    основного — переходный случай для персонажей, вошедших ДО этой
+    правки). Ручная кнопка «Сделать основным» (`group_characters()`)
+    остаётся — для исправления, если автоматика поставила не того.
     """
     from sqlalchemy import select
 
@@ -227,8 +239,25 @@ def _store(character_id: int, name: str, tokens: dict, claims: dict) -> None:
                     f"Персонаж {name} состоит в другой постоянной группе, чем "
                     "уже вошедшие в этом визите — сначала отвяжите их."
                 )
-            account_id = _group_account_id(primary_id)
-            set_account_id(account_id)
+        else:
+            already_in_session = session.scalars(
+                select(Character).where(
+                    Character.account_id == account_id, Character.source == "esi",
+                )
+            ).all()
+            existing_primaries = {
+                c.primary_character_id for c in already_in_session
+                if c.primary_character_id is not None
+            }
+            if len(existing_primaries) == 1:
+                primary_id = existing_primaries.pop()
+            elif already_in_session:
+                primary_id = min(c.character_id for c in already_in_session)
+            else:
+                primary_id = character_id
+
+        account_id = _group_account_id(primary_id)
+        set_account_id(account_id)
 
         if char is None:
             # Уровни скиллов пока неизвестны — их заполнит будущий
@@ -238,11 +267,13 @@ def _store(character_id: int, name: str, tokens: dict, claims: dict) -> None:
                 command_center_upgrades_level=0,
                 interplanetary_consolidation_level=0,
                 source="esi", account_id=account_id,
+                primary_character_id=primary_id,
             ))
         else:
             char.name = name
             char.source = "esi"
             char.account_id = account_id
+            char.primary_character_id = primary_id
 
         save_tokens(session, character_id, tokens, scopes)
 
@@ -250,15 +281,16 @@ def _store(character_id: int, name: str, tokens: dict, claims: dict) -> None:
 @bp.post("/auth/group")
 def group_characters():
     """
-    Создать постоянную группу «основной + альты» из персонажей, уже
-    видимых в ЭТОМ визите (docs/ROADMAP.md, Фаза 9, 16.09.2026) — чтобы
-    на новом устройстве/браузере вход ЛЮБЫМ из них подтягивал всех
-    остальных, а не оставлял их невидимыми до отдельного входа каждым.
+    Переназначить основного персонажа группы «основной + альты» среди
+    персонажей, уже видимых в ЭТОМ визите.
 
-    Пользователь явно выбирает primary_character_id из уже вошедших —
-    не автоматически первый и не молча при обычном входе: иначе
-    случайный первый вход мог бы незапланированно закрепиться навсегда
-    как «основной» (решение пользователя, см. docs/ROADMAP.md).
+    До 17.09.2026 это был единственный способ вообще завести группу —
+    пользователь явно выбирал primary_character_id из уже вошедших.
+    Теперь группа собирается сама при входе (`_store()`, Фаза 11, п.3):
+    первый персонаж визита становится основным себе, остальные
+    подтягиваются автоматически. Этот эндпоинт остался как ручная
+    ПОПРАВКА — кнопка «Сделать основным» у любого альта в карточке
+    персонажей, на случай если автоматика выбрала не того.
     """
     from sqlalchemy import select
 
