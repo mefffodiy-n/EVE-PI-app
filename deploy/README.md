@@ -108,10 +108,11 @@ SQLite через API `.backup()`, Postgres через `pg_dump` (нужен в 
 `deploy/backup-task.xml` (Task Scheduler → *Import Task*), путь к
 python и рабочему каталогу поправьте под себя.
 
-Восстановление dump-файла Postgres (обычный SQL, не custom-формат):
+Восстановление dump-файла Postgres (сжатый custom-формат, `-Fc`, с
+18.09.2026 — раньше был обычный текстовый SQL):
 
 ```
-psql pidirector < pi-backup-*/pidirector.sql
+pg_restore --no-owner --clean --if-exists -d pidirector pi-backup-*/pidirector.dump
 ```
 
 ## 6. nginx
