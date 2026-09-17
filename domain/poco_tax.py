@@ -15,20 +15,16 @@ structures_detail), результат — прибыльность именно
 wiki, support.eveonline.com), не одна ставка «на всякий вывоз».
 
 ОТКУДА СТАВКА (пересмотрено 17.09.2026, по прямому запросу пользователя
-после вопроса «зачем ручной ввод, если ставка уже есть в файле»).
-Приоритет: (1) ручной ввод пользователя по ТИПУ планеты, если он введён
-— пользователь мог узнать, что реальная ставка сменилась после снимка;
-(2) точная ставка ЭТОЙ КОНКРЕТНОЙ планеты из `data/planet_industry.csv`
+после вопроса «зачем ручной ввод, если ставка уже есть в файле»;
+ручной ввод убран целиком 17.09.2026 при переходе к
+мультирегиональности — с несколькими регионами переопределение «по
+типу планеты» перестаёт быть однозначным). Единственный источник —
+точная ставка ЭТОЙ КОНКРЕТНОЙ планеты из `data/planet_industry.csv`
 (`domain/planets.py::PlanetBook.poco_rate()`), если план/колония знает
-свою систему и номер планеты; (3) иначе — честный пробел
-(`missing_rates`). Ставка «по типу» — заведомо ГРУБЕЕ, чем по планете:
-в загруженном регионе у одного и того же типа встречаются планеты с
-разной ставкой (например, у Barren — и 3%, и 1% сразу), поэтому
-приближение по типу используется только когда точных данных по
-планете нет вовсе, не как основной источник. Ставка не «живая» ни в
-одном из двух источников — владелец POCO может сменить её в игре в
-любой момент без предупреждения, а сама структура — сменить владельца
-после войны за суверенитет; снимок файла честно датирован
+свою систему и номер планеты; иначе — честный пробел (`missing_rates`).
+Ставка не «живая» — владелец POCO может сменить её в игре в любой
+момент без предупреждения, а сама структура — сменить владельца после
+войны за суверенитет; снимок файла честно датирован
 (`PlanetBook.POCO_SNAPSHOT_DATE`).
 
 Хопы между колониями НЕ восстанавливаются как граф (в отличие от
@@ -81,20 +77,14 @@ def _factory_count(structures_detail: list[dict]) -> int:
 
 
 def _resolve_rate(
-    planet_type: str,
     system: str | None,
     planet: object,
-    poco_rates: dict[str, float],
     planets: "PlanetBook | None",
 ) -> float | None:
     """
-    Ставка POCO для одной строки/колонии — см. приоритет в докстринге
-    модуля: ручной ввод по типу, затем точная ставка этой планеты из
-    файла, затем честный пробел.
+    Ставка POCO для одной строки/колонии — см. докстринг модуля: точная
+    ставка этой планеты из файла, иначе честный пробел.
     """
-    manual = poco_rates.get(planet_type)
-    if manual is not None:
-        return manual
     if planets is not None and system and planet is not None:
         return planets.poco_rate(system, planet)
     return None
@@ -203,7 +193,6 @@ class ColonyProfitability:
 def evaluate_colonies_profitability(
     colonies: list[dict],
     prices: dict[str, float],
-    poco_rates: dict[str, float],
     planets: "PlanetBook | None" = None,
 ) -> ColonyProfitability:
     """
@@ -213,9 +202,9 @@ def evaluate_colonies_profitability(
     её собственной фабрики, фронтенд уже решает это в `colonyOutputFlow()`),
     `units_per_hour` (текущая скорость ЭТОГО потока, `None` — состояние
     неизвестно, `0` — колония простаивает, это тоже честный факт, не
-    пробел), `planet_type` (переопределение по типу, если введено
-    пользователем) и `system`/`planet` — для точной ставки этой планеты
-    из файла, см. `_resolve_rate()`.
+    пробел), `planet_type` (только для честного перечисления пробелов
+    по типу, когда ставки нет) и `system`/`planet` — для точной ставки
+    этой планеты из файла, см. `_resolve_rate()`.
 
     Колония без известного текущего потока (`units_per_hour is None`
     или `product is None`) — в `missing_output`, не участвует ни в одной
@@ -241,7 +230,7 @@ def evaluate_colonies_profitability(
 
         planet_type = colony.get("planet_type")
         price = prices.get(product)
-        rate = _resolve_rate(planet_type, colony.get("system"), colony.get("planet"), poco_rates, planets)
+        rate = _resolve_rate(colony.get("system"), colony.get("planet"), planets)
 
         if price is None:
             missing_prices.add(product)
@@ -271,23 +260,21 @@ def evaluate_plan_profitability(
     rows: list[dict],
     target_products: list[str],
     prices: dict[str, float],
-    poco_rates: dict[str, float],
     schematics: dict[str, Schematic] | None = None,
     planets: "PlanetBook | None" = None,
 ) -> PlanProfitability:
     """
     rows — строки построенного плана (формат PlanRow.to_dict()): нужны
     res_out, role_key, planet_type, structures_detail, system, planet.
-    poco_rates — {тип планеты: ставка в долях (0.10 = 10%)}, ПЕРЕОПРЕДЕЛЕНИЕ
-    пользователя — приоритетнее точной ставки конкретной планеты из файла
-    (planets.poco_rate(), если передан planets), см. докстринг модуля.
     prices — {продукт: ISK за единицу}, из снимка рыночных цен.
+    planets — для точной ставки POCO конкретной планеты из файла
+    (planets.poco_rate()), см. докстринг модуля.
 
     Честные пробелы, а не выдумка: продукт без цены — в missing_prices,
     его вклад в выручку/налог не считается (не подставляется 0, просто
     не участвует ни в одной сумме, чтобы не занижать итог молча).
-    Планета без введённой пользователем ставки — в missing_rates, её
-    вклад в налог тоже пропускается по той же причине.
+    Планета без известной ставки в файле — в missing_rates, её вклад в
+    налог тоже пропускается по той же причине.
     """
     schematics = load_schematics() if schematics is None else schematics
     target_set = set(target_products)
@@ -306,7 +293,7 @@ def evaluate_plan_profitability(
         if flow is None:
             continue
 
-        rate = _resolve_rate(flow.planet_type, flow.system, flow.planet, poco_rates, planets)
+        rate = _resolve_rate(flow.system, flow.planet, planets)
         if rate is None:
             missing_rates.add(flow.planet_type)
 

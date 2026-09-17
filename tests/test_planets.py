@@ -28,11 +28,7 @@ class TestRadiusKm:
 
 
 class TestPocoRate:
-    """
-    Ставка POCO по конкретной планете — точнее, чем ручной ввод по типу
-    (domain/poco_tax.py): внутри одного типа в загруженном регионе
-    встречаются разные ставки сразу (см. test_breakdown_finds_mixed_rates).
-    """
+    """Ставка POCO по конкретной планете — единственный источник (domain/poco_tax.py)."""
 
     def test_known_planet_returns_real_rate_as_fraction(self):
         """57-KJB I — та же строка, что и у радиуса, ставка 3% -> 0.03."""
@@ -52,23 +48,3 @@ class TestPocoRate:
         assert book.poco_rate("57-KJB", 99) is None
 
 
-class TestPocoRateBreakdown:
-    def test_breakdown_finds_mixed_rates(self):
-        """
-        Barren в загруженном регионе встречается и на 3%, и на 1% —
-        ручной ввод «по типу» поэтому заведомо приближение, не точное
-        значение (правило 1), и ставка по КОНКРЕТНОЙ планете (см. выше)
-        приоритетнее.
-        """
-        book = load_planets()
-        breakdown = book.poco_rate_breakdown()
-        assert "Barren" in breakdown
-        assert set(breakdown["Barren"]) == {"3", "1"}
-        assert breakdown["Barren"]["3"] > 0
-        assert breakdown["Barren"]["1"] > 0
-
-    def test_breakdown_counts_sum_to_type_total(self):
-        book = load_planets()
-        breakdown = book.poco_rate_breakdown()
-        barren_planets = book.dataframe[book.dataframe["Type"] == "Barren"]
-        assert sum(breakdown["Barren"].values()) == len(barren_planets)

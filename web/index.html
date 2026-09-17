@@ -847,18 +847,6 @@ details.msgs[open] > summary::before { content:'▾ '; }
 .poco-profit-note { margin-top:8px; color:var(--dim); font-size:11px; max-width:82ch; }
 @media (max-width:520px){ .poco-profit .figures { grid-template-columns:repeat(2,minmax(120px,1fr)); } }
 
-/* Ставки POCO по типам планет — фиксированные 3 колонки (не auto-fill:
-   при auto-fill число колонок прыгало от ширины экрана, а тут и так
-   всего 8 полей, три колонки читаются ровным блоком). Подпись — своя
-   ширина, чтобы поля ввода в одной колонке стояли на одном месте,
-   независимо от длины имени типа планеты («Barren» короче
-   «Temperate»). */
-.poco-rates { display:grid; grid-template-columns:repeat(3,1fr); gap:8px 16px; margin-top:4px; }
-.poco-rate-item { display:flex; align-items:center; gap:8px; font-size:11px; color:var(--dim); }
-.poco-rate-item span { min-width:64px; }
-.poco-rate-item input { width:52px; padding:3px 5px; font-size:12px; margin-left:auto; }
-@media (max-width:520px){ .poco-rates { grid-template-columns:repeat(2,1fr); } }
-
 /* ── Сохранённые планы ────────────────────────────────────────── */
 .saved { border-top:1px solid var(--seam); padding:12px 14px; }
 .saved h3 { font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--dim);
@@ -1113,19 +1101,6 @@ body.light .rolebadge.excess { background:rgba(154,107,18,.12); }
             <label for="margin" data-i18n="margin">Запас на истощение месторождений</label>
             <input id="margin" type="number" value="1.0" step="0.1" min="1" max="3">
           </div>
-          <!-- Ставки POCO по типам планет (docs/ROADMAP.md, Фаза 9,
-               пересмотрено 17.09.2026): точная ставка КОНКРЕТНОЙ планеты
-               берётся автоматически из data/planet_industry.csv
-               (domain/planets.py::PlanetBook.poco_rate()) — это поле
-               теперь ПЕРЕОПРЕДЕЛЕНИЕ по типу, приоритетнее автоматики, на
-               случай если реальная ставка сменилась после снимка файла.
-               Пустое поле — «переопределения нет», не 0%: используется
-               автоматическая ставка, а если её тоже нет — domain/poco_tax.py
-               честно исключает такую планету из расчёта (missing_rates). -->
-          <div class="field">
-            <label data-i18n="pocoRatesLabel">Переопределить ставку POCO по типу планеты, %</label>
-            <div class="poco-rates" id="pocoRates"></div>
-          </div>
           <!-- Флажок «Прямое P2» убран из интерфейса (15.09.2026, решение
                пользователя, см. docs/ROADMAP.md Фаза 9): застройка в
                domain/direct_p2.py — расчёт из стоимостей структур, а не
@@ -1203,7 +1178,7 @@ const charIdOf=name=>{ const c=crew.find(x=>x.name===name); return c?c.character
 const avatarImg=characterId=>characterId
   ? `<img src="${PORTRAIT(characterId)}" alt="" onerror="this.remove()">` : '';
 
-let ids={}, recipeInputs={}, schematics={}, typeVolumes={}, pocoRateBreakdown={}, pocoSnapshotDate=null, plan=[], staffing={}, view='details', sortBy='load';
+let ids={}, recipeInputs={}, schematics={}, typeVolumes={}, plan=[], staffing={}, view='details', sortBy='load';
 let lang='ru', crew=[], meta={};
 let regions={}, systemCounts={}, allProducts=[], allConstellations=[];
 let dataCounts=null;  // {bases, products} — для чипа data, перерисовывается при смене языка
@@ -1241,14 +1216,10 @@ const T={
   groupHint:'Отметьте, кто из вошедших персонажей основной, и сохраните — на новом устройстве или в другом браузере вход любым из этой группы подтянет всех остальных, без повторного входа каждым.',
   groupSave:'Сохранить группу',groupSaved:'Группа сохранена',groupSaveFail:'Не удалось сохранить группу',
   groupPrimary:'основной',groupPickPrimary:'Отметьте основного персонажа',
-  pocoRatesLabel:'Переопределить ставку POCO по типу планеты, %',
-  pocoRateAuto:'авто',
-  pocoRateBreakdownTitle:'В базе по этому типу: {breakdown} (снимок от {date}) — точная ставка берётся по конкретной планете, здесь можно только переопределить, если знаете о более свежих изменениях.',
-  pocoRateUnknownTitle:'В базе нет ни одной планеты этого типа — ставка возможна только вводом здесь.',
   pocoProfitTitle:'Прогноз прибыльности плана',
   pocoRevenue:'Выручка / мес',pocoTax:'Налог POCO / мес',pocoNetProfit:'Чистая прибыль / мес',
-  pocoMissingPrices:'Нет цены: {list}',pocoMissingRates:'Не введена ставка POCO: {list}',
-  pocoIncomplete:'Чистая прибыль не считается, пока не введены все ставки и не собраны все цены — частичная сумма выглядела бы точнее, чем есть на самом деле.',
+  pocoMissingPrices:'Нет цены: {list}',pocoMissingRates:'Нет данных о ставке POCO: {list}',
+  pocoIncomplete:'Чистая прибыль не считается, пока не известны все ставки и не собраны все цены — частичная сумма выглядела бы точнее, чем есть на самом деле.',
   pocoAssumption:'Оценка при полной загрузке цепочки без простоев и истощения месторождений, {hours} часов в месяце. Налог — и на вывоз, и на ввоз на каждом перемещении между планетами по цепочке.',
   coloniesProfitTitle:'Прогноз прибыльности по факту',
   coloniesProfitMissingOutput:'Неизвестна текущая скорость: {list}',
@@ -1320,14 +1291,10 @@ const T={
   groupHint:'Mark which of your logged-in characters is the primary one and save — logging in with any of this group on a new device or browser will pull in all the others, no need to log in with each separately.',
   groupSave:'Save group',groupSaved:'Group saved',groupSaveFail:'Could not save the group',
   groupPrimary:'primary',groupPickPrimary:'Mark the primary character',
-  pocoRatesLabel:'Override the POCO tax rate by planet type, %',
-  pocoRateAuto:'auto',
-  pocoRateBreakdownTitle:'In the database for this type: {breakdown} (snapshot from {date}) — the exact rate is taken per specific planet; this field only overrides it, for when you know the real rate has changed since.',
-  pocoRateUnknownTitle:'No planet of this type is in the database — a rate is only possible by entering it here.',
   pocoProfitTitle:'Plan profitability forecast',
   pocoRevenue:'Revenue / mo',pocoTax:'POCO tax / mo',pocoNetProfit:'Net profit / mo',
-  pocoMissingPrices:'No price: {list}',pocoMissingRates:'POCO rate not entered: {list}',
-  pocoIncomplete:'Net profit is not shown until every rate is entered and every price is available — a partial sum would look more accurate than it really is.',
+  pocoMissingPrices:'No price: {list}',pocoMissingRates:'POCO rate unknown: {list}',
+  pocoIncomplete:'Net profit is not shown until every rate is known and every price is available — a partial sum would look more accurate than it really is.',
   pocoAssumption:'Estimate at full chain throughput, no downtime, no deposit depletion, {hours} hours per month. Tax applies on both export and import at every hop between planets in the chain.',
   coloniesProfitTitle:'Actual profitability forecast',
   coloniesProfitMissingOutput:'Current rate unknown: {list}',
@@ -3141,73 +3108,12 @@ function renderProfit(){
 }
 
 /* ── Прибыльность плана с учётом POCO (docs/ROADMAP.md, Фаза 9,
-   16.09.2026) ────────────────────────────────────────────────────
-   Ставки — ручной ввод пользователя по типу планеты (тот же характер,
-   что margin выше): пустое поле значит «ставка не введена», а не 0% —
-   domain/poco_tax.py честно исключает такую планету из расчёта
-   (missing_rates), не подставляет «без налога». Планета без введённой
-   ставки, если план вообще на неё не заходит, никак не мешает: список
-   типов фиксированный (8, все типы EVE), большинство планов не строит
-   колоний на части из них. */
-const POCO_PLANET_TYPES=['Barren','Gas','Ice','Lava','Oceanic','Plasma','Storm','Temperate'];
-
-/* Вызывается один раз при загрузке страницы (boot), не на каждый applyLang:
-   иначе смена языка стирала бы уже введённые пользователем ставки. Сами
-   названия типов планет — термины EVE, не переводятся.
-   Ставки сохраняются в localStorage (store) — та же память браузера, что
-   и у языка/темы: переживают перезагрузку страницы в ЭТОЙ СЕССИИ/браузере,
-   но не путешествуют между устройствами (в отличие от сохранённых планов
-   на сервере) — сами ставки специфичны пользователю, не персонажу или
-   аккаунту, серверного хранения им не заведено. */
-const POCO_RATES_KEY='pi-poco-rates';
-
-function savePocoRates(){
-  store.set(POCO_RATES_KEY, JSON.stringify(pocoRatesFromInputs()));
-}
-
-/* Поле теперь не единственный источник ставки, а ПЕРЕОПРЕДЕЛЕНИЕ —
-   пустое поле значит «взять точную ставку конкретной планеты из
-   data/planet_industry.csv» (domain/poco_tax.py, 17.09.2026, по
-   прямому запросу пользователя: «зачем ручной ввод, если ставка уже
-   есть в файле»), а не «ставка неизвестна». Ставка ПО ТИПУ — заведомо
-   грубее: pocoRateBreakdown (тот же снимок, что и автоматическая
-   ставка) показывает во всплывающей подсказке, что внутри одного типа
-   в загруженном регионе встречаются разные ставки сразу (Barren —
-   и 3%, и 1%), поэтому вводить сюда стоит только когда точно известно,
-   что реальная ставка сменилась после снимка (дата — pocoSnapshotDate). */
-function renderPocoRateInputs(){
-  const box=document.getElementById('pocoRates'); if(!box) return;
-  let saved={};
-  try{ saved=JSON.parse(store.get(POCO_RATES_KEY,'{}')); }catch(e){ saved={}; }
-  box.innerHTML=POCO_PLANET_TYPES.map(pt=>{
-    const rate=saved[pt];
-    const pct=rate!=null?Math.round(rate*100):'';
-    const counts=pocoRateBreakdown[pt];
-    const breakdown=counts
-      ? Object.entries(counts).map(([r,n])=>`${n}×${r}%`).join(', ')
-      : null;
-    const title=breakdown
-      ? fmtPlain(t('pocoRateBreakdownTitle'),{breakdown, date:pocoSnapshotDate||'—'})
-      : t('pocoRateUnknownTitle');
-    return `<label class="poco-rate-item" title="${title.replace(/"/g,'&quot;')}"><span>${pt}</span>
-      <input type="number" class="poco-rate" data-planet-type="${pt}"
-        min="0" max="100" step="1" placeholder="${t('pocoRateAuto')}" value="${pct}"
-        oninput="savePocoRates();renderPocoProfit();renderColoniesProfit()"></label>`;
-  }).join('');
-}
-
-/* {тип планеты: доля 0..1} только для полей, которые пользователь
-   реально заполнил — пустое поле не превращается в 0%. */
-function pocoRatesFromInputs(){
-  const rates={};
-  document.querySelectorAll('.poco-rate').forEach(inp=>{
-    if(inp.value==='') return;
-    const pct=parseFloat(inp.value);
-    if(!isNaN(pct)) rates[inp.dataset.planetType]=pct/100;
-  });
-  return rates;
-}
-
+   16.09.2026; ручной ввод ставки по типу убран 17.09.2026 при переходе
+   к мультирегиональности) ───────────────────────────────────────────
+   Ставка — точная автоматическая ставка КОНКРЕТНОЙ планеты из
+   data/planet_industry.csv (domain/planets.py::PlanetBook.poco_rate()).
+   Планета без известной ставки — domain/poco_tax.py честно исключает
+   её из расчёта (missing_rates), не подставляет «без налога». */
 async function renderPocoProfit(){
   const box=document.getElementById('pocoProfit'); if(!box) return;
   if(!plan.length || !lastRequest){ box.innerHTML=''; return; }
@@ -3218,7 +3124,6 @@ async function renderPocoProfit(){
       method:'POST', headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
         rows:plan, target_products:lastRequest.target_products,
-        poco_rates:pocoRatesFromInputs(),
       }),
     });
     d=await r.json();
@@ -3282,7 +3187,7 @@ async function renderColoniesProfit(){
   try{
     const r=await fetch(`${API}/colonies-profitability`, {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({colonies, poco_rates:pocoRatesFromInputs()}),
+      body:JSON.stringify({colonies}),
     });
     d=await r.json();
   }catch(e){ box.innerHTML=''; return; }
@@ -3866,18 +3771,14 @@ const DOC={
    только на финальной продаже.</p>
    <p>Ставка POCO берётся автоматически — точное значение КОНКРЕТНОЙ
    планеты из выгрузки данных региона, той же, на которой считается весь
-   остальной план (17.09.2026, раньше вводилась только вручную). Поле
-   рядом с «Запас на истощение месторождений» — не единственный источник,
-   а переопределение ПО ТИПУ планеты: заполняйте его, только если знаете,
-   что реальная ставка сменилась в игре после снимка файла (дата снимка
-   показана во всплывающей подсказке над каждым полем) — иначе типовое
-   значение окажется грубее, чем точное автоматическое: в одном и том же
-   типе планеты встречаются разные ставки сразу. Пустое поле — «своего
-   переопределения нет», используется автоматика; если и её нет (планета
-   за пределами загруженного региона), расчёт честно исключает такую
-   планету, а не считает её беспошлинной. Чистая прибыль показывается
-   только когда собраны все нужные цены и известны все нужные ставки —
-   частичная сумма выглядела бы точнее, чем есть на самом деле.</p>
+   остальной план (17.09.2026; ручной ввод по типу планеты убран тем же
+   днём при переходе к мультирегиональности — с несколькими регионами
+   такое переопределение перестаёт быть однозначным). Если ставка
+   планеты неизвестна (планета за пределами загруженного региона),
+   расчёт честно исключает такую планету, а не считает её беспошлинной.
+   Чистая прибыль показывается только когда собраны все нужные цены и
+   известны все нужные ставки — частичная сумма выглядела бы точнее, чем
+   есть на самом деле.</p>
 
    <h3>Индикаторы вверху</h3>
    <p>Плашка «ESI» — число игроков онлайн из снимка сервера; жёлтая точка значит,
@@ -3992,10 +3893,9 @@ const DOC={
    планету, по её точной ставке (та же автоматика из файла, что и у
    прогноза для плана): связи «какая колония кормит какую» ESI не
    отдаёт, поэтому налог на ввоз между разными колониями не считается
-   (в отличие от прогноза для плана). Переопределение по типу планеты —
-   тот же общий ввод, что и у прогноза для плана. Колония с неизвестной
-   текущей скоростью выхода честно перечисляется отдельно, а не
-   считается нулевой или полной.</p>
+   (в отличие от прогноза для плана). Колония с неизвестной текущей
+   скоростью выхода честно перечисляется отдельно, а не считается
+   нулевой или полной.</p>
 
    <h3>Чего программа пока не знает</h3>
    <p><b>Регион.</b> Данные о планетах есть только для Fountain — ни ESI,
@@ -4131,17 +4031,14 @@ const DOC={
    the calculation, monthly, at full chain throughput with no downtime. Unlike the "most
    profitable to produce" table, this one accounts for POCO tax — on both export and import
    at every move between planets in the chain, not only on the final sale.</p>
-   <p>The POCO rate is now filled in automatically — the exact value for that SPECIFIC
-   planet, from the same regional data export the rest of the plan is built on (2026-09-17,
-   it used to be manual entry only). The field next to "Deposit depletion margin" is not the
-   only source anymore, it's an override BY TYPE — fill it in only if you know the real rate
-   has changed in-game since the file's snapshot (the snapshot date is shown in each field's
-   tooltip); otherwise a per-type value is cruder than the automatic per-planet one, since the
-   same planet type can carry more than one rate at once. An empty field means "no override of
-   my own" — the automatic value is used; if that's missing too (a planet outside the loaded
-   region), the calculation honestly excludes that planet rather than treating it as tax-free.
-   Net profit is only shown once every needed price is available and every needed rate is
-   known — a partial sum would look more accurate than it really is.</p>
+   <p>The POCO rate is filled in automatically — the exact value for that SPECIFIC
+   planet, from the same regional data export the rest of the plan is built on (2026-09-17;
+   manual entry by planet type was removed the same day when moving toward multi-region
+   support — with more than one region such an override stops being unambiguous). If a
+   planet's rate is unknown (a planet outside the loaded region), the calculation honestly
+   excludes that planet rather than treating it as tax-free. Net profit is only shown once
+   every needed price is available and every needed rate is known — a partial sum would look
+   more accurate than it really is.</p>
 
    <h3>Top bar indicators</h3>
    <p>The "ESI" chip shows online players from a server snapshot; an amber dot means the
@@ -4242,9 +4139,8 @@ const DOC={
    its own — on whatever physically leaves that specific planet, at its exact rate (the same
    automatic per-planet value from the file as the plan forecast): ESI doesn't report which
    colony feeds which, so import tax between different colonies isn't counted (unlike the
-   plan forecast). The per-type override is the same shared input as the plan forecast. A
-   colony whose current output rate is unknown is listed honestly on its own, not treated as
-   zero or full.</p>
+   plan forecast). A colony whose current output rate is unknown is listed honestly on its
+   own, not treated as zero or full.</p>
 
    <h3>What the program does not know yet</h3>
    <p><b>Region.</b> Planet data only exists for Fountain — neither ESI nor CCP's static
@@ -4472,14 +4368,6 @@ async function boot(){
     recipeInputs=d.recipe_inputs||{};
     schematics=d.schematics||{};
     typeVolumes=d.type_volumes||{};
-    pocoRateBreakdown=d.poco_rate_breakdown||{};
-    pocoSnapshotDate=d.poco_snapshot_date||null;
-    // Первый вызов renderPocoRateInputs() в хвосте скрипта происходит
-    // ДО того, как этот fetch успевает разрешиться (boot() там не
-    // ожидается) — без повторного вызова здесь подсказки/плейсхолдеры
-    // строились бы по пустым pocoRateBreakdown/pocoSnapshotDate
-    // (обнаружено вручную при проверке правки 17.09.2026).
-    renderPocoRateInputs();
     allConstellations=d.bases||[];
     allProducts=d.products||[];
     regions=d.regions||{};
@@ -4964,7 +4852,7 @@ setTheme(store.get('pi-theme','dark'));
 lang=store.get('pi-lang','ru');
 
 measureTopbar(); measureTools();
-boot(); loadMeta(); loadCrew(); loadProfit(); loadColonies(); loadSaved(); renderPocoRateInputs(); applyLang();
+boot(); loadMeta(); loadCrew(); loadProfit(); loadColonies(); loadSaved(); applyLang();
 // Онлайн меняется медленно; снимок обновляет фоновый сборщик,
 // поэтому опрашиваем раз в минуту и только читаем готовое.
 setInterval(loadMeta, 60000);

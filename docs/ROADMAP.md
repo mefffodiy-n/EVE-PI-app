@@ -2305,6 +2305,51 @@ PNG-логотип + скрипт компонента); статическая 
         налога на экспорт; ручной ввод 50% для Barren корректно
         переопределил его на `105 638 400 × 0.5`.
 
+- [x] **Ручной ввод ставки POCO по типу планеты убран (17.09.2026).**
+      Решение пользователя при переходе к мультирегиональности: с
+      несколькими регионами переопределение «по типу планеты» перестаёт
+      быть однозначным (один и тот же тип в разных регионах — разные
+      наборы реальных ставок), только усложняет ввод без пользы.
+      Единственный источник ставки POCO теперь — точная автоматическая
+      ставка КОНКРЕТНОЙ планеты из `data/planet_industry.csv`
+      (`domain/planets.py::PlanetBook.poco_rate()`, не изменился);
+      планета без известной ставки — честный пробел (`missing_rates`),
+      как и раньше, просто без запасного ручного варианта поверх.
+
+      **Убрано:**
+      - `domain/poco_tax.py::_resolve_rate()` — параметры `planet_type`/
+        `poco_rates` убраны, резолвер теперь только читает
+        `planets.poco_rate(system, planet)`. `evaluate_plan_profitability()`
+        и `evaluate_colonies_profitability()` лишились параметра
+        `poco_rates: dict[str, float]`.
+      - `domain/planets.py::PlanetBook.poco_rate_breakdown()` и
+        `POCO_TYPE_COLUMN` — были нужны только для честной подсказки
+        над полем ручного ввода («в одном типе несколько ставок сразу»),
+        без самого поля не нужны.
+      - `api/blueprints/plans.py::_parse_poco_rates()`/`MAX_POCO_RATE` —
+        валидация тела запроса `poco_rates`, оба эндпоинта
+        (`/api/plan-profitability`, `/api/colonies-profitability`)
+        больше не принимают и не ждут это поле.
+      - `/api/initial-data` — поля `poco_rate_breakdown`/`poco_snapshot_date`
+        (нужны были только для подсказки над убранным полем).
+      - `web/index.html` — вся панель «Переопределить ставку POCO по
+        типу планеты» (карточка «Где добываем»): HTML-поле, CSS
+        (`.poco-rates`/`.poco-rate-item`), JS (`POCO_PLANET_TYPES`,
+        `POCO_RATES_KEY`, `savePocoRates()`, `renderPocoRateInputs()`,
+        `pocoRatesFromInputs()`), ключи словаря `T` (`pocoRatesLabel`,
+        `pocoRateAuto`, `pocoRateBreakdownTitle`, `pocoRateUnknownTitle`),
+        справка (RU/EN, оба места — прогноз для плана и для настоящих
+        колоний) переписана под «только автоматика».
+      - Тесты — `tests/test_planets.py::TestPocoRateBreakdown` удалён;
+        `tests/test_poco_tax.py` переписан целиком на ставки только
+        через `_FakePlanetBook` (без `poco_rates=`); `tests/test_api.py`
+        — тест `/api/initial-data` на `poco_rate_breakdown`/
+        `poco_snapshot_date` удалён, тесты валидации `poco_rates`
+        (нечисловая ставка, ставка выше 100%) удалены как проверяющие
+        код, которого больше нет, остальные переписаны на мок
+        `_load_planets_book()` вместо `poco_rates` в теле запроса.
+        `python -m pytest tests/ -q` — 433 прошли.
+
 ### Фаза 10 — предложено пользователем (16.09.2026, в очереди, не начато)
 
 Занесено по прямому запросу — только зафиксировать и оценить

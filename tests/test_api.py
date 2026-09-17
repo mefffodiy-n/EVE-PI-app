@@ -71,19 +71,6 @@ class TestReference:
         assert "Broadcast Node" in products    # P4
         assert "Water" not in products         # P1
 
-    def test_initial_data_includes_poco_rate_breakdown_and_snapshot_date(self, client):
-        """
-        17.09.2026: сводка «сколько планет этого типа на какой ставке
-        POCO» и дата снимка — для честной подписи в панели ставок
-        (renderPocoRateInputs, web/index.html): ставка по типу — только
-        приближение (в Barren тестовых данных две разные ставки сразу),
-        точная берётся по конкретной планете (domain/poco_tax.py).
-        """
-        body = client.get("/api/initial-data").get_json()
-        assert body["poco_rate_breakdown"]["Barren"] == {"3": 1, "1": 1}
-        assert body["poco_rate_breakdown"]["Temperate"] == {"1": 1}
-        assert body["poco_snapshot_date"]
-
     def test_initial_data_includes_type_volumes(self, client, monkeypatch, tmp_path):
         """
         Объём одной единицы товара по type_id — тем же кэшем, которым
@@ -508,10 +495,12 @@ class TestPlanProfitability:
     MINING_ROW = {
         "role_key": "mine", "res_out": "Water", "planet_type": "Barren",
         "structures_detail": [{"kind": "basic_industry_facility", "count": 8}],
+        "system": "MINE", "planet": "1",
     }
     PROCESSING_ROW = {
         "role_key": "proc", "res_out": "Coolant", "planet_type": "Temperate",
         "structures_detail": [{"kind": "advanced_industry_facility", "count": 12}],
+        "system": "HOME", "planet": "2",
     }
 
     def _mock_prices(self, monkeypatch, prices: dict[str, float]):
@@ -520,6 +509,16 @@ class TestPlanProfitability:
         monkeypatch.setattr(market, "_load_snapshot", lambda: {
             "prices": {name: {"buy_max": price} for name, price in prices.items()}
         })
+
+    def _mock_planets(self, monkeypatch, rates: dict[tuple[str, str], float]):
+        """Ставка POCO — единственный источник теперь: точная ставка планеты из файла."""
+        import api.blueprints.plans as plans
+
+        class FakeBook:
+            def poco_rate(self, system, planet):
+                return rates.get((system, str(planet)))
+
+        monkeypatch.setattr(plans, "_load_planets_book", lambda: FakeBook())
 
     def _mock_schematics(self, monkeypatch):
         """
@@ -541,13 +540,13 @@ class TestPlanProfitability:
     def test_computes_revenue_and_both_tax_directions(self, monkeypatch):
         self._mock_prices(monkeypatch, {"Water": 10.0, "Coolant": 100.0})
         self._mock_schematics(monkeypatch)
+        self._mock_planets(monkeypatch, {("MINE", "1"): 0.10, ("HOME", "2"): 0.05})
         from api import create_app
 
         with create_app({"TESTING": True}).test_client() as client:
             r = client.post("/api/plan-profitability", json={
                 "rows": [self.MINING_ROW, self.PROCESSING_ROW],
                 "target_products": ["Coolant"],
-                "poco_rates": {"Barren": 0.10, "Temperate": 0.05},
             })
         assert r.status_code == 200
         body = r.get_json()
@@ -560,39 +559,17 @@ class TestPlanProfitability:
     def test_missing_price_reported_not_hidden(self, monkeypatch):
         self._mock_prices(monkeypatch, {"Coolant": 100.0})  # Water без цены
         self._mock_schematics(monkeypatch)
+        self._mock_planets(monkeypatch, {("MINE", "1"): 0.10, ("HOME", "2"): 0.05})
         from api import create_app
 
         with create_app({"TESTING": True}).test_client() as client:
             r = client.post("/api/plan-profitability", json={
                 "rows": [self.MINING_ROW, self.PROCESSING_ROW],
                 "target_products": ["Coolant"],
-                "poco_rates": {"Barren": 0.10, "Temperate": 0.05},
             })
         body = r.get_json()
         assert "Water" in body["missing_prices"]
         assert body["monthly_net_profit"] is None  # картина неполная — не выдаём частичную
-
-    def test_rejects_non_numeric_rate(self, monkeypatch):
-        self._mock_prices(monkeypatch, {})
-        from api import create_app
-
-        with create_app({"TESTING": True}).test_client() as client:
-            r = client.post("/api/plan-profitability", json={
-                "rows": [], "target_products": [],
-                "poco_rates": {"Barren": "ten percent"},
-            })
-        assert r.status_code == 400
-
-    def test_rejects_rate_above_100_percent(self, monkeypatch):
-        self._mock_prices(monkeypatch, {})
-        from api import create_app
-
-        with create_app({"TESTING": True}).test_client() as client:
-            r = client.post("/api/plan-profitability", json={
-                "rows": [], "target_products": [],
-                "poco_rates": {"Barren": 1.5},
-            })
-        assert r.status_code == 400
 
     def test_works_without_market_snapshot(self, monkeypatch):
         """Правило 3: эндпоинт не ходит наружу и отвечает даже без снимка цен."""
@@ -600,40 +577,33 @@ class TestPlanProfitability:
 
         monkeypatch.setattr(market, "_load_snapshot", lambda: {})
         self._mock_schematics(monkeypatch)
+        self._mock_planets(monkeypatch, {("MINE", "1"): 0.10})
         from api import create_app
 
         with create_app({"TESTING": True}).test_client() as client:
             r = client.post("/api/plan-profitability", json={
                 "rows": [self.MINING_ROW],
                 "target_products": ["Water"],
-                "poco_rates": {"Barren": 0.10},
             })
         assert r.status_code == 200
         assert r.get_json()["monthly_revenue"] is None
         assert "Water" in r.get_json()["missing_prices"]
 
-    def test_uses_planets_file_rate_when_row_has_no_manual_rate(self, monkeypatch):
+    def test_uses_planets_file_rate(self, monkeypatch):
         """
-        17.09.2026: ставка теперь берётся автоматически по конкретной
-        планете строки (data/planet_industry.csv), если пользователь не
-        ввёл её вручную по типу — не нужно вводить ставку вообще, чтобы
-        получить полную картину, когда планета есть в файле.
+        Ставка берётся автоматически по конкретной планете строки
+        (data/planet_industry.csv) — единственный источник (17.09.2026,
+        ручной ввод по типу убран при переходе к мультирегиональности).
         """
         self._mock_prices(monkeypatch, {"Water": 10.0})
         self._mock_schematics(monkeypatch)
-        import api.blueprints.plans as plans
-
-        class FakeBook:
-            def poco_rate(self, system, planet):
-                return 0.07 if (system, str(planet)) == ("HOME", "5") else None
-
-        monkeypatch.setattr(plans, "_load_planets_book", lambda: FakeBook())
+        self._mock_planets(monkeypatch, {("HOME", "5"): 0.07})
         row = {**self.MINING_ROW, "system": "HOME", "planet": "5"}
         from api import create_app
 
         with create_app({"TESTING": True}).test_client() as client:
             r = client.post("/api/plan-profitability", json={
-                "rows": [row], "target_products": ["Water"], "poco_rates": {},
+                "rows": [row], "target_products": ["Water"],
             })
         body = r.get_json()
         assert "Barren" not in body["missing_rates"]
@@ -654,16 +624,26 @@ class TestColoniesProfitability:
             "prices": {name: {"buy_max": price} for name, price in prices.items()}
         })
 
+    def _mock_planets(self, monkeypatch, rates: dict[tuple[str, str], float]):
+        import api.blueprints.plans as plans
+
+        class FakeBook:
+            def poco_rate(self, system, planet):
+                return rates.get((system, str(planet)))
+
+        monkeypatch.setattr(plans, "_load_planets_book", lambda: FakeBook())
+
     def test_computes_revenue_and_tax(self, monkeypatch):
         self._mock_prices(monkeypatch, {"Water": 10.0})
+        self._mock_planets(monkeypatch, {("MINE", "1"): 0.10})
         from api import create_app
 
         with create_app({"TESTING": True}).test_client() as client:
             r = client.post("/api/colonies-profitability", json={
                 "colonies": [
-                    {"label": "A", "product": "Water", "units_per_hour": 1000.0, "planet_type": "Barren"},
+                    {"label": "A", "product": "Water", "units_per_hour": 1000.0,
+                     "planet_type": "Barren", "system": "MINE", "planet": "1"},
                 ],
-                "poco_rates": {"Barren": 0.10},
             })
         assert r.status_code == 200
         body = r.get_json()
@@ -674,14 +654,15 @@ class TestColoniesProfitability:
 
     def test_unknown_current_rate_reported_not_hidden(self, monkeypatch):
         self._mock_prices(monkeypatch, {"Water": 10.0})
+        self._mock_planets(monkeypatch, {("MINE", "1"): 0.10})
         from api import create_app
 
         with create_app({"TESTING": True}).test_client() as client:
             r = client.post("/api/colonies-profitability", json={
                 "colonies": [
-                    {"label": "A", "product": "Water", "units_per_hour": None, "planet_type": "Barren"},
+                    {"label": "A", "product": "Water", "units_per_hour": None,
+                     "planet_type": "Barren", "system": "MINE", "planet": "1"},
                 ],
-                "poco_rates": {"Barren": 0.10},
             })
         body = r.get_json()
         assert body["missing_output"] == ["A"]
@@ -693,17 +674,7 @@ class TestColoniesProfitability:
 
         with create_app({"TESTING": True}).test_client() as client:
             r = client.post("/api/colonies-profitability", json={
-                "colonies": ["not a dict"], "poco_rates": {},
-            })
-        assert r.status_code == 400
-
-    def test_rejects_rate_above_100_percent(self, monkeypatch):
-        self._mock_prices(monkeypatch, {})
-        from api import create_app
-
-        with create_app({"TESTING": True}).test_client() as client:
-            r = client.post("/api/colonies-profitability", json={
-                "colonies": [], "poco_rates": {"Barren": 1.5},
+                "colonies": ["not a dict"],
             })
         assert r.status_code == 400
 
@@ -712,29 +683,24 @@ class TestColoniesProfitability:
         import api.blueprints.market as market
 
         monkeypatch.setattr(market, "_load_snapshot", lambda: {})
+        self._mock_planets(monkeypatch, {("MINE", "1"): 0.10})
         from api import create_app
 
         with create_app({"TESTING": True}).test_client() as client:
             r = client.post("/api/colonies-profitability", json={
                 "colonies": [
-                    {"label": "A", "product": "Water", "units_per_hour": 1000.0, "planet_type": "Barren"},
+                    {"label": "A", "product": "Water", "units_per_hour": 1000.0,
+                     "planet_type": "Barren", "system": "MINE", "planet": "1"},
                 ],
-                "poco_rates": {"Barren": 0.10},
             })
         assert r.status_code == 200
         assert r.get_json()["monthly_revenue"] is None
         assert "Water" in r.get_json()["missing_prices"]
 
-    def test_uses_planets_file_rate_when_colony_has_no_manual_rate(self, monkeypatch):
-        """17.09.2026: та же автоматическая ставка по планете, что и у плана."""
+    def test_uses_planets_file_rate(self, monkeypatch):
+        """Ставка POCO — автоматически по планете колонии, единственный источник."""
         self._mock_prices(monkeypatch, {"Water": 10.0})
-        import api.blueprints.plans as plans
-
-        class FakeBook:
-            def poco_rate(self, system, planet):
-                return 0.05 if (system, str(planet)) == ("AV-VB6", "9") else None
-
-        monkeypatch.setattr(plans, "_load_planets_book", lambda: FakeBook())
+        self._mock_planets(monkeypatch, {("AV-VB6", "9"): 0.05})
         from api import create_app
 
         with create_app({"TESTING": True}).test_client() as client:
@@ -743,7 +709,6 @@ class TestColoniesProfitability:
                     "label": "A", "product": "Water", "units_per_hour": 1000.0,
                     "planet_type": "Barren", "system": "AV-VB6", "planet": 9,
                 }],
-                "poco_rates": {},
             })
         body = r.get_json()
         assert body["missing_rates"] == []

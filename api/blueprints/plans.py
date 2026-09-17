@@ -157,21 +157,6 @@ def advice():
     return json_ok(**advise(targets, characters, prices).to_dict(lang))
 
 
-MAX_POCO_RATE = 1.0  # 100% — выше физически бессмысленно, явный признак опечатки
-
-
-def _parse_poco_rates(raw: dict) -> tuple[dict[str, float] | None, str | None]:
-    """Общая валидация ставок POCO — используется и планом, и настоящими колониями."""
-    rates: dict[str, float] = {}
-    for planet_type, rate in raw.items():
-        if not isinstance(rate, (int, float)):
-            return None, f"Ставка POCO для «{planet_type}» должна быть числом"
-        if not (0 <= rate <= MAX_POCO_RATE):
-            return None, f"Ставка POCO для «{planet_type}» должна быть от 0 до {MAX_POCO_RATE:.0%}"
-        rates[str(planet_type)] = float(rate)
-    return rates, None
-
-
 def _load_prices() -> dict[str, float]:
     """Тот же снимок рыночных цен, что и у /api/market/best-product (правило 3 — только чтение)."""
     try:
@@ -215,15 +200,13 @@ def plan_profitability():
     ответ /api/calculate), пересчитывать план заново здесь не нужно и
     было бы двойной работой. Ставка POCO — автоматически точная ставка
     КОНКРЕТНОЙ планеты строки из data/planet_industry.csv, когда она
-    известна; ручной ввод по типу планеты (вкладка «Настройки») —
-    приоритетное переопределение сверху, на случай если пользователь
-    знает о более свежей ставке, чем статичный снимок файла (см.
-    docstring domain/poco_tax.py, пересмотрено 17.09.2026).
+    известна (ручной ввод по типу планеты убран 17.09.2026 при переходе
+    к мультирегиональности — см. docstring domain/poco_tax.py).
     """
     from domain.poco_tax import evaluate_plan_profitability
 
     payload, error = parse_json_body({
-        "rows": list, "target_products": list, "poco_rates": dict,
+        "rows": list, "target_products": list,
     })
     if error:
         return json_error(error)
@@ -234,11 +217,7 @@ def plan_profitability():
 
     targets = [str(t) for t in payload["target_products"]]
 
-    rates, error = _parse_poco_rates(payload["poco_rates"])
-    if error:
-        return json_error(error)
-
-    result = evaluate_plan_profitability(rows, targets, _load_prices(), rates, planets=_load_planets_book())
+    result = evaluate_plan_profitability(rows, targets, _load_prices(), planets=_load_planets_book())
     return json_ok(**result.to_dict())
 
 
@@ -257,13 +236,12 @@ def colonies_profitability():
     colonies — по одной записи на колонию: label, product, units_per_hour
     (`null` — текущее состояние неизвестно), planet_type, system, planet.
     Ставка POCO — автоматически точная ставка этой планеты из файла,
-    когда известна её система/номер; ручной ввод по типу — тот же общий
-    ввод, что и у плана, приоритетное переопределение сверху (см.
-    docstring domain/poco_tax.py).
+    когда известна её система/номер (ручной ввод по типу убран
+    17.09.2026, см. docstring domain/poco_tax.py).
     """
     from domain.poco_tax import evaluate_colonies_profitability
 
-    payload, error = parse_json_body({"colonies": list, "poco_rates": dict})
+    payload, error = parse_json_body({"colonies": list})
     if error:
         return json_error(error)
 
@@ -271,11 +249,7 @@ def colonies_profitability():
     if not all(isinstance(c, dict) for c in colonies):
         return json_error("Каждая колония должна быть объектом")
 
-    rates, error = _parse_poco_rates(payload["poco_rates"])
-    if error:
-        return json_error(error)
-
-    result = evaluate_colonies_profitability(colonies, _load_prices(), rates, planets=_load_planets_book())
+    result = evaluate_colonies_profitability(colonies, _load_prices(), planets=_load_planets_book())
     return json_ok(**result.to_dict())
 
 
