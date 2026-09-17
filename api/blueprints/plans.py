@@ -187,6 +187,22 @@ def _load_prices() -> dict[str, float]:
         return {}
 
 
+def _load_planets_book():
+    """
+    Для точной автоматической ставки POCO по конкретной планете
+    (domain/planets.py::PlanetBook.poco_rate(), см. domain/poco_tax.py) —
+    тот же файл, что и весь остальной расчёт, читается один раз на
+    процесс. `None`, если файла нет (свежий репозиторий без данных) —
+    тогда прогноз прибыльности честно остаётся на ручном вводе по типу.
+    """
+    try:
+        from domain.planets import load_planets
+
+        return load_planets()
+    except FileNotFoundError:
+        return None
+
+
 @bp.post("/plan-profitability")
 def plan_profitability():
     """
@@ -197,10 +213,12 @@ def plan_profitability():
 
     Строки плана присылает фронтенд — они у него уже есть (последний
     ответ /api/calculate), пересчитывать план заново здесь не нужно и
-    было бы двойной работой. Ставки POCO по типам планет — ручной ввод
-    пользователя (вкладка «Настройки»), не из data/planet_industry.csv
-    (там точные, но статичные значения по конкретным планетам — устарели
-    бы молча, см. docstring domain/poco_tax.py).
+    было бы двойной работой. Ставка POCO — автоматически точная ставка
+    КОНКРЕТНОЙ планеты строки из data/planet_industry.csv, когда она
+    известна; ручной ввод по типу планеты (вкладка «Настройки») —
+    приоритетное переопределение сверху, на случай если пользователь
+    знает о более свежей ставке, чем статичный снимок файла (см.
+    docstring domain/poco_tax.py, пересмотрено 17.09.2026).
     """
     from domain.poco_tax import evaluate_plan_profitability
 
@@ -220,7 +238,7 @@ def plan_profitability():
     if error:
         return json_error(error)
 
-    result = evaluate_plan_profitability(rows, targets, _load_prices(), rates)
+    result = evaluate_plan_profitability(rows, targets, _load_prices(), rates, planets=_load_planets_book())
     return json_ok(**result.to_dict())
 
 
@@ -237,8 +255,11 @@ def colonies_profitability():
     между разными колониями (см. domain/poco_tax.py::ColonyProfitability).
 
     colonies — по одной записи на колонию: label, product, units_per_hour
-    (`null` — текущее состояние неизвестно), planet_type. Ставки POCO —
-    тот же ручной ввод, что и у плана (одна настройка на обе функции).
+    (`null` — текущее состояние неизвестно), planet_type, system, planet.
+    Ставка POCO — автоматически точная ставка этой планеты из файла,
+    когда известна её система/номер; ручной ввод по типу — тот же общий
+    ввод, что и у плана, приоритетное переопределение сверху (см.
+    docstring domain/poco_tax.py).
     """
     from domain.poco_tax import evaluate_colonies_profitability
 
@@ -254,7 +275,7 @@ def colonies_profitability():
     if error:
         return json_error(error)
 
-    result = evaluate_colonies_profitability(colonies, _load_prices(), rates)
+    result = evaluate_colonies_profitability(colonies, _load_prices(), rates, planets=_load_planets_book())
     return json_ok(**result.to_dict())
 
 

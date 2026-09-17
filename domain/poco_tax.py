@@ -12,11 +12,24 @@ structures_detail), результат — прибыльность именно
 КАК СЧИТАЕТСЯ НАЛОГ (docs/ROADMAP.md, Фаза 9, 16.09.2026). В игре POCO
 берёт налог и на экспорт (вывоз с планеты в космос), и на импорт (ввоз
 на планету) — подтверждено официальной документацией (EVE University
-wiki, support.eveonline.com), не одна ставка «на всякий вывоз». Ставка
-вводится пользователем по ТИПУ планеты (Barren, Temperate и т.д.), не
-по конкретной планете (в data/planet_industry.csv есть точные
-POCO Tax Rate/Owner на планету, но это статичный снимок, который
-устаревает молча — правило 1).
+wiki, support.eveonline.com), не одна ставка «на всякий вывоз».
+
+ОТКУДА СТАВКА (пересмотрено 17.09.2026, по прямому запросу пользователя
+после вопроса «зачем ручной ввод, если ставка уже есть в файле»).
+Приоритет: (1) ручной ввод пользователя по ТИПУ планеты, если он введён
+— пользователь мог узнать, что реальная ставка сменилась после снимка;
+(2) точная ставка ЭТОЙ КОНКРЕТНОЙ планеты из `data/planet_industry.csv`
+(`domain/planets.py::PlanetBook.poco_rate()`), если план/колония знает
+свою систему и номер планеты; (3) иначе — честный пробел
+(`missing_rates`). Ставка «по типу» — заведомо ГРУБЕЕ, чем по планете:
+в загруженном регионе у одного и того же типа встречаются планеты с
+разной ставкой (например, у Barren — и 3%, и 1% сразу), поэтому
+приближение по типу используется только когда точных данных по
+планете нет вовсе, не как основной источник. Ставка не «живая» ни в
+одном из двух источников — владелец POCO может сменить её в игре в
+любой момент без предупреждения, а сама структура — сменить владельца
+после войны за суверенитет; снимок файла честно датирован
+(`PlanetBook.POCO_SNAPSHOT_DATE`).
 
 Хопы между колониями НЕ восстанавливаются как граф (в отличие от
 simulateColonyFactories() для настоящих колоний, где ESI отдаёт
@@ -50,8 +63,12 @@ routes) — плану взять их неоткуда, цепочка ещё �
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from domain.throughput import Schematic, load_schematics
+
+if TYPE_CHECKING:
+    from domain.planets import PlanetBook
 
 HOURS_PER_MONTH = 720.0
 
@@ -63,6 +80,26 @@ def _factory_count(structures_detail: list[dict]) -> int:
     )
 
 
+def _resolve_rate(
+    planet_type: str,
+    system: str | None,
+    planet: object,
+    poco_rates: dict[str, float],
+    planets: "PlanetBook | None",
+) -> float | None:
+    """
+    Ставка POCO для одной строки/колонии — см. приоритет в докстринге
+    модуля: ручной ввод по типу, затем точная ставка этой планеты из
+    файла, затем честный пробел.
+    """
+    manual = poco_rates.get(planet_type)
+    if manual is not None:
+        return manual
+    if planets is not None and system and planet is not None:
+        return planets.poco_rate(system, planet)
+    return None
+
+
 @dataclass
 class RowFlow:
     """Материальный поток одной строки плана — для одного расчёта на строку."""
@@ -70,6 +107,8 @@ class RowFlow:
     planet_type: str
     output_product: str
     output_per_hour: float
+    system: str | None = None
+    planet: object = None
     inputs_per_hour: dict[str, float] = field(default_factory=dict)
 
 
@@ -90,6 +129,8 @@ def _row_flow(row: dict, schematics: dict[str, Schematic]) -> RowFlow | None:
         planet_type=str(row.get("planet_type", "")),
         output_product=row["res_out"],
         output_per_hour=schematic.output_per_hour * factories,
+        system=row.get("system"),
+        planet=row.get("planet"),
         inputs_per_hour=inputs_per_hour,
     )
 
@@ -163,6 +204,7 @@ def evaluate_colonies_profitability(
     colonies: list[dict],
     prices: dict[str, float],
     poco_rates: dict[str, float],
+    planets: "PlanetBook | None" = None,
 ) -> ColonyProfitability:
     """
     colonies — по одной записи на настоящую синхронизированную колонию:
@@ -171,7 +213,9 @@ def evaluate_colonies_profitability(
     её собственной фабрики, фронтенд уже решает это в `colonyOutputFlow()`),
     `units_per_hour` (текущая скорость ЭТОГО потока, `None` — состояние
     неизвестно, `0` — колония простаивает, это тоже честный факт, не
-    пробел) и `planet_type` — тот же общий ввод ставок, что и у плана.
+    пробел), `planet_type` (переопределение по типу, если введено
+    пользователем) и `system`/`planet` — для точной ставки этой планеты
+    из файла, см. `_resolve_rate()`.
 
     Колония без известного текущего потока (`units_per_hour is None`
     или `product is None`) — в `missing_output`, не участвует ни в одной
@@ -197,7 +241,7 @@ def evaluate_colonies_profitability(
 
         planet_type = colony.get("planet_type")
         price = prices.get(product)
-        rate = poco_rates.get(planet_type) if planet_type else None
+        rate = _resolve_rate(planet_type, colony.get("system"), colony.get("planet"), poco_rates, planets)
 
         if price is None:
             missing_prices.add(product)
@@ -229,11 +273,14 @@ def evaluate_plan_profitability(
     prices: dict[str, float],
     poco_rates: dict[str, float],
     schematics: dict[str, Schematic] | None = None,
+    planets: "PlanetBook | None" = None,
 ) -> PlanProfitability:
     """
     rows — строки построенного плана (формат PlanRow.to_dict()): нужны
-    res_out, role_key, planet_type, structures_detail.
-    poco_rates — {тип планеты: ставка в долях (0.10 = 10%)}.
+    res_out, role_key, planet_type, structures_detail, system, planet.
+    poco_rates — {тип планеты: ставка в долях (0.10 = 10%)}, ПЕРЕОПРЕДЕЛЕНИЕ
+    пользователя — приоритетнее точной ставки конкретной планеты из файла
+    (planets.poco_rate(), если передан planets), см. докстринг модуля.
     prices — {продукт: ISK за единицу}, из снимка рыночных цен.
 
     Честные пробелы, а не выдумка: продукт без цены — в missing_prices,
@@ -259,7 +306,7 @@ def evaluate_plan_profitability(
         if flow is None:
             continue
 
-        rate = poco_rates.get(flow.planet_type)
+        rate = _resolve_rate(flow.planet_type, flow.system, flow.planet, poco_rates, planets)
         if rate is None:
             missing_rates.add(flow.planet_type)
 

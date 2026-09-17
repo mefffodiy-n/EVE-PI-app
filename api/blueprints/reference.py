@@ -155,6 +155,8 @@ def _initial_payload() -> dict:
         "regions": {},
         "system_counts": {},
         "data_problems": [],
+        "poco_rate_breakdown": {},
+        "poco_snapshot_date": None,
     }
 
     try:
@@ -165,6 +167,14 @@ def _initial_payload() -> dict:
             c: int((book.dataframe["Constellation"] == c).sum())
             for c in payload["bases"]
         }
+        # Для панели ставок POCO (web/index.html, renderPocoRateInputs) —
+        # честная сводка «сколько планет этого типа на какой ставке»,
+        # рядом с точным автоматическим расчётом по конкретной планете
+        # (domain/poco_tax.py). Дата — см. PlanetBook.POCO_SNAPSHOT_DATE.
+        from domain.planets import POCO_SNAPSHOT_DATE
+
+        payload["poco_rate_breakdown"] = book.poco_rate_breakdown()
+        payload["poco_snapshot_date"] = POCO_SNAPSHOT_DATE
     except FileNotFoundError:
         payload["data_problems"].append(
             "Не найден файл data/planet_industry.csv — списки констелляций "

@@ -15,9 +15,12 @@ import pytest
 from domain.planets import RADIUS_COLUMN, PlanetBook
 
 SAMPLE_PLANETS = [
-    {"Constellation": "ALPHA", "System": "HOME", "Planet": "4", "Type": "Barren", RADIUS_COLUMN: 5820},
-    {"Constellation": "ALPHA", "System": "HOME", "Planet": "7", "Type": "Temperate", RADIUS_COLUMN: 8100},
-    {"Constellation": "BETA", "System": "FAR", "Planet": "1", "Type": "Barren", RADIUS_COLUMN: 18000},
+    {"Constellation": "ALPHA", "System": "HOME", "Planet": "4", "Type": "Barren", RADIUS_COLUMN: 5820,
+     "POCO Tax Rate [%]": 3.0},
+    {"Constellation": "ALPHA", "System": "HOME", "Planet": "7", "Type": "Temperate", RADIUS_COLUMN: 8100,
+     "POCO Tax Rate [%]": 1.0},
+    {"Constellation": "BETA", "System": "FAR", "Planet": "1", "Type": "Barren", RADIUS_COLUMN: 18000,
+     "POCO Tax Rate [%]": 1.0},
 ]
 
 
@@ -67,6 +70,19 @@ class TestReference:
         assert "Biocells" in products          # P2
         assert "Broadcast Node" in products    # P4
         assert "Water" not in products         # P1
+
+    def test_initial_data_includes_poco_rate_breakdown_and_snapshot_date(self, client):
+        """
+        17.09.2026: сводка «сколько планет этого типа на какой ставке
+        POCO» и дата снимка — для честной подписи в панели ставок
+        (renderPocoRateInputs, web/index.html): ставка по типу — только
+        приближение (в Barren тестовых данных две разные ставки сразу),
+        точная берётся по конкретной планете (domain/poco_tax.py).
+        """
+        body = client.get("/api/initial-data").get_json()
+        assert body["poco_rate_breakdown"]["Barren"] == {"3": 1, "1": 1}
+        assert body["poco_rate_breakdown"]["Temperate"] == {"1": 1}
+        assert body["poco_snapshot_date"]
 
     def test_initial_data_includes_type_volumes(self, client, monkeypatch, tmp_path):
         """
@@ -596,6 +612,33 @@ class TestPlanProfitability:
         assert r.get_json()["monthly_revenue"] is None
         assert "Water" in r.get_json()["missing_prices"]
 
+    def test_uses_planets_file_rate_when_row_has_no_manual_rate(self, monkeypatch):
+        """
+        17.09.2026: ставка теперь берётся автоматически по конкретной
+        планете строки (data/planet_industry.csv), если пользователь не
+        ввёл её вручную по типу — не нужно вводить ставку вообще, чтобы
+        получить полную картину, когда планета есть в файле.
+        """
+        self._mock_prices(monkeypatch, {"Water": 10.0})
+        self._mock_schematics(monkeypatch)
+        import api.blueprints.plans as plans
+
+        class FakeBook:
+            def poco_rate(self, system, planet):
+                return 0.07 if (system, str(planet)) == ("HOME", "5") else None
+
+        monkeypatch.setattr(plans, "_load_planets_book", lambda: FakeBook())
+        row = {**self.MINING_ROW, "system": "HOME", "planet": "5"}
+        from api import create_app
+
+        with create_app({"TESTING": True}).test_client() as client:
+            r = client.post("/api/plan-profitability", json={
+                "rows": [row], "target_products": ["Water"], "poco_rates": {},
+            })
+        body = r.get_json()
+        assert "Barren" not in body["missing_rates"]
+        assert body["monthly_export_tax"] is not None
+
 
 class TestColoniesProfitability:
     """
@@ -681,6 +724,30 @@ class TestColoniesProfitability:
         assert r.status_code == 200
         assert r.get_json()["monthly_revenue"] is None
         assert "Water" in r.get_json()["missing_prices"]
+
+    def test_uses_planets_file_rate_when_colony_has_no_manual_rate(self, monkeypatch):
+        """17.09.2026: та же автоматическая ставка по планете, что и у плана."""
+        self._mock_prices(monkeypatch, {"Water": 10.0})
+        import api.blueprints.plans as plans
+
+        class FakeBook:
+            def poco_rate(self, system, planet):
+                return 0.05 if (system, str(planet)) == ("AV-VB6", "9") else None
+
+        monkeypatch.setattr(plans, "_load_planets_book", lambda: FakeBook())
+        from api import create_app
+
+        with create_app({"TESTING": True}).test_client() as client:
+            r = client.post("/api/colonies-profitability", json={
+                "colonies": [{
+                    "label": "A", "product": "Water", "units_per_hour": 1000.0,
+                    "planet_type": "Barren", "system": "AV-VB6", "planet": 9,
+                }],
+                "poco_rates": {},
+            })
+        body = r.get_json()
+        assert body["missing_rates"] == []
+        assert body["monthly_tax"] == 360_000.0
 
 
 class TestMarket:

@@ -234,6 +234,88 @@ class TestColoniesProfitability:
         assert body["missing_output"] == []
 
 
+class _FakePlanetBook:
+    """Минимальная замена PlanetBook для тестов — только то, что читает _resolve_rate()."""
+
+    def __init__(self, rates: dict[tuple[str, float], float]):
+        self._rates = rates
+
+    def poco_rate(self, system, planet):
+        try:
+            key = (system, float(planet))
+        except (TypeError, ValueError):
+            return None
+        return self._rates.get(key)
+
+
+class TestAutomaticRateFromPlanetsFile:
+    """
+    Приоритет источников ставки (17.09.2026, по прямому запросу
+    пользователя): ручной ввод по типу > точная ставка планеты из файла
+    > честный пробел. domain/planets.py::PlanetBook.poco_rate() — не
+    подделка, а сама точная реализация; здесь проверяется только
+    порядок приоритета внутри poco_tax.py, поэтому planets — минимальная
+    тестовая замена, без побочных эффектов чтения настоящего CSV.
+    """
+
+    def test_uses_planets_file_when_no_manual_rate(self):
+        planets = _FakePlanetBook({("HOME", 5.0): 0.07})
+        row = {**_mining_row(planet_type="Barren"), "system": "HOME", "planet": "5"}
+        result = evaluate_plan_profitability(
+            rows=[row], target_products=["Water"],
+            prices={"Water": 10.0}, poco_rates={},  # ставка по типу не введена
+            schematics=_schematics(), planets=planets,
+        )
+        assert "Barren" not in result.missing_rates
+        # 8 фабрик * 100 ед./цикл * (60/30) цикла в час = 1600 ед./ч,
+        # * 720 ч * 10 ISK * 0.07 = 806 400.
+        assert round(result.monthly_export_tax, 6) == 806_400.0
+
+    def test_manual_rate_overrides_planets_file(self):
+        planets = _FakePlanetBook({("HOME", 5.0): 0.07})
+        row = {**_mining_row(planet_type="Barren"), "system": "HOME", "planet": "5"}
+        result = evaluate_plan_profitability(
+            rows=[row], target_products=["Water"],
+            prices={"Water": 10.0}, poco_rates={"Barren": 0.10},  # явный ввод пользователя
+            schematics=_schematics(), planets=planets,
+        )
+        # Ручные 0.10, не файловые 0.07: 1600*720*10*0.10 = 1 152 000.
+        assert result.monthly_export_tax == 1_152_000.0
+
+    def test_missing_when_neither_manual_nor_file_has_rate(self):
+        planets = _FakePlanetBook({})  # планеты нет в загруженном регионе
+        row = {**_mining_row(planet_type="Barren"), "system": "Jita", "planet": "4"}
+        result = evaluate_plan_profitability(
+            rows=[row], target_products=["Water"],
+            prices={"Water": 10.0}, poco_rates={},
+            schematics=_schematics(), planets=planets,
+        )
+        assert "Barren" in result.missing_rates
+        assert result.monthly_export_tax is None
+
+    def test_without_planets_argument_behaves_as_before(self):
+        """planets по умолчанию None — только ручной ввод, старое поведение без изменений."""
+        row = {**_mining_row(planet_type="Barren"), "system": "HOME", "planet": "5"}
+        result = evaluate_plan_profitability(
+            rows=[row], target_products=["Water"],
+            prices={"Water": 10.0}, poco_rates={},
+            schematics=_schematics(),
+        )
+        assert "Barren" in result.missing_rates
+
+    def test_colonies_profitability_also_uses_planets_file(self):
+        planets = _FakePlanetBook({("AV-VB6", 9.0): 0.05})
+        result = evaluate_colonies_profitability(
+            colonies=[{
+                "label": "A", "product": "Water", "units_per_hour": 1000.0,
+                "planet_type": "Barren", "system": "AV-VB6", "planet": 9,
+            }],
+            prices={"Water": 10.0}, poco_rates={}, planets=planets,
+        )
+        assert result.missing_rates == set()
+        assert result.monthly_tax == 360_000.0  # 1000*720*10*0.05
+
+
 class TestToDict:
     def test_to_dict_sums_export_and_import_into_monthly_tax(self):
         result = evaluate_plan_profitability(
