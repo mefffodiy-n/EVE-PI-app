@@ -349,6 +349,8 @@ class TestExport:
         """
         Сводка должна пересчитываться, если пользователь правит лист
         «План» вручную, поэтому там формулы, а не числа из Python.
+        Данные начинаются со строки 3 — строка 1 заголовок блока, строка
+        2 шапка таблицы (см. test_summary_has_explicit_command_center_block).
         """
         from io import BytesIO
 
@@ -356,8 +358,28 @@ class TestExport:
 
         response = client.post("/api/export", json={"plan_data": [SAMPLE_PLAN_ROW]})
         workbook = load_workbook(BytesIO(response.data))
-        assert str(workbook["Сводка"]["B2"].value).startswith("=COUNTIF")
+        assert str(workbook["Сводка"]["B3"].value).startswith("=COUNTIF")
         assert str(workbook["Проверка"]["F2"].value).startswith("=100-")
+
+    def test_summary_has_explicit_command_center_block(self, client):
+        """
+        17.09.2026, по прямому запросу пользователя: раньше сводка была
+        просто «тип планеты + количество», командный центр подразумевался
+        неявно. Теперь — явный заголовок блока и отдельная колонка с
+        названием командного центра, тем же смыслом, что и «Список
+        закупки» в вебе (renderShopping()).
+        """
+        from io import BytesIO
+
+        from openpyxl import load_workbook
+
+        response = client.post("/api/export", json={"plan_data": [SAMPLE_PLAN_ROW]})
+        workbook = load_workbook(BytesIO(response.data))
+        summary = workbook["Сводка"]
+        assert "командные центры" in str(summary["A1"].value).lower()
+        assert summary["C2"].value == "Командный центр"
+        assert summary["C3"].value == '=A3&" Command Center"'
+        assert "командных центров" in str(summary["A4"].value).lower()  # итоговая строка
 
     def test_overloaded_planets_are_highlighted(self, client):
         """Планеты с загрузкой от 90% подсвечиваются — они сломаются первыми."""
