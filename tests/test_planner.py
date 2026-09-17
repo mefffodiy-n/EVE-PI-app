@@ -11,7 +11,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from domain.planets import RADIUS_COLUMN, PlanetBook
+from domain.planets import POCO_RATE_COLUMN, RADIUS_COLUMN, PlanetBook
 from domain.planner import CharacterSlot, PlanRequest, build_plan
 from domain.recipes import load_recipes
 from domain.throughput import Schematic
@@ -107,6 +107,27 @@ class TestAllocation:
     def test_processing_uses_home_system(self, planets, characters):
         rows = [r for r in _plan(planets, characters).rows if "Добыча" not in r.role]
         assert all(r.system == "HOME" for r in rows)
+
+    def test_poco_rate_filled_from_planets_file(self, characters):
+        """
+        17.09.2026, по прямому запросу пользователя: каждая строка плана
+        несёт ставку POCO своей конкретной планеты (для колонки в Excel
+        и для сравнения ставок между строками), а не только сама
+        переработка/выгрузка это уже умели считать отдельно.
+        """
+        planets_with_rate = PlanetBook(pd.DataFrame([
+            {**PLANETS[0], "Planet": 4, POCO_RATE_COLUMN: 3},   # HOME 4, Barren
+            {**PLANETS[1], "Planet": 7, POCO_RATE_COLUMN: 1},   # HOME 7, Temperate
+            {**PLANETS[2]},                        # MINE1 2 — ставка неизвестна
+            {**PLANETS[3]},
+            {**PLANETS[4]},
+            {**PLANETS[5]},
+        ]))
+        result = _plan(planets_with_rate, characters)
+        proc_rows = [r for r in result.rows if "Добыча" not in r.role]
+        assert proc_rows and all(r.poco_rate is not None for r in proc_rows)
+        mine_rows = [r for r in result.rows if "Добыча" in r.role]
+        assert mine_rows and all(r.poco_rate is None for r in mine_rows)
 
     def test_mining_planets_actually_have_the_resource(self, planets, characters):
         by_planet = {(p["System"], p["Planet"]): p for p in PLANETS}

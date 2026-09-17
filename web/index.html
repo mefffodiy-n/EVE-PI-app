@@ -1224,6 +1224,7 @@ const T={
   pocoProfitTitle:'Прогноз прибыльности плана',
   pocoRevenue:'Выручка / мес',pocoTax:'Налог POCO / мес',pocoNetProfit:'Чистая прибыль / мес',
   pocoMissingPrices:'Нет цены: {list}',pocoMissingRates:'Нет данных о ставке POCO: {list}',
+  pocoHigherThanBest:'Ставка POCO здесь выше, чем на других перерабатывающих колониях плана',
   pocoIncomplete:'Чистая прибыль не считается, пока не известны все ставки и не собраны все цены — частичная сумма выглядела бы точнее, чем есть на самом деле.',
   pocoAssumption:'Оценка при полной загрузке цепочки без простоев и истощения месторождений, {hours} часов в месяце. Налог — и на вывоз, и на ввоз на каждом перемещении между планетами по цепочке.',
   coloniesProfitTitle:'Прогноз прибыльности по факту',
@@ -1299,6 +1300,7 @@ const T={
   pocoProfitTitle:'Plan profitability forecast',
   pocoRevenue:'Revenue / mo',pocoTax:'POCO tax / mo',pocoNetProfit:'Net profit / mo',
   pocoMissingPrices:'No price: {list}',pocoMissingRates:'POCO rate unknown: {list}',
+  pocoHigherThanBest:'This POCO rate is higher than on other processing colonies in the plan',
   pocoIncomplete:'Net profit is not shown until every rate is known and every price is available — a partial sum would look more accurate than it really is.',
   pocoAssumption:'Estimate at full chain throughput, no downtime, no deposit depletion, {hours} hours per month. Tax applies on both export and import at every hop between planets in the chain.',
   coloniesProfitTitle:'Actual profitability forecast',
@@ -3716,9 +3718,12 @@ const DOC={
     если в выгрузке есть колонка региона, созвездия сгруппированы по ним.</li>
     <li>Задайте запас на истощение месторождений, если нужен. Это не расчёт,
     а поправка: плотность сырья у нас статичная, а в игре месторождения истощаются.</li>
-    <li>Выберите домашнюю систему для заводов. Переработка ставится на планеты
-    с наименьшим радиусом, предпочтительно Barren и Temperate: чем меньше планета,
-    тем дешевле линки. Для P4 эти типы обязательны — это правило игры.</li>
+    <li>Выберите домашнюю систему для заводов. Переработка ставится на
+    предпочтительные Barren и Temperate (для P4 это правило игры, не просто
+    предпочтение); среди них сначала выбираются планеты с меньшим налогом POCO,
+    а при равном налоге — с меньшим радиусом (чем меньше планета, тем дешевле
+    линки). Другие типы планет используются, только если Barren/Temperate по
+    размеру не подошли — план честно об этом предупредит.</li>
     <li>Под выбором системы показан предел: до какого радиуса в неё
     помещается двойной шаблон и сколько планет системы ему подходят.
     Это видно до расчёта, а не после.</li>
@@ -3982,9 +3987,12 @@ const DOC={
     grouped by region.</li>
     <li>Set a depletion safety margin if you need one. It is not a calculation but a
     correction: our resource density is static, while deposits deplete in game.</li>
-    <li>Pick a home system for the factories. Processing goes on the smallest-radius
-    planets, preferably Barren and Temperate: smaller planets make cheaper links.
-    For P4 those types are mandatory — that is a game rule.</li>
+    <li>Pick a home system for the factories. Processing goes on the preferred
+    Barren and Temperate types (mandatory for P4 — a game rule, not just a
+    preference); among those, the lowest POCO tax rate wins first, and radius
+    (smaller is cheaper on links) only breaks ties on equal tax. Other planet
+    types are used only when no Barren/Temperate planet fits by size — the plan
+    warns you honestly when that happens.</li>
     <li>Below the system picker you see the limit: up to which radius a double
     template fits planets here, and how many of the system's planets qualify.
     This is shown before the calculation, not after.</li>
@@ -4760,8 +4768,20 @@ function renderAnswers(){
 function renderTable(){
   if(!plan.length){ document.getElementById('tableWrap').innerHTML=`<div class="empty">${t('planEmpty')}</div>`; return; }
   const rows=[...plan].sort((a,b)=>Math.max(b.cpu_percent,b.pg_percent)-Math.max(a.cpu_percent,a.pg_percent));
+  // Лучшая (наименьшая) ставка POCO среди перерабатывающих строк плана —
+  // чтобы пометить те, что вынужденно ушли на планету с более высоким
+  // налогом (17.09.2026, по прямому запросу пользователя; сама
+  // приоритизация — domain/factory_site.py). Та же логика, что уже
+  // используется для подсветки CPU/PG>=90 чуть ниже — простое сравнение
+  // на фронтенде, без отдельного серверного флага на каждой строке.
+  const procRates=plan.filter(r=>r.role_key==='proc' && r.poco_rate!=null).map(r=>r.poco_rate);
+  const bestProcRate=procRates.length?Math.min(...procRates):null;
   const body=rows.map((r,i)=>{
     const peak=Math.max(r.cpu_percent,r.pg_percent), reserve=100-peak, pgb=r.pg_breakdown||{};
+    const pocoOutlier=r.role_key==='proc' && r.poco_rate!=null && bestProcRate!=null && r.poco_rate>bestProcRate;
+    const pocoCell=r.poco_rate!=null
+      ? `<span class="pct${pocoOutlier?' warm':''}" title="${pocoOutlier?t('pocoHigherThanBest'):''}">${(r.poco_rate*100).toFixed(1)}</span>`
+      : `<span class="pct" style="color:var(--dim)">${t('noData')}</span>`;
     return `<tr>
       <td class="idx num">${i+1}</td>
       <td><div style="color:var(--bright)">${r.character}</div>
@@ -4777,14 +4797,16 @@ function renderTable(){
       <td class="r"><span class="pct ${r.cpu_percent>=90?'hot':r.cpu_percent>=75?'warm':''}">${r.cpu_percent.toFixed(1)}</span></td>
       <td class="r"><span class="pct ${r.pg_percent>=90?'hot':r.pg_percent>=75?'warm':''}">${r.pg_percent.toFixed(1)}</span></td>
       <td class="r"><span class="pct" style="color:${reserve<5?'var(--alarm)':reserve<15?'var(--amber)':'var(--calm)'}">${reserve.toFixed(1)}</span></td>
+      <td class="r">${pocoCell}</td>
     </tr>`;}).join('');
   document.getElementById('tableWrap').innerHTML=`<table>
     <thead>
       <tr class="group"><th colspan="3">${t('thColony')}<small>${t('thColonySub')}</small></th>
         <th>${t('thProd')}<small>${t('thProdSub')}</small></th>
-        <th colspan="4">${t('thLoad')}<small>${t('thLoadSub')}</small></th></tr>
+        <th colspan="5">${t('thLoad')}<small>${t('thLoadSub')}</small></th></tr>
       <tr class="cols"><th>#</th><th>${t('thChar')}</th><th>${t('thPlanet')}</th><th>${t('thProduct')}</th>
-        <th>${t('thPgFrom')}</th><th class="r">CPU %</th><th class="r">PG %</th><th class="r">${t('thReserve')}</th></tr>
+        <th>${t('thPgFrom')}</th><th class="r">CPU %</th><th class="r">PG %</th><th class="r">${t('thReserve')}</th>
+        <th class="r">POCO %</th></tr>
     </thead><tbody>${body}</tbody></table>`;
 }
 

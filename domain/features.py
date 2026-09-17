@@ -247,5 +247,15 @@ FEATURES = FEATURES + (
 )
 
 
+FEATURES = FEATURES + (
+    Feature(
+        "site_selection_by_poco_rate", "Выбор планет под переработку — по налогу POCO, затем по радиусу",
+        ("меньшим налогом", "радиусом"),
+        ("lowest poco", "radius"),
+        "0.10.16", "help",
+    ),
+)
+
+
 def by_section(section: str) -> tuple[Feature, ...]:
     return tuple(f for f in FEATURES if f.where == section)
