@@ -59,8 +59,9 @@ _L = {
         "planet_radius_km": "Радиус, км", "cc_type": "Командный центр",
         "res_in": "Вход", "res_out": "Выход", "structures": "Структуры",
         "template_key": "Шаблон", "cpu_percent": "CPU, %", "pg_percent": "PG, %",
-        "sum_type": "Тип планеты", "sum_count": "Количество планет", "sum_role": "Роль",
-        "sum_role_value": "Добыча и переработка", "total": "Всего",
+        "sum_type": "Тип планеты", "sum_count": "Количество планет",
+        "cc_shopping_title": "Список закупки: командные центры",
+        "total": "Всего командных центров",
         "note_formula": "Количества считаются формулами по листу «План» и "
                         "пересчитываются при его правке.",
         "exported": "Выгружено: {stamp}",
@@ -77,8 +78,9 @@ _L = {
         "planet_radius_km": "Radius, km", "cc_type": "Command centre",
         "res_in": "Input", "res_out": "Output", "structures": "Structures",
         "template_key": "Template", "cpu_percent": "CPU, %", "pg_percent": "PG, %",
-        "sum_type": "Planet type", "sum_count": "Planet count", "sum_role": "Role",
-        "sum_role_value": "Extraction and processing", "total": "Total",
+        "sum_type": "Planet type", "sum_count": "Planet count",
+        "cc_shopping_title": "Shopping list: Command Centers",
+        "total": "Total Command Centers",
         "note_formula": "Counts are formulas over the Plan sheet and recalculate "
                         "when it is edited.",
         "exported": "Exported: {stamp}",
@@ -110,14 +112,14 @@ def _structures_value(item: dict, tr: dict) -> str:
     return item.get("structures") or ""
 
 
-def _style_header(sheet, headers: list[str], widths: list[int]) -> None:
+def _style_header(sheet, headers: list[str], widths: list[int], start_row: int = 1) -> None:
     for index, (title, width) in enumerate(zip(headers, widths), start=1):
-        cell = sheet.cell(row=1, column=index, value=title)
+        cell = sheet.cell(row=start_row, column=index, value=title)
         cell.fill = HEADER_FILL
         cell.font = HEADER_FONT
         cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
         sheet.column_dimensions[get_column_letter(index)].width = width
-    sheet.freeze_panes = "A2"
+    sheet.freeze_panes = f"A{start_row + 1}"
 
 
 def _build_workbook(rows: list[dict], lang: str = "ru") -> Workbook:
@@ -149,9 +151,20 @@ def _build_workbook(rows: list[dict], lang: str = "ru") -> Workbook:
 
     last = len(rows) + 1
 
-    # Лист сводки: сколько командных центров каждого типа закупать.
+    # Лист сводки: сколько командных центров каждого типа закупать —
+    # отдельным явно подписанным блоком (17.09.2026, по прямому запросу
+    # пользователя), тем же смыслом, что и «Список закупки» в вебе
+    # (renderShopping(), web/index.html): раньше колонка с типом планеты
+    # неявно подразумевала «это и есть нужный командный центр» — теперь
+    # заголовок блока и отдельная колонка называют его прямо, а не
+    # оставляют читателю догадываться по количеству и типам планет.
     summary = workbook.create_sheet(tr["sheet_summary"])
-    _style_header(summary, [tr["sum_type"], tr["sum_count"], tr["sum_role"]], [18, 20, 24])
+    summary.cell(row=1, column=1, value=tr["cc_shopping_title"]).font = Font(
+        name="Arial", bold=True, size=12
+    )
+    _style_header(
+        summary, [tr["sum_type"], tr["sum_count"], tr["cc_type"]], [18, 20, 30], start_row=2
+    )
 
     types_seen: list[str] = []
     for item in rows:
@@ -159,18 +172,22 @@ def _build_workbook(rows: list[dict], lang: str = "ru") -> Workbook:
         if planet_type not in types_seen:
             types_seen.append(planet_type)
 
-    for row_index, planet_type in enumerate(sorted(types_seen), start=2):
+    for row_index, planet_type in enumerate(sorted(types_seen), start=3):
         summary.cell(row=row_index, column=1, value=planet_type).font = BODY_FONT
         # COUNTIF, а не посчитанное в Python число: если пользователь
         # удалит строку на листе «План», сводка пересчитается сама.
         formula = f"=COUNTIF('{tr['sheet_plan']}'!F2:F{last},A{row_index})"
         cell = summary.cell(row=row_index, column=2, value=formula)
         cell.font = BODY_FONT
-        summary.cell(row=row_index, column=3, value=tr["sum_role_value"]).font = BODY_FONT
+        # Тоже формула, не строка из Python — тем же принципом, что и
+        # COUNTIF выше: если пользователь поправит тип планеты в A,
+        # название командного центра рядом обновится само.
+        cc_formula = f'=A{row_index}&" Command Center"'
+        summary.cell(row=row_index, column=3, value=cc_formula).font = BODY_FONT
 
-    total_row = len(types_seen) + 2
+    total_row = len(types_seen) + 3
     summary.cell(row=total_row, column=1, value=tr["total"]).font = Font(name="Arial", bold=True)
-    total = summary.cell(row=total_row, column=2, value=f"=SUM(B2:B{total_row - 1})")
+    total = summary.cell(row=total_row, column=2, value=f"=SUM(B3:B{total_row - 1})")
     total.font = Font(name="Arial", bold=True)
 
     note_row = total_row + 2
