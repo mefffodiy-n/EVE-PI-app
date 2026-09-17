@@ -71,6 +71,17 @@ class TestReference:
         assert "Broadcast Node" in products    # P4
         assert "Water" not in products         # P1
 
+    def test_initial_data_includes_product_tiers(self, client):
+        """
+        17.09.2026, Фаза 11: тир каждого продукта — фронтенду для кнопок-
+        фильтров P2/P3/P4 над списком продуктов (web/index.html,
+        renderTierFilter/renderProducts).
+        """
+        tiers = client.get("/api/initial-data").get_json()["product_tiers"]
+        assert tiers["Biocells"] == "P2"
+        assert tiers["Broadcast Node"] == "P4"
+        assert "Water" not in tiers  # P1 не входит в целевые продукты вовсе
+
     def test_initial_data_includes_type_volumes(self, client, monkeypatch, tmp_path):
         """
         Объём одной единицы товара по type_id — тем же кэшем, которым

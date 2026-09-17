@@ -124,7 +124,13 @@ def _initial_payload() -> dict:
     без единого намёка на причину — ровно тот симптом, по которому
     невозможно понять, что не так.
     """
-    products = sorted(r.name for r in load_recipes() if r.tier in PROCESSING_TIERS)
+    processing_recipes = [r for r in load_recipes() if r.tier in PROCESSING_TIERS]
+    products = sorted(r.name for r in processing_recipes)
+    # Тир продукта — для кнопок-фильтров P2/P3/P4 над списком в карточке
+    # «Что производим» (17.09.2026, Фаза 11, по прямому запросу
+    # пользователя): раньше фронтенд получал только имена, без тира
+    # сузить список можно было исключительно текстовым поиском.
+    product_tiers = {r.name: r.tier for r in processing_recipes}
     ids = _type_ids()
 
     # Отдаём карту id целиком, а не только по целевым продуктам.
@@ -147,6 +153,7 @@ def _initial_payload() -> dict:
 
     payload = {
         "products": products,
+        "product_tiers": product_tiers,
         "product_ids": ids,
         "recipe_inputs": recipe_inputs,
         "schematics": _schematics_by_output(),

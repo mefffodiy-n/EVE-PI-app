@@ -733,6 +733,8 @@ details.msgs[open] > summary::before { content:'▾ '; }
 .mini { background:none; border:1px solid var(--seam); color:var(--dim); padding:3px 8px;
         cursor:pointer; font-size:11px; white-space:nowrap; }
 .mini:hover { color:var(--amber); border-color:var(--amber); }
+.mini.active { color:var(--amber); border-color:var(--amber); background:color-mix(in srgb, var(--amber) 12%, transparent); }
+.tier-filter { display:flex; gap:6px; margin-bottom:6px; }
 /* Персонажу нужно перезайти через EVE SSO — токен протух/отозван,
    колонии и скиллы больше не обновляются (см. needs_reconnect,
    api/blueprints/meta.py). Тревожный цвет — не просто ещё одно
@@ -1072,6 +1074,7 @@ body.light .rolebadge.excess { background:rgba(154,107,18,.12); }
                 <input type="search" id="prodSearch" placeholder="поиск…" data-i18n-ph="searchPh" oninput="renderProducts()">
                 <button class="mini" onclick="clearPick('products')" data-i18n="clearAll">Снять всё</button>
               </div>
+              <div class="tier-filter" id="tierFilter"></div>
               <div class="picker-list" id="productList"></div>
               <div class="chosen" id="productChosen"></div>
             </div>
@@ -1179,6 +1182,8 @@ const avatarImg=characterId=>characterId
   ? `<img src="${PORTRAIT(characterId)}" alt="" onerror="this.remove()">` : '';
 
 let ids={}, recipeInputs={}, schematics={}, typeVolumes={}, plan=[], staffing={}, view='details', sortBy='load';
+let productTiers={}, activeTiers=new Set();
+const PRODUCT_TIER_ORDER=['P2','P3','P4'];
 let lang='ru', crew=[], meta={};
 let regions={}, systemCounts={}, allProducts=[], allConstellations=[];
 let dataCounts=null;  // {bases, products} — для чипа data, перерисовывается при смене языка
@@ -3661,7 +3666,8 @@ const DOC={
    <h3>Как пользоваться</h3>
    <ol>
     <li>На вкладке «Настройки» отметьте целевые продукты. Можно выбрать несколько
-    сразу — список с поиском и иконками, отмеченное показано внизу.</li>
+    сразу — список с поиском и иконками, отмеченное показано внизу. Кнопки P2/P3/P4
+    над списком сужают его по тиру продукта, вместе с текстовым поиском, не вместо него.</li>
     <li>Отметьте созвездия для добычи (все — в регионе Fountain). Кнопка «Весь регион» отмечает все сразу;
     если в выгрузке есть колонка региона, созвездия сгруппированы по ним.</li>
     <li>Задайте запас на истощение месторождений, если нужен. Это не расчёт,
@@ -3926,7 +3932,8 @@ const DOC={
    <h3>How to use it</h3>
    <ol>
     <li>On the Settings tab tick your target products. Several products at once is fine —
-    the list has search and icons, and your picks are shown below it.</li>
+    the list has search and icons, and your picks are shown below it. The P2/P3/P4 buttons
+    above the list narrow it by product tier, alongside the text search, not instead of it.</li>
     <li>Tick the constellations you extract from (all of them are in Fountain). “Whole
     region” ticks them all; if your export has a region column, constellations are
     grouped by region.</li>
@@ -4370,9 +4377,10 @@ async function boot(){
     typeVolumes=d.type_volumes||{};
     allConstellations=d.bases||[];
     allProducts=d.products||[];
+    productTiers=d.product_tiers||{};
     regions=d.regions||{};
     systemCounts=d.system_counts||{};
-    renderProducts(); renderConstellations();
+    renderTierFilter(); renderProducts(); renderConstellations();
     dataCounts={bases:(d.bases||[]).length, products:(d.products||[]).length};
     renderDataChip();
     (d.data_problems||[]).forEach(t=>msg(t,true));
@@ -4385,10 +4393,29 @@ function setSort(k){ sortBy=k; document.getElementById('sortMenu').classList.rem
   buildSortMenu(); renderDash(); renderColonies(); }
 
 /* ── Списки выбора ────────────────────────────────────────────── */
+/* Кнопки-фильтры по тиру (P2/P3/P4) над списком продуктов (17.09.2026,
+   Фаза 11, по прямому запросу пользователя) — сужают тот же allProducts,
+   что и текстовый поиск, в ДОПОЛНЕНИЕ к нему, не вместо (пустой набор
+   нажатых тиров — «все тиры», как и было раньше). Сами буквы P2/P3/P4 —
+   термины EVE, не переводятся. */
+function renderTierFilter(){
+  const box=document.getElementById('tierFilter'); if(!box) return;
+  box.innerHTML=PRODUCT_TIER_ORDER.map(tier=>
+    `<button class="mini${activeTiers.has(tier)?' active':''}" onclick="toggleTierFilter('${tier}')">${tier}</button>`
+  ).join('');
+}
+
+function toggleTierFilter(tier){
+  if(activeTiers.has(tier)) activeTiers.delete(tier); else activeTiers.add(tier);
+  renderTierFilter(); renderProducts();
+}
+
 function renderProducts(){
   const q=(document.getElementById('prodSearch').value||'').toLowerCase();
   const list=document.getElementById('productList');
-  list.innerHTML=allProducts.filter(n=>n.toLowerCase().includes(q)).map(n=>{
+  list.innerHTML=allProducts
+    .filter(n=>(!activeTiers.size || activeTiers.has(productTiers[n])) && n.toLowerCase().includes(q))
+    .map(n=>{
     const id=ids[n];
     return `<label><input type="checkbox" ${chosen.products.has(n)?'checked':''}
         onchange="togglePick('products','${n.replace(/'/g,"\\'")}',this.checked)">

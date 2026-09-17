@@ -237,5 +237,15 @@ FEATURES = FEATURES + (
 )
 
 
+FEATURES = FEATURES + (
+    Feature(
+        "product_tier_filter", "Фильтр целевых продуктов по тиру (P2/P3/P4)",
+        ("фильтр", "тиру"),
+        ("filter", "tier"),
+        "0.10.11", "help",
+    ),
+)
+
+
 def by_section(section: str) -> tuple[Feature, ...]:
     return tuple(f for f in FEATURES if f.where == section)
