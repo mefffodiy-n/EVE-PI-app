@@ -2322,6 +2322,16 @@ function simulateColonyFactories(pins, routes, gameLastUpdateIso){
   // означает «кончилось», отрицательное значение не требует отдельной
   // обработки.
   let lastIdleTransition=null;
+  // Фабрика хоть раз успешно набрала цикл В ЭТОМ прогоне симуляции —
+  // нужно для ВТОРОГО случая того же бага (найдено пользователем
+  // 17.09.2026, сразу следом за первым): если причал УЖЕ был пуст на
+  // момент снимка (buf с нуля, не «опустел в ходе проекции»), ни одна
+  // фабрика ни разу не переходит active:true→false — переходить не из
+  // чего, entry.active всю симуляцию остаётся тем же false, с которого
+  // стартовала. lastIdleTransition в такой колонии никогда не
+  // присвоится, а колония на самом деле простаивает как минимум с
+  // момента снимка. См. проверку после цикла событий ниже.
+  let anyFactoryEverActive=false;
   let iterations=0;
   const MAX_EVENTS=50000; // защита от зависания на аномальных данных
   while(events.length && iterations++<MAX_EVENTS){
@@ -2376,6 +2386,7 @@ function simulateColonyFactories(pins, routes, gameLastUpdateIso){
     if(canConsume){
       for(const [typeId,need] of entry.demands) entry.buf.set(typeId, entry.buf.get(typeId)-need);
       entry.active=true; entry.idleSinceMs=null; entry.lastRun=t;
+      anyFactoryEverActive=true;
       push(pinId, entry.outputTypeId, entry.outputQty, t, 0);
       // Игра резервирует вход СЛЕДУЮЩЕГО цикла в момент, когда кончился
       // текущий (найдено 17.09.2026 на реальных данных прода — у каждой
@@ -2437,6 +2448,18 @@ function simulateColonyFactories(pins, routes, gameLastUpdateIso){
   // живучая из них», не «когда любая из них» — честное ограничение,
   // отдельный учёт по каждой цепочке потребовал бы знать заранее, какие
   // факторы вообще связаны общим источником, а не просто общей колонией.
+  // ВТОРОЙ случай того же бага (найдено пользователем 17.09.2026, сразу
+  // следом за первым): причал был УЖЕ пуст на момент снимка (не опустел
+  // В ХОДЕ проекции, а пришёл пустым) — ни одна фабрика ни разу не
+  // получает канал «работала → встала» внутри симуляции, потому что
+  // работать ей не с чего было ни на одном шаге, entry.active никогда
+  // не становится true. lastIdleTransition в этом случае так и остаётся
+  // null, хотя колония совершенно точно простаивает — переход просто не
+  // наблюдаем изнутри симуляции, а не «неизвестно». Честная нижняя
+  // граница: раз ни одна фабрика не работала ни одного мгновения за весь
+  // горизонт от снимка (anyFactoryEverActive=false), простаивает как
+  // минимум с самого снимка (раньше снимка не знаем — не гадаем).
+  if(lastIdleTransition==null && anyFactory && !anyFactoryEverActive) lastIdleTransition=startMs;
   results.depletionMs = lastIdleTransition!=null ? lastIdleTransition-nowMs : null;
   return results;
 }
