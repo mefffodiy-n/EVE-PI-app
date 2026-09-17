@@ -82,7 +82,7 @@ def test_backs_up_postgres_via_pg_dump(_paths, monkeypatch):
     # только SQLAlchemy, не libpq.
     assert calls == ["postgresql://u:p@localhost/pidirector"]
     made = next((_paths / "backups").glob("pi-backup-*"))
-    assert (made / "pidirector.sql").read_text(encoding="utf-8") == "-- dump"
+    assert (made / "pidirector.dump").read_text(encoding="utf-8") == "-- dump"
     assert "market_prices.json" in {p.name for p in made.iterdir()}
 
 
@@ -101,6 +101,31 @@ def test_pg_dump_failure_is_logged_not_silenced(_paths, monkeypatch):
     monkeypatch.setattr(backup, "_backup_postgres", fake_backup_postgres)
     assert backup.main() == 1
     assert _backups(_paths) == []
+
+
+def test_postgres_backup_uses_compressed_custom_format(_paths, monkeypatch, tmp_path):
+    """
+    18.09.2026, по прямому запросу пользователя: сжатый custom-формат
+    (-Fc) вместо текстового SQL-дампа — размер копии растёт линейно с
+    базой без сжатия, custom-формат сокращает его в разы почти бесплатно.
+    """
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        kwargs["stdout"].write(b"fake dump")
+
+        class Result:
+            returncode = 0
+        return Result()
+
+    monkeypatch.setattr(backup.subprocess, "run", fake_run)
+    dst = tmp_path / "out.dump"
+    backup._backup_postgres("postgresql://u:p@localhost/pidirector", dst)
+
+    assert calls[0][:2] == ["pg_dump", "--no-owner"]
+    assert "-Fc" in calls[0]
+    assert dst.read_bytes() == b"fake dump"
 
 
 def test_unknown_database_url_still_backs_up_cache(_paths, monkeypatch):

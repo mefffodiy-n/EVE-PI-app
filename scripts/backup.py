@@ -10,9 +10,19 @@
     приложении), Postgres через `pg_dump` (тот же принцип: снимок
     согласованного состояния без остановки сервиса). С 15.09.2026 на
     проде — Postgres (docs/ROADMAP.md, Фаза 9); функция для SQLite осталась
-    ради разработки и отката;
+    ради разработки и отката. С 18.09.2026 — сжатый custom-формат
+    (`pg_dump -Fc`, файл `pidirector.dump`), не текстовый SQL: без сжатия
+    размер копии растёт линейно с базой, custom-формат сокращает его в
+    разы почти бесплатно. Восстановление —
+    `pg_restore --no-owner --clean --if-exists -d имя_базы файл`,
+    не `psql имя_базы < файл`, как было для текстового дампа;
   - снимки `data/cache/*.json` (кроме служебного etags.json) — их легко
     пересобрать, но с копией дашборд не «мигнёт» пустотой после отката.
+
+Дальнейший рост базы — см. docs/ROADMAP.md, Фаза 10, пункт про
+инкрементальные бэкапы (WAL-архивирование): применять, когда база
+займёт заметное место на диске, не раньше — сейчас (18.09.2026) это
+11 МБ, сжатие с запасом покрывает рост на годы вперёд.
 
 Куда: `{PI_BACKUP_DIR}/pi-backup-YYYYMMDD-HHMMSS/`. Старые чистятся,
 остаётся последние `PI_BACKUP_KEEP` (по умолчанию 14).
@@ -67,12 +77,15 @@ def _postgres_url() -> str | None:
 
 def _backup_postgres(url: str, dst: Path) -> None:
     """
-    `pg_dump` в формате обычного SQL-дампа (не custom): восстановление —
-    `psql имя_базы < файл`, без утилиты `pg_restore` под рукой.
+    `pg_dump` в СЖАТОМ custom-формате (`-Fc`, 18.09.2026 — по прямому
+    запросу пользователя: без сжатия дамп растёт линейно с базой,
+    custom-формат сокращает его в разы почти бесплатно, единственная
+    цена — восстановление через `pg_restore`, а не `psql имя_базы < файл`:
+        pg_restore --no-owner --clean --if-exists -d имя_базы файл
     """
     with dst.open("wb") as out:
         subprocess.run(
-            ["pg_dump", "--no-owner", "--no-privileges", url],
+            ["pg_dump", "--no-owner", "--no-privileges", "-Fc", url],
             stdout=out, check=True, timeout=300,
         )
 
@@ -115,7 +128,7 @@ def main() -> int:
     elif pg_url is not None:
         target.mkdir(parents=True, exist_ok=True)
         try:
-            _backup_postgres(pg_url, target / "pidirector.sql")
+            _backup_postgres(pg_url, target / "pidirector.dump")
         except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired) as exc:
             # Честно падаем в лог, а не молчим: без дампа резервной копии
             # БД в этом запуске нет вовсе, снимки кэша ниже её не заменяют.
