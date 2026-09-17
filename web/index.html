@@ -1131,7 +1131,7 @@ body.light .rolebadge.excess { background:rgba(154,107,18,.12); }
           <div class="crew" id="crew"><div style="color:var(--dim);font-size:12px" data-i18n="crewPre">
             Появятся после расчёта: планировщик сам распределяет персонажей
             по планетам с учётом их прокачки.</div></div>
-          <div class="crew-hint" id="crewHint" data-i18n="crewHint">Персонажи хранятся на сервере и не пропадают при перезаходе.</div>
+          <div class="crew-hint" id="crewHint"></div>
         </div>
       </div>
     </div>
@@ -1214,13 +1214,13 @@ const T={
   details:'Детали',back:'Назад',reserveOk:'запас везде есть',
   noReserve:'без запаса',sortLoad:'По загрузке',sortReserve:'По остатку запаса',
   sortPilot:'По имени персонажа',sortSystem:'По системе',
-  cProc:'переработка',cMine:'добыча',crewHint:'Персонажи хранятся на сервере и не пропадают при перезаходе.',
+  cProc:'переработка',cMine:'добыча',addCharacter:'Добавить персонажа',
   unlink:'Отвязать',unlinkHint:'Стереть токен на нашей стороне — планировщик перестанет видеть персонажа до повторного входа. Доступ на стороне CCP отдельно отзывается на eveonline.com/account/third_party_apps.',
   reconnect:'Перезайти',reconnectHint:'Доступ ESI для этого персонажа истёк или отозван (сменён пароль, отозвано приложение) — колонии и скиллы больше не обновляются. Перезайдите через EVE SSO этим же персонажем.',
   unlinkFail:'Не удалось отвязать персонажа',
-  groupHint:'Отметьте, кто из вошедших персонажей основной, и сохраните — на новом устройстве или в другом браузере вход любым из этой группы подтянет всех остальных, без повторного входа каждым.',
-  groupSave:'Сохранить группу',groupSaved:'Группа сохранена',groupSaveFail:'Не удалось сохранить группу',
-  groupPrimary:'основной',groupPickPrimary:'Отметьте основного персонажа',
+  groupHint:'Сделать этого персонажа основным для группы — на новом устройстве или в другом браузере вход любым из группы подтянет всех остальных к нему.',
+  groupSave:'Сделать основным',groupSaved:'Теперь основной',groupSaveFail:'Не удалось назначить основного',
+  groupPrimary:'основной',
   pocoProfitTitle:'Прогноз прибыльности плана',
   pocoRevenue:'Выручка / мес',pocoTax:'Налог POCO / мес',pocoNetProfit:'Чистая прибыль / мес',
   pocoMissingPrices:'Нет цены: {list}',pocoMissingRates:'Нет данных о ставке POCO: {list}',
@@ -1289,13 +1289,13 @@ const T={
   details:'Details',back:'Back',reserveOk:'headroom everywhere',
   noReserve:'no headroom',sortLoad:'By load',sortReserve:'By remaining headroom',
   sortPilot:'By character name',sortSystem:'By system',
-  cProc:'processing',cMine:'extraction',crewHint:'Characters live on the server and survive a reload.',
+  cProc:'processing',cMine:'extraction',addCharacter:'Add character',
   unlink:'Unlink',unlinkHint:'Erases the token on our side — the planner stops seeing this character until you log in again. Access on the CCP side is revoked separately at eveonline.com/account/third_party_apps.',
   reconnect:'Reconnect',reconnectHint:'ESI access for this character has expired or been revoked (password changed, app access revoked) — colonies and skills are no longer updating. Log in again through EVE SSO with this same character.',
   unlinkFail:'Could not unlink the character',
-  groupHint:'Mark which of your logged-in characters is the primary one and save — logging in with any of this group on a new device or browser will pull in all the others, no need to log in with each separately.',
-  groupSave:'Save group',groupSaved:'Group saved',groupSaveFail:'Could not save the group',
-  groupPrimary:'primary',groupPickPrimary:'Mark the primary character',
+  groupHint:'Make this character the group\'s primary — logging in on a new device or browser with any member will pull in all the others under it.',
+  groupSave:'Make primary',groupSaved:'Now primary',groupSaveFail:'Could not set as primary',
+  groupPrimary:'primary',
   pocoProfitTitle:'Plan profitability forecast',
   pocoRevenue:'Revenue / mo',pocoTax:'POCO tax / mo',pocoNetProfit:'Net profit / mo',
   pocoMissingPrices:'No price: {list}',pocoMissingRates:'POCO rate unknown: {list}',
@@ -3827,14 +3827,13 @@ const DOC={
    красная кнопка «Перезайти»: планировщик больше не может обновлять его
    скиллы и колонии, пока вы не войдёте этим же персонажем заново через
    EVE SSO.</p>
-   <p>Персонажи группируются только в рамках одного визита (одного браузера):
-   на новом устройстве или после долгого перерыва вход даже уже знакомым
-   персонажем начинает пустой список — остальные альты придётся вводить
-   заново. Если вошло несколько персонажей сразу, рядом с каждым появляется
-   отметка выбора основного персонажа и кнопка «Сохранить группу»: отметьте,
-   кто из них основной, и сохраните — при входе ЛЮБЫМ персонажем этой группы
-   на любом устройстве или в любом браузере подтянутся сразу все остальные,
-   без повторного входа каждым.</p>
+   <p>Персонажи, вошедшие в одном браузере, группируются автоматически:
+   первый вошедший становится основным сам себе, каждый следующий в том же
+   визите подтягивается к нему без отдельных действий. При входе ЛЮБЫМ
+   персонажем этой группы на любом устройстве или в любом браузере
+   подтянутся сразу все остальные, без повторного входа каждым. Если
+   автоматика выбрала не того основным — у любого альта в карточке
+   персонажей есть кнопка «Сделать основным».</p>
 
    <h3>Мои колонии в игре</h3>
    <p>Отдельный блок на дашборде: что у персонажей реально построено — снимок
@@ -4083,13 +4082,12 @@ const DOC={
    password or revoked the app on eveonline.com), a red "Reconnect" button appears next to
    them: the planner can no longer refresh their skills and colonies until you log in again
    with that same character through EVE SSO.</p>
-   <p>Characters are grouped only within one visit (one browser): on a new device or
-   after a long break, logging in with even a familiar character starts from an empty
-   list — the other alts need logging in again separately. Once several characters have
-   logged in together, a pick mark for the primary character and a "Save group" button
-   appear next to each of them: mark which one is primary and save — logging in with ANY
-   character from that group, on any device or browser, will pull in all the others at
-   once, with no need to log in with each separately.</p>
+   <p>Characters that log in from the same browser are grouped automatically: the first
+   one to log in becomes primary to itself, and every next one in that same visit joins it
+   with no extra steps. Logging in with ANY character from that group, on any device or
+   browser, pulls in all the others at once, with no need to log in with each separately.
+   If the automatic pick got it wrong, any alt in the character card has a "Make primary"
+   button.</p>
 
    <h3>My in-game colonies</h3>
    <p>A separate dashboard panel: what your characters have actually built — a live
@@ -4569,6 +4567,15 @@ function renderMessages(){
 // Список приходит с сервера, поэтому переживает перезаход на сайт.
 function renderCrew(){
   const box=document.getElementById('crew'); if(!box) return;
+  // Кнопка входа в топбаре нужна, только пока НИ ОДИН персонаж этого
+  // визита не вошёл через EVE SSO — дальше эту роль берёт на себя
+  // «Добавить персонажа» в самой карточке (17.09.2026, Фаза 11, п.1).
+  const hasLinked=crew.some(c=>c.esi_linked);
+  const ssoBtn=document.getElementById('ssoBtn');
+  if(ssoBtn) ssoBtn.style.display=hasLinked?'none':'';
+  const hintBox=document.getElementById('crewHint');
+  if(hintBox) hintBox.innerHTML=hasLinked
+    ? `<button class="mini" onclick="startLogin()">${t('addCharacter')}</button>` : '';
   if(!crew.length){
     box.innerHTML=`<div style="color:var(--dim);font-size:12px">${t('noData')}</div>`;
     fitStepFills();
@@ -4597,11 +4604,20 @@ function renderCrew(){
     const b=busy[c.name]||{mine:0,proc:0}, used=b.mine+b.proc;
     const spread=(lastLogistics&&lastLogistics.characters||[]).find(x=>x.character===c.name);
     const sys=spread?` · ${plural(spread.system_count,t('sysOne'),t('sysFew'),t('sysMany'))}`:'';
+    // Основной группы — просто метка (группа уже сложилась сама при
+    // входе, править тут нечего); у альтов вместо неё кнопка ручной
+    // поправки, только если группа реально из 2+ человек (17.09.2026,
+    // Фаза 11, п.3 — радиокнопки выбора упразднены как следствие
+    // автогруппировки, не заменены новым способом выбора вручную).
+    const isPrimary=c.esi_linked && c.character_id===currentPrimary;
+    const primaryControl=(!c.esi_linked || linked.length<=1)?'':
+      isPrimary?`<span class="mini" style="padding:1px 6px;font-size:10px;margin-right:6px;
+          pointer-events:none;color:var(--amber);border-color:var(--amber)">${t('groupPrimary')}</span>`
+      :`<button class="mini" style="padding:1px 6px;font-size:10px;margin-right:6px"
+          title="${t('groupHint')}" onclick="makePrimary(${c.character_id})">${t('groupSave')}</button>`;
     return `<div title="CCU ${c.ccu} · IC ${c.ic} · ${c.planet_slots} ${t('planetSlots')}${
       spread?' · '+spread.systems.join(', '):''}">
-      ${linked.length>1?`<input type="radio" name="primaryPick" value="${c.character_id}"
-        ${c.character_id===currentPrimary?'checked':''}
-        style="margin-right:4px" title="${t('groupPickPrimary')}">`:''}
+      ${primaryControl}
       <div class="pilot-lg" style="width:22px;height:22px;font-size:9px">${initials(c.name)}${avatarImg(c.character_id)}</div>
       <span>${c.name}</span>
       <span class="lv">${used}/${c.planet_slots}${sys}</span>
@@ -4612,29 +4628,20 @@ function renderCrew(){
         title="${t('unlinkHint')}" onclick="unlinkCharacter(${c.character_id})"
         data-i18n="unlink">${t('unlink')}</button>`:''}</div>`;
   }).join('');
-  if(linked.length>1){
-    box.insertAdjacentHTML('beforeend',
-      `<div style="margin-top:6px">
-        <button class="mini" style="padding:2px 8px;font-size:10px" title="${t('groupHint')}"
-          onclick="saveCharacterGroup()">${t('groupSave')}</button>
-      </div>`);
-  }
   fitStepFills();
 }
 
 /* Постоянная группа «основной + альты» (docs/ROADMAP.md, Фаза 9,
-   16.09.2026): пользователь отмечает радио-кнопкой, кто из УЖЕ вошедших
-   в этот визит esi-персонажей основной, и сохраняет — /api/auth/group
-   привязывает всех esi-персонажей визита к одному детерминированному
-   account_id (f"char:{primary}"), одинаковому при входе с любого
-   устройства/браузера. Без выбора — честная подсказка, а не тихий
-   no-op. */
-async function saveCharacterGroup(){
-  const picked=document.querySelector('input[name="primaryPick"]:checked');
-  if(!picked){ msg(t('groupPickPrimary'), true); return; }
+   16.09.2026; автогруппировка при входе — Фаза 11, п.3, 17.09.2026):
+   группа теперь собирается сама на сервере при входе (api/blueprints/
+   auth.py::_store()) — первый персонаж визита становится основным
+   сам себе, следующие подтягиваются автоматически. Эта кнопка — только
+   ручная ПОПРАВКА: сделать конкретного альта основным, если автоматика
+   выбрала не того. */
+async function makePrimary(characterId){
   const r=await fetch(`${API}/auth/group`, {
     method:'POST', headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({primary_character_id:Number(picked.value)}),
+    body:JSON.stringify({primary_character_id:characterId}),
   });
   const d=await r.json().catch(()=>({}));
   if(!r.ok){ msg(d.message||t('groupSaveFail'), true); return; }

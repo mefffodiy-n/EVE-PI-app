@@ -209,9 +209,9 @@ FEATURES = FEATURES + (
 
 FEATURES = FEATURES + (
     Feature(
-        "character_grouping", "Постоянная группа «основной + альты»",
-        ("основного персонажа", "сохраните"),
-        ("primary character", "save"),
+        "character_grouping", "Постоянная группа «основной + альты» (с 17.09.2026 — автоматическая)",
+        ("группируются автоматически", "сделать основным"),
+        ("grouped automatically", "make primary"),
         "0.10.2", "help",
     ),
 )
