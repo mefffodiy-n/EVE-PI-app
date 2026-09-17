@@ -72,6 +72,7 @@ class PlanetCandidate:
     planet: str
     planet_type: str
     radius_km: float
+    poco_rate: float | None = None  # доля 0..1; None — ставка неизвестна
 
     @property
     def preferred(self) -> bool:
@@ -138,6 +139,15 @@ def _candidates(planets: PlanetBook, system: str) -> list[PlanetCandidate]:
     Внутри каждой группы порядок по радиусу сохраняется, поэтому
     самая мелкая Barren идёт раньше самой мелкой Lava, но обе — раньше
     крупных планет своего типа.
+
+    ПОРЯДОК СРЕДИ ПРЕДПОЧТИТЕЛЬНЫХ (17.09.2026, по прямому запросу
+    пользователя): ставка POCO — тоже критерий выбора планеты для
+    переработки, и «всегда», а не только при прочих равных, поэтому
+    стоит перед радиусом (сам радиус остаётся решающим для того,
+    ПОМЕЩАЕТСЯ ли шаблон — это отдельная проверка в _fits(), сюда не
+    относится). Неизвестная ставка — не «дёшево» и не «дорого», честно
+    сортируется ПОСЛЕ любой известной (правило 1 — не подставлять
+    оптимистичное предположение вместо пробела).
     """
     df = planets.factory_candidates(system)
     result: list[PlanetCandidate] = []
@@ -145,16 +155,25 @@ def _candidates(planets: PlanetBook, system: str) -> list[PlanetCandidate]:
         radius = row.get(RADIUS_COLUMN)
         if radius is None or radius != radius:  # NaN
             continue
+        system_name = str(row["System"])
+        planet_number = row.get("Planet", "")
         result.append(
             PlanetCandidate(
-                system=str(row["System"]),
-                planet=str(row.get("Planet", "")),
+                system=system_name,
+                planet=str(planet_number),
                 planet_type=str(row["Type"]),
                 radius_km=float(radius),
+                poco_rate=planets.poco_rate(system_name, planet_number),
             )
         )
-    # Предпочтительные типы впереди, внутри групп — по радиусу.
-    result.sort(key=lambda c: (not c.preferred, c.radius_km))
+    # Предпочтительные типы впереди; внутри группы — по возрастанию
+    # ставки POCO (неизвестная ставка — в конец), затем по радиусу.
+    result.sort(key=lambda c: (
+        not c.preferred,
+        c.poco_rate is None,
+        c.poco_rate if c.poco_rate is not None else 0.0,
+        c.radius_km,
+    ))
     return result
 
 
@@ -248,10 +267,35 @@ def select_factory_sites(
     single_key = TEMPLATE_BY_TIER[tier][1]
     double_available = ccu_level >= load_templates()[double_key].min_ccu_level
 
-    smallest = candidates[0]
+    # Самая мелкая планета вообще — для текста предупреждения
+    # "site_double_too_big" ниже. Не candidates[0]: с 17.09.2026 порядок
+    # списка возглавляет самая ДЕШЁВАЯ ПО НАЛОГУ предпочтительная планета,
+    # не обязательно самая мелкая.
+    smallest = min(candidates, key=lambda c: c.radius_km)
 
     if not double_available:
         selection.warn("site_no_ccu5", ccu_level=ccu_level)
+
+    def _pool(template_key: str) -> list[PlanetCandidate]:
+        """
+        Предпочтительные планеты, пока среди них есть хоть одна
+        подходящая под шаблон; общий список (включая другие типы) —
+        только когда НИ ОДНА предпочтительная не подходит вовсе.
+
+        "Нехватка" предпочтительных (правило 1 в докстринге модуля) —
+        про ПРИГОДНОСТЬ, не про количество: одна планета несёт
+        неограниченное число колоний (правило 4), поэтому счётчик
+        кандидатов не может "закончиться" сам по себе. Раньше здесь
+        безусловно передавался весь `candidates` (предпочтительные и
+        остальные вперемешку) — из-за этого переработка иногда уходила
+        на непредпочтительные типы, даже когда предпочтительных хватало
+        с большим запасом (найдено пользователем на реальном плане
+        17.09.2026: часть колоний Barren/Temperate, часть — на Storm,
+        хотя Barren/Temperate было достаточно).
+        """
+        if preferred and any(_fits(template_key, ccu_level, c) is not None for c in preferred):
+            return preferred
+        return candidates
 
     # Пытаемся разместить двойные шаблоны на самых мелких планетах.
     remaining = templates_needed
@@ -282,7 +326,7 @@ def select_factory_sites(
                 return selection
             selection.downgraded_to_single = True
         else:
-            for candidate, colony_index in _cycle(candidates, remaining // 2):
+            for candidate, colony_index in _cycle(_pool(double_key), remaining // 2):
                 if remaining < 2:
                     break
                 load = _fits(double_key, ccu_level, candidate)
@@ -307,7 +351,7 @@ def select_factory_sites(
     #   - остался НЕЧЁТНЫЙ хвост после размещения двойных — это штатная
     #     ситуация, а не откат, и предупреждения не требует.
     if remaining > 0:
-        for candidate, colony_index in _cycle(candidates, remaining, start=used):
+        for candidate, colony_index in _cycle(_pool(single_key), remaining, start=used):
             if remaining <= 0:
                 break
             load = _fits(single_key, ccu_level, candidate)
@@ -330,6 +374,45 @@ def select_factory_sites(
     selection.used_fallback_types = sorted(
         t for t in used_types if t not in PREFERRED_FACTORY_PLANET_TYPES
     )
+
+    if selection.used_fallback_types and preferred:
+        # Отличается от site_no_preferred/site_p4_no_preferred (которые
+        # уже покрывают случай "предпочтительных типов в системе нет
+        # вовсе"): здесь предпочтительные планеты ЕСТЬ, но часть
+        # переработки всё равно ушла на другие типы, потому что ни одна
+        # предпочтительная не подошла по размеру под этот шаблон
+        # (см. _pool() выше).
+        selection.warn(
+            "site_fallback_size_used",
+            system=system, tier=tier,
+            types=", ".join(selection.used_fallback_types),
+        )
+
+    # Ставка POCO неодинакова у разных планет одного и того же типа
+    # (см. domain/planets.py::PlanetBook.poco_rate) — даже когда все
+    # назначения предпочтительного типа, часть могла получить более
+    # высокую ставку, чем лучший доступный вариант (например, лучшая
+    # по налогу планета не поместилась под двойной шаблон, а под
+    # одиночный — поместилась, и на неё ушла лишь часть колоний).
+    # Честно называем это пользователю и перечисляем конкретные планеты,
+    # а не молчим — план остаётся рабочим (правило пользователя 17.09.2026:
+    # не блокировать, просто пометить).
+    used_rates = [
+        a.candidate.poco_rate for a in selection.assignments if a.candidate.poco_rate is not None
+    ]
+    if used_rates:
+        best_rate = min(used_rates)
+        outliers = sorted({
+            (a.candidate.system, a.candidate.planet, a.candidate.poco_rate)
+            for a in selection.assignments
+            if a.candidate.poco_rate is not None and a.candidate.poco_rate > best_rate
+        })
+        if outliers:
+            selection.warn(
+                "site_higher_tax_used",
+                system=system, tier=tier, best_rate=f"{best_rate:.0%}",
+                planets=", ".join(f"{s} {p} ({r:.0%})" for s, p, r in outliers),
+            )
 
     if remaining > 0:
         selection.warn(

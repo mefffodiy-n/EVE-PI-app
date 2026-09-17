@@ -222,7 +222,7 @@ SAMPLE_PLAN_ROW = {
     "system": "HOME", "planet": "4", "planet_type": "Barren", "planet_radius_km": 5820.0,
     "cc_type": "1x Barren Command Center", "res_in": "Biofuels", "res_out": "Biocells",
     "structures": "12 фабрик", "template_key": "p2p3_1factory",
-    "cpu_percent": 39.2, "pg_percent": 95.1,
+    "cpu_percent": 39.2, "pg_percent": 95.1, "poco_rate": 0.03,
 }
 
 
@@ -380,6 +380,22 @@ class TestExport:
         assert summary["C2"].value == "Командный центр"
         assert summary["C3"].value == '=A3&" Command Center"'
         assert "командных центров" in str(summary["A4"].value).lower()  # итоговая строка
+
+    def test_plan_sheet_includes_poco_rate_column(self, client):
+        """
+        17.09.2026, по прямому запросу пользователя: колонка с налогом
+        POCO рядом с CPU/PG — доля хранится как есть (0.03), Excel сам
+        показывает её процентом через формат ячейки.
+        """
+        from io import BytesIO
+
+        from openpyxl import load_workbook
+
+        response = client.post("/api/export", json={"plan_data": [SAMPLE_PLAN_ROW]})
+        workbook = load_workbook(BytesIO(response.data))
+        poco_cell = workbook["План"]["O2"]  # 15-я колонка, после pg_percent
+        assert poco_cell.value == 0.03
+        assert poco_cell.number_format == "0.0%"
 
     def test_overloaded_planets_are_highlighted(self, client):
         """Планеты с загрузкой от 90% подсвечиваются — они сломаются первыми."""

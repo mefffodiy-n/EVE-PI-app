@@ -170,6 +170,28 @@ _CATALOG: dict[str, dict[str, str]] = {
               "would raise the limit from about 9,600 to 61,700 km), so the "
               "threshold stays conservative.",
     },
+    "site_fallback_size_used": {
+        "ru": "В системе {system} часть переработки {tier} поставлена на другие типы "
+              "планет ({types}): подходящие по размеру Barren/Temperate под этот "
+              "шаблон не нашлись, хотя планеты этих типов в системе есть. Если "
+              "хотите обойтись только Barren/Temperate — выберите другую домашнюю "
+              "систему.",
+        "en": "In system {system}, some {tier} processing went on other planet types "
+              "({types}): no Barren/Temperate planet of a suitable size was found for "
+              "this template, even though the system does have planets of those "
+              "types. Pick another home system if you want to stick to Barren/"
+              "Temperate only.",
+    },
+    "site_higher_tax_used": {
+        "ru": "В системе {system} часть переработки {tier} поставлена на планеты со "
+              "ставкой POCO выше, чем у лучшего варианта ({best_rate}): {planets}. "
+              "В плане это те же строки, просто с более высокой ставкой — план "
+              "рабочий, можно оставить как есть или выбрать другую домашнюю систему.",
+        "en": "In system {system}, some {tier} processing went on planets with a "
+              "POCO rate higher than the best available ({best_rate}): {planets}. "
+              "These are ordinary plan rows, just at a higher rate — the plan still "
+              "works; keep it as is or pick another home system.",
+    },
     "site_unplaced": {
         "ru": "В системе {system} не удалось разместить {remaining} шаблонов "
               "{tier} из {requested}: на пригодных планетах "

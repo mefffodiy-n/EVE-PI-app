@@ -48,7 +48,7 @@ COLUMNS = [
     ("character", 22), ("role", 20), ("constellation", 16), ("system", 14),
     ("planet", 10), ("planet_type", 14), ("planet_radius_km", 12), ("cc_type", 26),
     ("res_in", 22), ("res_out", 22), ("structures", 14), ("template_key", 16),
-    ("cpu_percent", 9), ("pg_percent", 9),
+    ("cpu_percent", 9), ("pg_percent", 9), ("poco_rate", 12),
 ]
 
 _L = {
@@ -59,6 +59,7 @@ _L = {
         "planet_radius_km": "Радиус, км", "cc_type": "Командный центр",
         "res_in": "Вход", "res_out": "Выход", "structures": "Структуры",
         "template_key": "Шаблон", "cpu_percent": "CPU, %", "pg_percent": "PG, %",
+        "poco_rate": "Налог POCO, %",
         "sum_type": "Тип планеты", "sum_count": "Количество планет",
         "cc_shopping_title": "Список закупки: командные центры",
         "total": "Всего командных центров",
@@ -78,6 +79,7 @@ _L = {
         "planet_radius_km": "Radius, km", "cc_type": "Command centre",
         "res_in": "Input", "res_out": "Output", "structures": "Structures",
         "template_key": "Template", "cpu_percent": "CPU, %", "pg_percent": "PG, %",
+        "poco_rate": "POCO tax, %",
         "sum_type": "Planet type", "sum_count": "Planet count",
         "cc_shopping_title": "Shopping list: Command Centers",
         "total": "Total Command Centers",
@@ -142,6 +144,11 @@ def _build_workbook(rows: list[dict], lang: str = "ru") -> Workbook:
             cell.font = BODY_FONT
             if key == "planet_radius_km" and isinstance(value, (int, float)):
                 cell.number_format = "#,##0"
+            if key == "poco_rate" and isinstance(value, (int, float)):
+                # value — доля (0.03 = 3%), формат Excel сам домножит на
+                # 100 для отображения; значение "нет данных" (None) даёт
+                # пустую ячейку, а не 0% (правило 1 — честный пробел).
+                cell.number_format = "0.0%"
             if key in ("cpu_percent", "pg_percent") and isinstance(value, (int, float)):
                 cell.number_format = "0.0"
                 # Подсветка планет, где почти не осталось запаса: именно

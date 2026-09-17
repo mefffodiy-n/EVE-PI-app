@@ -14,7 +14,7 @@ import pandas as pd
 import pytest
 
 from domain.factory_site import describe_thresholds, select_factory_sites
-from domain.planets import RADIUS_COLUMN, PlanetBook
+from domain.planets import POCO_RATE_COLUMN, RADIUS_COLUMN, PlanetBook
 
 
 def _book(rows: list[dict]) -> PlanetBook:
@@ -186,6 +186,81 @@ def test_unknown_tier_rejected(tier):
     select_factory_sites(_book(SMALL_SYSTEM), "HOME", tier, 5, 1)
     with pytest.raises(ValueError):
         select_factory_sites(_book(SMALL_SYSTEM), "HOME", "P1", 5, 1)
+
+
+def test_does_not_fall_back_to_other_types_when_preferred_can_host_all_colonies():
+    """
+    17.09.2026, найдено пользователем на реальном плане: раньше при
+    потребности больше числа РАЗЛИЧНЫХ предпочтительных планет
+    переработка всё равно уходила на другие типы, хотя одна планета
+    несёт неограниченное число колоний (правило 4) и двух предпочтительных
+    (Barren + Temperate) хватало с большим запасом.
+    """
+    result = select_factory_sites(_book(SMALL_SYSTEM), "HOME", "P2_P3", 5, 20)
+    assert result.satisfied
+    assert not result.used_fallback_types
+    assert not result.warnings
+    types = {a.candidate.planet_type for a in result.assignments}
+    assert types <= {"Barren", "Temperate"}
+
+
+def test_lower_tax_preferred_planet_used_first_even_if_larger():
+    """
+    Среди предпочтительных планет ставка POCO — критерий выбора наравне
+    с радиусом, и по прямому запросу пользователя (17.09.2026) стоит
+    впереди него: планета с меньшим налогом используется первой, даже
+    если она крупнее (обе всё равно помещаются под шаблон).
+    """
+    book = _book([
+        {"System": "HOME", "Planet": 4, "Type": "Barren", RADIUS_COLUMN: 5000,
+         POCO_RATE_COLUMN: 10},
+        {"System": "HOME", "Planet": 7, "Type": "Temperate", RADIUS_COLUMN: 9000,
+         POCO_RATE_COLUMN: 3},
+    ])
+    result = select_factory_sites(book, "HOME", "P2_P3", 5, 2)
+    assert len(result.assignments) == 1
+    assert result.assignments[0].candidate.planet == "7"  # ниже налог, хоть и крупнее
+
+
+def test_warns_and_marks_fallback_types_when_preferred_too_big_for_template():
+    """
+    Отличается от site_no_preferred: предпочтительные планеты в системе
+    ЕСТЬ, но ни одна не помещается под шаблон по размеру — переработка
+    уходит на другие типы, и это должно быть явно сказано, а не тихо.
+    """
+    book = _book([
+        {"System": "HOME", "Planet": "1", "Type": "Barren", RADIUS_COLUMN: 18000},
+        {"System": "HOME", "Planet": "2", "Type": "Lava", RADIUS_COLUMN: 5000},
+    ])
+    result = select_factory_sites(book, "HOME", "P2_P3", 5, 2)
+    assert result.used_fallback_types == ["Lava"]
+    text = " ".join(result.warnings)
+    assert "другие типы планет" in text
+    assert "Lava" in text
+
+
+def test_warns_when_some_colonies_end_up_on_higher_tax_planet():
+    """
+    17.09.2026, по прямому запросу пользователя: если часть переработки
+    вынужденно ушла на планету с более высокой ставкой POCO, чем у
+    лучшего использованного варианта, план остаётся рабочим, но
+    предупреждает и называет конкретные планеты — не блокирует выбор
+    домашней системы, просто честно указывает на разницу.
+    """
+    book = _book([
+        # Помещается и под двойной, и под одиночный шаблон, но налог выше.
+        {"System": "HOME", "Planet": 4, "Type": "Barren", RADIUS_COLUMN: 5820,
+         POCO_RATE_COLUMN: 10},
+        # Налог ниже, но слишком крупная под двойной — только одиночный.
+        {"System": "HOME", "Planet": 7, "Type": "Temperate", RADIUS_COLUMN: 18000,
+         POCO_RATE_COLUMN: 1},
+    ])
+    result = select_factory_sites(book, "HOME", "P2_P3", 5, 5)  # 2 двойных + 1 одиночный
+    assert result.satisfied
+    rates_used = {a.candidate.poco_rate for a in result.assignments}
+    assert rates_used == {0.10, 0.01}
+    text = " ".join(result.warnings)
+    assert "выше" in text and "1%" in text
 
 
 def test_thresholds_reported_for_ui():

@@ -200,6 +200,14 @@ class PlanRow:
     cpu_percent: float
     pg_percent: float
 
+    # Ставка POCO (доля 0..1) конкретной планеты, из data/planet_industry.csv
+    # (domain/planets.py::PlanetBook.poco_rate()) — заполняется один раз,
+    # после того как известны system/planet каждой строки (build_plan()),
+    # той же автоматикой, что и прогноз прибыльности (domain/poco_tax.py).
+    # None — планета за пределами загруженного региона, честный пробел,
+    # не 0% (правило 1).
+    poco_rate: float | None = None
+
     # Поимённый состав застройки: командный центр, причал, склад,
     # экстрактор, фабрики. Нужен дашборду, чтобы рисовать полосу
     # структур как в игровом окне Planetary Industry, а не одно число.
@@ -273,6 +281,7 @@ class PlanRow:
             },
             "hours_left": self.hours_left,
             "shared_extraction_count": self.shared_extraction_count,
+            "poco_rate": self.poco_rate,
         }
 
 
@@ -905,6 +914,15 @@ def build_plan(
 
     if request.extraction_margin > 1.0:
         result.assume("assume_extraction_margin", margin=f"{request.extraction_margin:g}")
+
+    # Ставка POCO по конкретной планете каждой строки (17.09.2026, по
+    # прямому запросу пользователя) — единым проходом в конце, а не в
+    # каждом месте создания PlanRow (их несколько: прямое P2, обычная
+    # переработка, обычная добыча, избыточная добыча) — system/planet
+    # у всех строк уже известны, дублировать вызов planets.poco_rate()
+    # в каждом месте незачем.
+    for row in result.rows:
+        row.poco_rate = planets.poco_rate(row.system, row.planet)
 
     _note_extractor_stacking(result)
     return result
