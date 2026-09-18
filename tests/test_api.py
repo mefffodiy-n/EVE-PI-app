@@ -409,6 +409,141 @@ class TestExport:
         assert pg_cell.fill.start_color.rgb == "00FFF2CC"
 
 
+class TestExportColonies:
+    """
+    18.09.2026, по прямому запросу пользователя: «раз можем
+    экспортировать план, почему не колонии» — /api/export принимает и
+    colonies_data, тем же форматом колонок, что и план.
+    """
+
+    SAMPLE_COLONY = {
+        "character": "Chief 1", "character_id": 90001, "planet_id": 111,
+        "planet_name": "HOME IV", "system_name": "HOME", "planet_index": 4,
+        "planet_type": "barren", "upgrade_level": 5, "num_pins": 3,
+        "structures": [], "routes": [],
+        "pins": [
+            {"pin_id": 1, "kind": "advanced_industry_facility",
+             "product": "Biocells", "cycle_minutes": 60, "last_cycle_start": None},
+        ],
+        "cpu_percent": 39.2, "pg_percent": 95.1,
+        "cpu_used": None, "cpu_capacity": None, "pg_used": None, "pg_capacity": None,
+        "nearest_expiry": None, "synced_at": None, "game_last_update": None,
+    }
+
+    def _mock_planets(self, monkeypatch):
+        """
+        `export.py::_load_planets_and_schematics()` импортирует
+        `load_planets` заново при каждом вызове — патчим сам модуль
+        `domain.planets`, а не `reference.load_planets` (тот патчит
+        только имя внутри api.blueprints.reference, см. фикстуру client).
+
+        Planet — числом (не строкой, как в общем SAMPLE_PLANETS): у
+        настоящих колоний planet_index приходит от ESI числом, а
+        PlanetBook.radius_km()/poco_rate() сравнивают через float() —
+        строковая колонка не совпала бы ни с одним числом.
+        """
+        book = PlanetBook(pd.DataFrame([
+            {"Constellation": "ALPHA", "System": "HOME", "Planet": 4, "Type": "Barren",
+             RADIUS_COLUMN: 5820, "POCO Tax Rate [%]": 3.0},
+        ]))
+        monkeypatch.setattr("domain.planets.load_planets", lambda: book)
+
+    def test_colonies_only_produces_single_sheet(self, client, monkeypatch):
+        from io import BytesIO
+
+        from openpyxl import load_workbook
+
+        self._mock_planets(monkeypatch)
+        r = client.post("/api/export", json={"colonies_data": [self.SAMPLE_COLONY]})
+        assert r.status_code == 200
+        workbook = load_workbook(BytesIO(r.data))
+        # Ни "Сводки", ни "Проверки" — командные центры уже куплены,
+        # решение пользователя.
+        assert workbook.sheetnames == ["Мои колонии"]
+
+    def test_colony_row_maps_real_data_to_plan_columns(self, client, monkeypatch):
+        from io import BytesIO
+
+        from openpyxl import load_workbook
+
+        self._mock_planets(monkeypatch)
+        r = client.post("/api/export", json={"colonies_data": [self.SAMPLE_COLONY]})
+        sheet = load_workbook(BytesIO(r.data))["Мои колонии"]
+        assert sheet["A2"].value == "Chief 1"
+        assert sheet["B2"].value == "Переработка"
+        assert sheet["D2"].value == "HOME"
+        assert sheet["E2"].value == "4"
+        assert sheet["F2"].value == "Barren"  # ESI отдаёт строчными, здесь — с заглавной
+        assert sheet["G2"].value == 5820  # радиус из того же файла, что и у плана
+        assert sheet["H2"].value == "1x Barren Command Center"
+        assert sheet["I2"].value == "Biofuels, Precious Metals"
+        assert sheet["J2"].value == "Biocells"
+        assert sheet["O2"].value == 0.03  # ставка POCO той же планеты
+
+    def test_idle_factory_still_reports_its_assigned_product(self, client, monkeypatch):
+        """
+        Простаивающая фабрика (цикл истёк давным-давно) по-прежнему
+        показывает назначенный продукт — ESI не стирает schematic_id,
+        когда истекает таймер, это не одно и то же (тот же факт, на
+        котором построен pinCycleInfo() во фронтенде).
+        """
+        from io import BytesIO
+
+        from openpyxl import load_workbook
+
+        self._mock_planets(monkeypatch)
+        idle_colony = {
+            **self.SAMPLE_COLONY,
+            "pins": [{
+                "pin_id": 1, "kind": "advanced_industry_facility",
+                "product": "Biocells", "cycle_minutes": 60,
+                "last_cycle_start": "2020-01-01T00:00:00Z",
+            }],
+        }
+        r = client.post("/api/export", json={"colonies_data": [idle_colony]})
+        sheet = load_workbook(BytesIO(r.data))["Мои колонии"]
+        assert sheet["J2"].value == "Biocells"
+
+    def test_plan_and_colonies_together_produce_four_sheets(self, client, monkeypatch):
+        from io import BytesIO
+
+        from openpyxl import load_workbook
+
+        self._mock_planets(monkeypatch)
+        r = client.post("/api/export", json={
+            "plan_data": [SAMPLE_PLAN_ROW], "colonies_data": [self.SAMPLE_COLONY],
+        })
+        workbook = load_workbook(BytesIO(r.data))
+        assert workbook.sheetnames == ["План", "Сводка", "Проверка", "Мои колонии"]
+
+    def test_rejects_when_neither_plan_nor_colonies_given(self, client):
+        r = client.post("/api/export", json={"plan_data": [], "colonies_data": []})
+        assert r.status_code == 400
+
+    def test_rejects_oversized_colonies_list(self, client):
+        r = client.post("/api/export", json={"colonies_data": [{}] * 501})
+        assert r.status_code == 400
+
+    def test_mining_colony_role_and_extractor_product(self, client, monkeypatch):
+        self._mock_planets(monkeypatch)
+        mining_colony = {
+            **self.SAMPLE_COLONY,
+            "pins": [{
+                "pin_id": 2, "kind": "extractor_control_unit",
+                "product": "Base Metals", "expiry_time": None,
+            }],
+        }
+        from io import BytesIO
+
+        from openpyxl import load_workbook
+
+        r = client.post("/api/export", json={"colonies_data": [mining_colony]})
+        sheet = load_workbook(BytesIO(r.data))["Мои колонии"]
+        assert sheet["B2"].value == "Добыча"
+        assert sheet["J2"].value == "Base Metals"
+        assert sheet["I2"].value is None  # у добычи нет "входа" по определению
+
+
 class TestColonies:
     def test_empty_when_nothing_synced(self, client):
         body = client.get("/api/colonies").get_json()

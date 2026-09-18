@@ -257,5 +257,15 @@ FEATURES = FEATURES + (
 )
 
 
+FEATURES = FEATURES + (
+    Feature(
+        "colonies_excel_export", "Выгрузка настоящих колоний в Excel («Мои колонии»), тем же форматом, что и план",
+        ("Мои колонии", "командные центры уже куплены"),
+        ("My colonies", "already bought"),
+        "0.10.20", "help",
+    ),
+)
+
+
 def by_section(section: str) -> tuple[Feature, ...]:
     return tuple(f for f in FEATURES if f.where == section)
