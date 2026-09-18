@@ -142,6 +142,21 @@ class PlanetBook:
         """Все планеты системы."""
         return self._df[self._df["System"] == system]
 
+    def constellation_of(self, system: str) -> str | None:
+        """
+        Констелляция по имени системы — для настоящих колоний (ESI её
+        не отдаёт, а тут она есть). None, если системы нет в этом файле:
+        честный пробел, не пустая строка без объяснения (18.09.2026,
+        найдено пользователем — колонка «Констелляция» в выгрузке
+        настоящих колоний в Excel оставалась пустой без причины, хотя
+        данные для неё есть в этом же файле).
+        """
+        subset = self._df[self._df["System"] == system]
+        if subset.empty:
+            return None
+        value = subset.iloc[0]["Constellation"]
+        return None if pd.isna(value) else str(value)
+
     def radius_km(self, system: str, planet_number: float | int | str) -> float | None:
         """
         Радиус конкретной планеты по системе и номеру — для расчёта

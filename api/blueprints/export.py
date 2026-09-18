@@ -176,7 +176,7 @@ def _write_rows_sheet(sheet, rows: list[dict], tr: dict) -> None:
                     cell.fill = WARN_FILL
 
 
-def _colony_to_row(colony: dict, planets, schematics: dict) -> dict:
+def _colony_to_row(colony: dict, planets, recipes) -> dict:
     """
     Настоящая колония (одна запись `/api/colonies`) → строка того же
     формата, что и у расчётного плана (COLUMNS) — 18.09.2026, по прямому
@@ -187,10 +187,30 @@ def _colony_to_row(colony: dict, planets, schematics: dict) -> dict:
     ДАЖЕ когда сейчас простаивает — ESI не стирает назначенную схему
     производства, когда истекает цикл, само назначение и таймер это
     разные вещи (тот же факт, на котором построен pinCycleInfo() во
-    фронтенде). Радиус и ставка POCO — из того же файла данных, что и
-    весь остальной расчёт (`PlanetBook.radius_km()`/`poco_rate()`);
-    оба честно `None`, если планета за пределами загруженного региона —
-    не 0 и не подстановка среднего.
+    фронтенде). Радиус, ставка POCO и констелляция — из того же файла
+    данных, что и весь остальной расчёт (`PlanetBook.radius_km()`/
+    `poco_rate()`/`constellation_of()`); все честно `None`, если планета
+    за пределами загруженного региона — не 0/пустая строка без объяснения
+    и не подстановка среднего.
+
+    **Роль — по экстрактору, даже если на планете есть и фабрики**
+    (18.09.2026, найдено пользователем на реальных данных: колония с
+    экстрактором Felsic Magma и 8 фабриками, перерабатывающими её же
+    выход в Silicon на месте — обычная оптимизация, не вывозить P1 —
+    показывала «Переработка» на КАЖДОЙ такой колонии). Экстрактор решает
+    первым — та же приоритетность, что уже в `realRows()`
+    (`web/index.html`) для карточек колоний на дашборде; здесь просто
+    забыли её повторить, когда добавляли экспорт.
+
+    **Вход фабрики — из `domain.recipes` (`Recipe.inputs`/`.source`),
+    не из `domain.throughput.load_schematics()`** (тот же день, тот же
+    отчёт пользователя: колонка «Вход» показывала `type_id:2307` вместо
+    «Felsic Magma»). `data/schematics.json` резолвит имена входов только
+    по `data/type_ids.json`, а там нет сырья R0 (оно не структура и не
+    продукт с иконкой) — есть отдельный, уже проверенный по источникам
+    (правило 2) способ узнать сырьё P1-рецепта: `Recipe.source`. Тот же
+    способ уже используют "recipe_inputs" в `/api/initial-data`
+    (`api/blueprints/reference.py::_initial_payload()`).
     """
     system = colony.get("system_name") or ""
     planet_number = colony.get("planet_index")
@@ -201,28 +221,37 @@ def _colony_to_row(colony: dict, planets, schematics: dict) -> dict:
     planet_type = raw_type[:1].upper() + raw_type[1:] if raw_type else ""
 
     pins = colony.get("pins") or []
-    factory_pins = [p for p in pins if str(p.get("kind") or "").endswith("industry_facility")]
     extractor_pins = [p for p in pins if p.get("kind") == "extractor_control_unit"]
+    factory_pins = [p for p in pins if str(p.get("kind") or "").endswith("industry_facility")]
 
-    role_key = "proc" if factory_pins else "mine" if extractor_pins else None
+    role_key = "mine" if extractor_pins else "proc" if factory_pins else None
     res_out = res_in = None
-    structures = ""
-    if factory_pins:
-        res_out = factory_pins[0].get("product")
-        schem = schematics.get(res_out) if res_out else None
-        res_in = ", ".join(sorted(schem.inputs)) if schem else None
-        structures = f"{len(factory_pins)} {_L['ru']['fact']}"
-    elif extractor_pins:
+    # {"factories": N} — тот же формат, что и у расчётного плана
+    # (PlanRow.factory_summary), не голая русская строка: тогда
+    # _structures_value()/_write_rows_sheet() переводят число на язык
+    # листа сами, лист на английском не остаётся с русским словом внутри.
+    factory_summary: dict = {}
+    if role_key == "mine":
         res_out = extractor_pins[0].get("product")
-        structures = str(len(extractor_pins))
+        heads = extractor_pins[0].get("heads")
+        factory_summary = {"factories": heads or len(extractor_pins)}
+    elif role_key == "proc":
+        res_out = factory_pins[0].get("product")
+        recipe = recipes.get(res_out) if res_out else None
+        if recipe and recipe.inputs:
+            res_in = ", ".join(sorted(recipe.inputs))
+        elif recipe and recipe.source:
+            res_in = recipe.source
+        factory_summary = {"factories": len(factory_pins)}
 
     radius = planets.radius_km(system, planet_number) if planets and planet_number is not None else None
     poco_rate = planets.poco_rate(system, planet_number) if planets and planet_number is not None else None
+    constellation = planets.constellation_of(system) if planets and system else None
 
     return {
         "character": colony.get("character"),
         "role_key": role_key,
-        "constellation": None,
+        "constellation": constellation,
         "system": system,
         "planet": str(planet_number) if planet_number is not None else "",
         "planet_type": planet_type,
@@ -230,7 +259,7 @@ def _colony_to_row(colony: dict, planets, schematics: dict) -> dict:
         "cc_type": f"1x {planet_type} Command Center" if planet_type else None,
         "res_in": res_in,
         "res_out": res_out,
-        "structures": structures,
+        "factory_summary": factory_summary,
         "template_key": None,
         "cpu_percent": colony.get("cpu_percent"),
         "pg_percent": colony.get("pg_percent"),
@@ -238,12 +267,12 @@ def _colony_to_row(colony: dict, planets, schematics: dict) -> dict:
     }
 
 
-def _load_planets_and_schematics():
+def _load_planets_and_recipes():
     """
     Тот же способ читать справочники, что и у остальных эндпоинтов
-    (`api/blueprints/plans.py::_load_planets_book()`) — `None`/`{}`,
-    если файла нет, а не падение: экспорт колоний тогда просто останется
-    без радиуса/ставки POCO/входов схемы, честно (правило 1).
+    (`api/blueprints/plans.py::_load_planets_book()`) — `None`, если
+    файла нет, а не падение: экспорт колоний тогда просто останется без
+    радиуса/ставки POCO/констелляции/входа рецепта, честно (правило 1).
     """
     try:
         from domain.planets import load_planets
@@ -251,9 +280,9 @@ def _load_planets_and_schematics():
         planets = load_planets()
     except FileNotFoundError:
         planets = None
-    from domain.throughput import load_schematics
+    from domain.recipes import load_recipes
 
-    return planets, load_schematics()
+    return planets, load_recipes()
 
 
 def _build_workbook(rows: list[dict], colony_rows: list[dict], lang: str = "ru") -> Workbook:
@@ -376,8 +405,8 @@ def export_plan():
 
     colony_rows = []
     if colonies:
-        planets, schematics = _load_planets_and_schematics()
-        colony_rows = [_colony_to_row(c, planets, schematics) for c in colonies]
+        planets, recipes = _load_planets_and_recipes()
+        colony_rows = [_colony_to_row(c, planets, recipes) for c in colonies]
 
     stream = BytesIO()
     _build_workbook(rows, colony_rows, lang).save(stream)
