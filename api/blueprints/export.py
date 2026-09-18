@@ -1,20 +1,38 @@
 """
-Экспорт готового плана в Excel (.xlsx).
+Экспорт готового плана и/или настоящих колоний в Excel (.xlsx).
 
 Контракт фронтенда (web/index.html):
-  POST /api/export  body: {plan_data: currentPlan, lang: "ru"|"en"}
+  POST /api/export  body: {plan_data: currentPlan, colonies_data: coloniesData,
+                            lang: "ru"|"en"}
   -> файл .xlsx с Content-Disposition
 
-Три листа:
-  «План» / Plan       — по строке на планету, как в интерфейсе;
-  «Сводка» / Summary   — сколько каких командных центров закупать, с формулами;
-  «Проверка» / Check   — загрузка CPU/PG по каждой планете, чтобы видеть запас.
+Оба поля необязательны, но хотя бы одно должно быть непустым списком —
+экспортировать нечего, если нет ни плана, ни колоний.
 
-Формулы, а не посчитанные в Python числа: лист должен пересчитываться,
-если пользователь вручную поправит строку.
+Листы (18.09.2026, добавлены настоящие колонии — по прямому запросу
+пользователя: «раз можем экспортировать план, почему не колонии»):
+  «План» / Plan         — по строке на планету, как в интерфейсе
+                          (только если plan_data непуст);
+  «Сводка» / Summary     — сколько каких командных центров закупать, с
+                          формулами (только вместе с «План» — у настоящих
+                          колоний командные центры уже куплены, список
+                          закупки не нужен);
+  «Проверка» / Check     — загрузка CPU/PG по каждой планете плана, чтобы
+                          видеть запас (та же оговорка, что и у «Сводки»);
+  «Мои колонии» / My colonies — настоящие колонии (только если
+                          colonies_data непуст), тем же форматом колонок,
+                          что и «План» — единственным листом, без своих
+                          сводки/проверки (решение пользователя: они не
+                          нужны для уже построенного).
+
+Если plan_data пуст, а colonies_data — нет: книга состоит из ОДНОГО
+листа «Мои колонии», без «Плана»/«Сводки»/«Проверки» вовсе.
+
+Формулы, а не посчитанные в Python числа: лист «Сводка» должен
+пересчитываться, если пользователь вручную поправит лист «План».
 
 НАГРУЗКА: генерация xlsx держит воркер занятым и ест память, поэтому
-размер входных данных ограничен явно.
+размер входных данных ограничен явно (оба списка по отдельности).
 
 Язык листа задаётся полем lang: заголовки, имена листов и значения ролей
 и структур переводятся здесь. Формула COUNTIF ссылается на переведённое
@@ -26,17 +44,17 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from io import BytesIO
 
-from flask import Blueprint, send_file
+from flask import Blueprint, request, send_file
 
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-from api.cache import json_error, parse_json_body
+from api.cache import json_error
 
 bp = Blueprint("export", __name__)
 
-MAX_PLAN_ROWS = 500
+MAX_EXPORT_ROWS = 500
 
 HEADER_FILL = PatternFill("solid", start_color="1F3B4D")
 HEADER_FONT = Font(name="Arial", bold=True, color="FFFFFF", size=11)
@@ -54,6 +72,7 @@ COLUMNS = [
 _L = {
     "ru": {
         "sheet_plan": "План", "sheet_summary": "Сводка", "sheet_check": "Проверка",
+        "sheet_colonies": "Мои колонии",
         "character": "Персонаж", "role": "Роль", "constellation": "Констелляция",
         "system": "Система", "planet": "Планета", "planet_type": "Тип планеты",
         "planet_radius_km": "Радиус, км", "cc_type": "Командный центр",
@@ -74,6 +93,7 @@ _L = {
     },
     "en": {
         "sheet_plan": "Plan", "sheet_summary": "Summary", "sheet_check": "Check",
+        "sheet_colonies": "My colonies",
         "character": "Character", "role": "Role", "constellation": "Constellation",
         "system": "System", "planet": "Planet", "planet_type": "Planet type",
         "planet_radius_km": "Radius, km", "cc_type": "Command centre",
@@ -124,14 +144,13 @@ def _style_header(sheet, headers: list[str], widths: list[int], start_row: int =
     sheet.freeze_panes = f"A{start_row + 1}"
 
 
-def _build_workbook(rows: list[dict], lang: str = "ru") -> Workbook:
-    tr = _L.get(lang, _L["ru"])
-    workbook = Workbook()
-
-    plan = workbook.active
-    plan.title = tr["sheet_plan"]
-    _style_header(plan, [tr[key] for key, _ in COLUMNS], [w for _, w in COLUMNS])
-
+def _write_rows_sheet(sheet, rows: list[dict], tr: dict) -> None:
+    """
+    Заполнить лист по общему формату COLUMNS — одинаково для «План» и
+    «Мои колонии» (18.09.2026): один и тот же набор колонок, один и тот
+    же смысл каждой, разница только в источнике строк.
+    """
+    _style_header(sheet, [tr[key] for key, _ in COLUMNS], [w for _, w in COLUMNS])
     for row_index, item in enumerate(rows, start=2):
         for col_index, (key, _) in enumerate(COLUMNS, start=1):
             if key == "role":
@@ -140,7 +159,7 @@ def _build_workbook(rows: list[dict], lang: str = "ru") -> Workbook:
                 value = _structures_value(item, tr)
             else:
                 value = item.get(key)
-            cell = plan.cell(row=row_index, column=col_index, value=value)
+            cell = sheet.cell(row=row_index, column=col_index, value=value)
             cell.font = BODY_FONT
             if key == "planet_radius_km" and isinstance(value, (int, float)):
                 cell.number_format = "#,##0"
@@ -156,6 +175,108 @@ def _build_workbook(rows: list[dict], lang: str = "ru") -> Workbook:
                 if value >= 90:
                     cell.fill = WARN_FILL
 
+
+def _colony_to_row(colony: dict, planets, schematics: dict) -> dict:
+    """
+    Настоящая колония (одна запись `/api/colonies`) → строка того же
+    формата, что и у расчётного плана (COLUMNS) — 18.09.2026, по прямому
+    запросу пользователя: «раз можем экспортировать план, почему не
+    колонии».
+
+    Текущий продукт фабрики/экстрактора берётся с её пина (`pin.product`)
+    ДАЖЕ когда сейчас простаивает — ESI не стирает назначенную схему
+    производства, когда истекает цикл, само назначение и таймер это
+    разные вещи (тот же факт, на котором построен pinCycleInfo() во
+    фронтенде). Радиус и ставка POCO — из того же файла данных, что и
+    весь остальной расчёт (`PlanetBook.radius_km()`/`poco_rate()`);
+    оба честно `None`, если планета за пределами загруженного региона —
+    не 0 и не подстановка среднего.
+    """
+    system = colony.get("system_name") or ""
+    planet_number = colony.get("planet_index")
+    # ESI отдаёт тип строчными («barren»), в файле данных и у плана —
+    # с заглавной («Barren») — та же нормализация, что и во фронтенде
+    # (realRows(), web/index.html).
+    raw_type = str(colony.get("planet_type") or "")
+    planet_type = raw_type[:1].upper() + raw_type[1:] if raw_type else ""
+
+    pins = colony.get("pins") or []
+    factory_pins = [p for p in pins if str(p.get("kind") or "").endswith("industry_facility")]
+    extractor_pins = [p for p in pins if p.get("kind") == "extractor_control_unit"]
+
+    role_key = "proc" if factory_pins else "mine" if extractor_pins else None
+    res_out = res_in = None
+    structures = ""
+    if factory_pins:
+        res_out = factory_pins[0].get("product")
+        schem = schematics.get(res_out) if res_out else None
+        res_in = ", ".join(sorted(schem.inputs)) if schem else None
+        structures = f"{len(factory_pins)} {_L['ru']['fact']}"
+    elif extractor_pins:
+        res_out = extractor_pins[0].get("product")
+        structures = str(len(extractor_pins))
+
+    radius = planets.radius_km(system, planet_number) if planets and planet_number is not None else None
+    poco_rate = planets.poco_rate(system, planet_number) if planets and planet_number is not None else None
+
+    return {
+        "character": colony.get("character"),
+        "role_key": role_key,
+        "constellation": None,
+        "system": system,
+        "planet": str(planet_number) if planet_number is not None else "",
+        "planet_type": planet_type,
+        "planet_radius_km": radius,
+        "cc_type": f"1x {planet_type} Command Center" if planet_type else None,
+        "res_in": res_in,
+        "res_out": res_out,
+        "structures": structures,
+        "template_key": None,
+        "cpu_percent": colony.get("cpu_percent"),
+        "pg_percent": colony.get("pg_percent"),
+        "poco_rate": poco_rate,
+    }
+
+
+def _load_planets_and_schematics():
+    """
+    Тот же способ читать справочники, что и у остальных эндпоинтов
+    (`api/blueprints/plans.py::_load_planets_book()`) — `None`/`{}`,
+    если файла нет, а не падение: экспорт колоний тогда просто останется
+    без радиуса/ставки POCO/входов схемы, честно (правило 1).
+    """
+    try:
+        from domain.planets import load_planets
+
+        planets = load_planets()
+    except FileNotFoundError:
+        planets = None
+    from domain.throughput import load_schematics
+
+    return planets, load_schematics()
+
+
+def _build_workbook(rows: list[dict], colony_rows: list[dict], lang: str = "ru") -> Workbook:
+    tr = _L.get(lang, _L["ru"])
+    workbook = Workbook()
+    first_sheet_used = False
+
+    if rows:
+        plan = workbook.active
+        plan.title = tr["sheet_plan"]
+        first_sheet_used = True
+        _write_rows_sheet(plan, rows, tr)
+        _write_summary_and_check_sheets(workbook, rows, tr)
+
+    if colony_rows:
+        colonies_sheet = workbook.active if not first_sheet_used else workbook.create_sheet()
+        colonies_sheet.title = tr["sheet_colonies"]
+        _write_rows_sheet(colonies_sheet, colony_rows, tr)
+
+    return workbook
+
+
+def _write_summary_and_check_sheets(workbook: Workbook, rows: list[dict], tr: dict) -> None:
     last = len(rows) + 1
 
     # Лист сводки: сколько командных центров каждого типа закупать —
@@ -224,26 +345,42 @@ def _build_workbook(rows: list[dict], lang: str = "ru") -> Workbook:
         reserve.font = BODY_FONT
         reserve.number_format = "0.0"
 
-    return workbook
+
+def _validate_rows(rows: object, field_name: str) -> str | None:
+    """Общая проверка plan_data/colonies_data — список объектов в пределах лимита."""
+    if not isinstance(rows, list):
+        return f"Поле '{field_name}' должно быть списком"
+    if len(rows) > MAX_EXPORT_ROWS:
+        return f"Слишком много строк в '{field_name}': {len(rows)}, максимум {MAX_EXPORT_ROWS}"
+    if not all(isinstance(item, dict) for item in rows):
+        return f"Каждый элемент '{field_name}' должен быть объектом"
+    return None
 
 
 @bp.post("/export")
 def export_plan():
-    payload, error = parse_json_body({"plan_data": list})
-    if error:
-        return json_error(error)
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return json_error("Ожидается JSON-объект в теле запроса")
 
-    rows = payload["plan_data"]
+    rows = payload.get("plan_data") or []
+    colonies = payload.get("colonies_data") or []
     lang = "en" if str(payload.get("lang", "ru")).lower().startswith("en") else "ru"
-    if not rows:
-        return json_error("Нечего экспортировать: план пуст")
-    if len(rows) > MAX_PLAN_ROWS:
-        return json_error(f"Слишком большой план: {len(rows)} строк, максимум {MAX_PLAN_ROWS}")
-    if not all(isinstance(item, dict) for item in rows):
-        return json_error("Каждый элемент plan_data должен быть объектом")
+
+    if not rows and not colonies:
+        return json_error("Нечего экспортировать: нет ни плана, ни колоний")
+    for field_name, value in (("plan_data", rows), ("colonies_data", colonies)):
+        error = _validate_rows(value, field_name)
+        if error:
+            return json_error(error)
+
+    colony_rows = []
+    if colonies:
+        planets, schematics = _load_planets_and_schematics()
+        colony_rows = [_colony_to_row(c, planets, schematics) for c in colonies]
 
     stream = BytesIO()
-    _build_workbook(rows, lang).save(stream)
+    _build_workbook(rows, colony_rows, lang).save(stream)
     stream.seek(0)
 
     filename = f"pi-plan-{datetime.now(timezone.utc):%Y%m%d-%H%M}.xlsx"
