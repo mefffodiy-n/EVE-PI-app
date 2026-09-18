@@ -48,3 +48,19 @@ class TestPocoRate:
         assert book.poco_rate("57-KJB", 99) is None
 
 
+class TestConstellationOf:
+    """
+    18.09.2026, найдено пользователем: колонка «Констелляция» в
+    экспорте настоящих колоний в Excel оставалась пустой — данные для
+    неё есть в этом же файле, просто не читались.
+    """
+
+    def test_known_system_returns_its_constellation(self):
+        book = load_planets()
+        assert book.constellation_of("57-KJB") == "MINOTAUR"
+
+    def test_unknown_system_is_none(self):
+        book = load_planets()
+        assert book.constellation_of("Jita") is None
+
+

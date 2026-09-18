@@ -432,7 +432,7 @@ class TestExportColonies:
 
     def _mock_planets(self, monkeypatch):
         """
-        `export.py::_load_planets_and_schematics()` импортирует
+        `export.py::_load_planets_and_recipes()` импортирует
         `load_planets` заново при каждом вызове — патчим сам модуль
         `domain.planets`, а не `reference.load_planets` (тот патчит
         только имя внутри api.blueprints.reference, см. фикстуру client).
@@ -471,6 +471,7 @@ class TestExportColonies:
         sheet = load_workbook(BytesIO(r.data))["Мои колонии"]
         assert sheet["A2"].value == "Chief 1"
         assert sheet["B2"].value == "Переработка"
+        assert sheet["C2"].value == "ALPHA"  # 18.09.2026: раньше оставалась пустой
         assert sheet["D2"].value == "HOME"
         assert sheet["E2"].value == "4"
         assert sheet["F2"].value == "Barren"  # ESI отдаёт строчными, здесь — с заглавной
@@ -479,6 +480,59 @@ class TestExportColonies:
         assert sheet["I2"].value == "Biofuels, Precious Metals"
         assert sheet["J2"].value == "Biocells"
         assert sheet["O2"].value == 0.03  # ставка POCO той же планеты
+
+    def test_combined_colony_is_classified_as_mining_not_processing(self, client, monkeypatch):
+        """
+        18.09.2026, найдено пользователем на реальном экспорте: колония
+        с экстрактором И фабриками на одной планете (обычная оптимизация —
+        перерабатывать сырьё сразу на месте добычи, не вывозя P1)
+        показывала «Переработка» на КАЖДОЙ такой колонии. Экстрактор
+        должен решать роль первым — та же приоритетность, что уже
+        использует realRows() (web/index.html) для карточек на дашборде.
+        """
+        from io import BytesIO
+
+        from openpyxl import load_workbook
+
+        self._mock_planets(monkeypatch)
+        combined = {
+            **self.SAMPLE_COLONY,
+            "pins": [
+                {"pin_id": 1, "kind": "advanced_industry_facility",
+                 "product": "Biocells", "cycle_minutes": 60, "last_cycle_start": None},
+                {"pin_id": 2, "kind": "extractor_control_unit",
+                 "product": "Precious Metals", "heads": 8, "expiry_time": None},
+            ],
+        }
+        r = client.post("/api/export", json={"colonies_data": [combined]})
+        sheet = load_workbook(BytesIO(r.data))["Мои колонии"]
+        assert sheet["B2"].value == "Добыча"
+        assert sheet["J2"].value == "Precious Metals"  # выход экстрактора, не фабрики
+        assert sheet["I2"].value is None  # у добычи нет "входа"
+
+    def test_factory_input_resolved_by_name_not_left_as_raw_type_id(self, client, monkeypatch):
+        """
+        18.09.2026, найдено пользователем на реальном экспорте: колонка
+        «Вход» показывала "type_id:2307" вместо "Felsic Magma" —
+        data/schematics.json резолвит входы только по type_ids.json, а
+        там нет сырья R0 (не структура и не продукт с иконкой).
+        domain.recipes.py (Recipe.source, проверено по источникам —
+        правило 2) знает сырьё P1-рецепта всегда.
+        """
+        from io import BytesIO
+
+        from openpyxl import load_workbook
+
+        self._mock_planets(monkeypatch)
+        p1_colony = {
+            **self.SAMPLE_COLONY,
+            "pins": [{"pin_id": 1, "kind": "basic_industry_facility",
+                      "product": "Silicon", "cycle_minutes": 30, "last_cycle_start": None}],
+        }
+        r = client.post("/api/export", json={"colonies_data": [p1_colony]})
+        sheet = load_workbook(BytesIO(r.data))["Мои колонии"]
+        assert sheet["I2"].value == "Felsic Magma"
+        assert "type_id" not in str(sheet["I2"].value)
 
     def test_idle_factory_still_reports_its_assigned_product(self, client, monkeypatch):
         """
