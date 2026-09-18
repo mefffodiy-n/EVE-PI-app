@@ -489,6 +489,16 @@ class TestExportColonies:
         показывала «Переработка» на КАЖДОЙ такой колонии. Экстрактор
         должен решать роль первым — та же приоритетность, что уже
         использует realRows() (web/index.html) для карточек на дашборде.
+
+        Вход/выход при этом смотрят не на роль, а на факт переработки:
+        18.09.2026, тот же отчёт сразу ПОСЛЕ фикса роли — «Добыча» стала
+        показываться верно, но «Выход» оставался сырым продуктом
+        экстрактора (Precious Metals), а «Вход» — пустым, хотя колония
+        реально производит P1 и известно, из чего. Комбинированная
+        колония должна показывать то, что она реально выпускает: выход —
+        продукт фабрики, вход — сырьё этой же планеты (продукт
+        экстрактора), а не Recipe.source (тот годится только для
+        привозного сырья, здесь оно своё).
         """
         from io import BytesIO
 
@@ -507,8 +517,33 @@ class TestExportColonies:
         r = client.post("/api/export", json={"colonies_data": [combined]})
         sheet = load_workbook(BytesIO(r.data))["Мои колонии"]
         assert sheet["B2"].value == "Добыча"
-        assert sheet["J2"].value == "Precious Metals"  # выход экстрактора, не фабрики
-        assert sheet["I2"].value is None  # у добычи нет "входа"
+        assert sheet["J2"].value == "Biocells"  # реальный выход колонии — продукт фабрики
+        assert sheet["I2"].value == "Precious Metals"  # сырьё с этой же планеты
+
+    def test_pure_mining_colony_without_factories_reports_raw_output(self, client, monkeypatch):
+        """
+        Без фабрик на планете вход/выход остаются как раньше: выход —
+        сырой продукт экстрактора, входа нет (нечего перерабатывать на
+        месте).
+        """
+        from io import BytesIO
+
+        from openpyxl import load_workbook
+
+        self._mock_planets(monkeypatch)
+        pure_mining = {
+            **self.SAMPLE_COLONY,
+            "pins": [
+                {"pin_id": 1, "kind": "extractor_control_unit",
+                 "product": "Precious Metals", "heads": 8, "expiry_time": None},
+            ],
+        }
+        r = client.post("/api/export", json={"colonies_data": [pure_mining]})
+        sheet = load_workbook(BytesIO(r.data))["Мои колонии"]
+        assert sheet["B2"].value == "Добыча"
+        assert sheet["J2"].value == "Precious Metals"
+        assert sheet["I2"].value is None
+        assert sheet["K2"].value == "8 фабрик"  # heads экстрактора, не 1 пин
 
     def test_factory_input_resolved_by_name_not_left_as_raw_type_id(self, client, monkeypatch):
         """

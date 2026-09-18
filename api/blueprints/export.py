@@ -211,6 +211,22 @@ def _colony_to_row(colony: dict, planets, recipes) -> dict:
     (правило 2) способ узнать сырьё P1-рецепта: `Recipe.source`. Тот же
     способ уже используют "recipe_inputs" в `/api/initial-data`
     (`api/blueprints/reference.py::_initial_payload()`).
+
+    **Вход/выход описывают материальный поток колонии, а не решают её
+    роль** (18.09.2026, тот же реальный отчёт сразу после фикса роли:
+    комбинированная колония экстрактор+фабрики стала верно показывать
+    «Добыча», но «Выход» — сырой P0 экстрактора (Felsic Magma) вместо
+    P1, который фабрики реально производят (Silicon), а «Вход» — пусто,
+    хотя сырьё известно — это же выход экстрактора на этой планете).
+    `role_key` по-прежнему решает экстрактор первым (см. выше — это
+    ярлык для UI), а `res_in`/`res_out`/`factory_summary` теперь всегда
+    смотрят на `factory_pins`, если они есть, независимо от `role_key`:
+    для комбинированной колонии выход — продукт фабрики, вход — продукт
+    экстрактора на той же планете (сырьё берётся локально, а не через
+    `Recipe.source`, который годится только когда P1-сырьё привозное).
+    Recipe.inputs/.source — только когда фабрика вообще без своего
+    экстрактора (привозное сырьё). Чистая добыча без фабрик — как раньше,
+    выход это сырой продукт экстрактора, входа нет.
     """
     system = colony.get("system_name") or ""
     planet_number = colony.get("planet_index")
@@ -231,18 +247,30 @@ def _colony_to_row(colony: dict, planets, recipes) -> dict:
     # _structures_value()/_write_rows_sheet() переводят число на язык
     # листа сами, лист на английском не остаётся с русским словом внутри.
     factory_summary: dict = {}
-    if role_key == "mine":
+    if factory_pins:
+        # Вход/выход всегда описывают то, что колония реально производит
+        # и продаёт — а не то, чем формально считается «роль» (18.09.2026,
+        # тот же реальный отчёт, сразу за фиксом роли: комбинированная
+        # колония экстрактор+фабрики показывала «Добыча» верно, но «Выход»
+        # — сырое P0 экстрактора вместо P1, который фабрики реально
+        # выпускают, а «Вход» — пусто, хотя сырьё для фабрик известно:
+        # это же выход экстрактора на этой планете). Роль (role_key)
+        # остаётся по экстрактору — только она определяет ярлык
+        # «Добыча»/«Переработка», вход-выход теперь не завязаны на неё.
+        res_out = factory_pins[0].get("product")
+        if extractor_pins:
+            res_in = extractor_pins[0].get("product")
+        else:
+            recipe = recipes.get(res_out) if res_out else None
+            if recipe and recipe.inputs:
+                res_in = ", ".join(sorted(recipe.inputs))
+            elif recipe and recipe.source:
+                res_in = recipe.source
+        factory_summary = {"factories": len(factory_pins)}
+    elif extractor_pins:
         res_out = extractor_pins[0].get("product")
         heads = extractor_pins[0].get("heads")
         factory_summary = {"factories": heads or len(extractor_pins)}
-    elif role_key == "proc":
-        res_out = factory_pins[0].get("product")
-        recipe = recipes.get(res_out) if res_out else None
-        if recipe and recipe.inputs:
-            res_in = ", ".join(sorted(recipe.inputs))
-        elif recipe and recipe.source:
-            res_in = recipe.source
-        factory_summary = {"factories": len(factory_pins)}
 
     radius = planets.radius_km(system, planet_number) if planets and planet_number is not None else None
     poco_rate = planets.poco_rate(system, planet_number) if planets and planet_number is not None else None

@@ -3326,16 +3326,19 @@ function renderShopping(){
    ~21 000 записей на 87 колоний, найдено 18.09.2026 при разборе HTTP 413
    от nginx) и contents/routes — ничего из этого _colony_to_row() на
    сервере не читает (только character/system_name/planet_index/
-   planet_type/cpu_percent/pg_percent и per-pin kind/product). Отправлять
-   это в экспорт — раздувать тело запроса без всякой пользы, и рано или
-   поздно упереться в лимит nginx снова, сколько его ни поднимай. Поэтому
-   для экспорта — свой, урезанный список полей, а не coloniesData как
-   есть. */
+   planet_type/cpu_percent/pg_percent и per-pin kind/product/heads).
+   Отправлять это в экспорт — раздувать тело запроса без всякой пользы, и
+   рано или поздно упереться в лимит nginx снова, сколько его ни поднимай.
+   Поэтому для экспорта — свой, урезанный список полей, а не coloniesData
+   как есть. heads — не лишний: без него число голов экстрактора терялось
+   по дороге и «Структуры» у чисто добывающих колоний показывали «1
+   фабрик» вместо реального числа (18.09.2026, тот же реальный отчёт, что
+   и фикс роли/входа/выхода). */
 function coloniesForExport(){
   return coloniesData.map(c=>({
     character:c.character, system_name:c.system_name, planet_index:c.planet_index,
     planet_type:c.planet_type, cpu_percent:c.cpu_percent, pg_percent:c.pg_percent,
-    pins:(c.pins||[]).map(p=>({kind:p.kind, product:p.product})),
+    pins:(c.pins||[]).map(p=>({kind:p.kind, product:p.product, heads:p.heads})),
   }));
 }
 
