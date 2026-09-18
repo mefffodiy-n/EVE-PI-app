@@ -3321,6 +3321,24 @@ function renderShopping(){
    сервере (api/blueprints/export.py::_build_workbook()), тело запроса
    просто передаёт то, что уже загружено на дашборде (plan/coloniesData),
    без пересчёта на фронтенде. */
+/* coloniesData целиком — САМ пин несёт extraction_history (копится с
+   13.09.2026, ничем не ограничена — на реальном счёте пользователя уже
+   ~21 000 записей на 87 колоний, найдено 18.09.2026 при разборе HTTP 413
+   от nginx) и contents/routes — ничего из этого _colony_to_row() на
+   сервере не читает (только character/system_name/planet_index/
+   planet_type/cpu_percent/pg_percent и per-pin kind/product). Отправлять
+   это в экспорт — раздувать тело запроса без всякой пользы, и рано или
+   поздно упереться в лимит nginx снова, сколько его ни поднимай. Поэтому
+   для экспорта — свой, урезанный список полей, а не coloniesData как
+   есть. */
+function coloniesForExport(){
+  return coloniesData.map(c=>({
+    character:c.character, system_name:c.system_name, planet_index:c.planet_index,
+    planet_type:c.planet_type, cpu_percent:c.cpu_percent, pg_percent:c.pg_percent,
+    pins:(c.pins||[]).map(p=>({kind:p.kind, product:p.product})),
+  }));
+}
+
 async function exportPlan(){
   if(!plan.length && !coloniesData.length){ alert(t('exportEmpty')); return; }
   const btn=document.getElementById('exportBtn');
@@ -3328,7 +3346,7 @@ async function exportPlan(){
   try{
     const r=await fetch(`${API}/export`,{method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({plan_data:plan,colonies_data:coloniesData,lang})});
+      body:JSON.stringify({plan_data:plan,colonies_data:coloniesForExport(),lang})});
     if(!r.ok){
       const d=await r.json().catch(()=>({}));
       throw new Error(d.message||`HTTP ${r.status}`);
