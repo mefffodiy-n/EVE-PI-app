@@ -81,6 +81,40 @@ PREFERRED_FACTORY_PLANET_TYPES = ("Barren", "Temperate")
 # Прежнее имя оставлено: на него могли ссылаться внешние скрипты.
 FACTORY_PLANET_TYPES = PREFERRED_FACTORY_PLANET_TYPES
 
+_ROMAN_NUMERALS = (
+    (1000, "M"), (900, "CM"), (500, "D"), (400, "CD"), (100, "C"), (90, "XC"),
+    (50, "L"), (40, "XL"), (10, "X"), (9, "IX"), (5, "V"), (4, "IV"), (1, "I"),
+)
+
+
+def planet_number_to_roman(value: float | int | str | None) -> str:
+    """
+    Номер планеты -> римская цифра, как его показывает сама игра
+    («WMH-SO IV», не «WMH-SO 4») — 18.09.2026, по прямому запросу
+    пользователя после того, как номер планеты расчётного плана
+    отображался как «16.0» (CSV-колонка «Planet» читается pandas как
+    float64 — в файле нет строки без дробной части, дробность у неё не
+    убрана нигде). Не просто "убрать .0": весь номер планеты везде
+    (план и настоящие колонии) должен выглядеть как в игре.
+
+    Источники отдают номер по-разному (CSV — float «16.0», ESI —
+    int, JSON с фронта — то и другое как строка) — здесь принимается
+    что угодно приводимое к целому. Нечисловое или отсутствующее
+    значение возвращается как есть (честно, не выдумывая цифру).
+    """
+    try:
+        number = int(round(float(value)))
+    except (TypeError, ValueError):
+        return str(value) if value is not None else ""
+    if number <= 0:
+        return str(number)
+    result = []
+    remaining = number
+    for magnitude, numeral in _ROMAN_NUMERALS:
+        count, remaining = divmod(remaining, magnitude)
+        result.append(numeral * count)
+    return "".join(result)
+
 
 @dataclass(frozen=True)
 class Planet:
