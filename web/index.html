@@ -1417,6 +1417,24 @@ function factoryLabel(row){
   if(fs.factories!=null) return pl(fs.factories,'pFactory');
   return row.structures||'';
 }
+/* Номер планеты -> римская цифра, как в самой игре («WMH-SO IV», не
+   «16.0»/«16») — 18.09.2026, по прямому запросу пользователя: план
+   показывал дробный номер (CSV-колонка «Planet» приходит от сервера
+   как «16.0» — pandas читает её float64), а игра номер планеты вообще
+   никогда не показывает арабской цифрой. Только для ОТОБРАЖЕНИЯ:
+   исходное поле .planet остаётся числом везде, где по нему сравнивают/
+   сортируют/шлют на сервер (matchColony(), matchPlanRow(), сортировка
+   по системе, колонки profitability) — иначе parseInt("XVI",10) сломал
+   бы сопоставление плана с настоящими колониями. */
+const ROMAN_NUMERALS=[[1000,'M'],[900,'CM'],[500,'D'],[400,'CD'],[100,'C'],[90,'XC'],
+  [50,'L'],[40,'XL'],[10,'X'],[9,'IX'],[5,'V'],[4,'IV'],[1,'I']];
+function romanNumeral(value){
+  let n=Math.round(parseFloat(value));
+  if(!Number.isFinite(n)||n<=0) return value==null?'':String(value);
+  let out='';
+  for(const [v,sym] of ROMAN_NUMERALS){ while(n>=v){ out+=sym; n-=v; } }
+  return out;
+}
 /* Число в языковом формате и множественное число под язык. */
 const nloc=n=>Number(n).toLocaleString(lang==='en'?'en-US':'ru-RU');
 const pl=(n,forms)=>{ const f=(T[lang]||T.ru)[forms]||['','',''];
@@ -1831,12 +1849,12 @@ function orb(row,size,showPilot=true){
       ${pin?`<div class="tip-label">${sname(pin.kind)}</div>
         <div class="tip-bar"><i style="width:${fillPct.toFixed(0)}%"></i></div>
         <div class="tip-meta">${nloc(Math.round(pinUsedM3))}/${nloc(pin.capacity_m3)} m³</div>`:''}
-      <div class="tip-planet">${row.system} ${row.planet}</div>
+      <div class="tip-planet">${row.system} ${romanNumeral(row.planet)}</div>
       <div class="tip-meta">${row.planet_type} ${(T[lang]||T.ru).pPlanetN[0]}</div>
     </div>`;
     return `<div class="orb real${attention?' attn':''}" style="--orb:${size}px"
               onclick="openColony('${row.matchId}')"
-              aria-label="${row.character} · ${row.system} ${row.planet}">
+              aria-label="${row.character} · ${row.system} ${romanNumeral(row.planet)}">
       <div class="disc">${planetId?`<img src="${ICON(planetId,128)}" alt="">`:''}</div>
       ${fillPct!=null?`<svg class="ring${launchpadAlarm?' full':''}" viewBox="0 0 ${size} ${size}">
         <circle class="track" cx="${size/2}" cy="${size/2}" r="${r}"/>
@@ -1855,7 +1873,7 @@ function orb(row,size,showPilot=true){
               (isMining(row)?'var(--ring-extract)':'var(--ring-adv)');
   const cargoId=row.type_id;
   return `<div class="orb" style="--orb:${size}px" onclick="openColony('${row.id}')"
-            title="${row.character} · ${row.system} ${row.planet} · ${row.res_out}">
+            title="${row.character} · ${row.system} ${romanNumeral(row.planet)} · ${row.res_out}">
     <div class="disc">${planetId?`<img src="${ICON(planetId)}" alt="">`:''}</div>
     ${cargoId?`<img class="cargo" src="${ICON(cargoId)}" alt="">`:''}
     <div class="arrows"><svg viewBox="0 0 40 40">
@@ -2643,7 +2661,7 @@ function colonyCardHTML(p){
         <div class="pilot-name">${p.character}</div>
         <div class="sub">
           ${roleBadge}
-          <span class="sysbadge">${p.system} ${p.planet}</span>
+          <span class="sysbadge">${p.system} ${romanNumeral(p.planet)}</span>
           <span class="sec" style="color:${secColor(p.planet_type)}">${p.planet_type}</span>
           ${subExtra}
         </div>
@@ -2907,7 +2925,7 @@ async function runCompare(){
   const sign=v=>v>0?`<span class="up">+${v}</span>`:v<0?`<span class="down">${v}</span>`:'0';
   const list=(items,label)=>items.length
     ? `<div style="margin-top:6px">${label}:<ul>${items.map(x=>
-        `<li>${x.system} ${x.planet} — ${x.product}</li>`).join('')}</ul></div>` : '';
+        `<li>${x.system} ${romanNumeral(x.planet)} — ${x.product}</li>`).join('')}</ul></div>` : '';
   box.innerHTML=`<div class="cmp">
     <div><b>${d.left.name}</b> → <b>${d.right.name}</b></div>
     <div style="margin-top:4px">
@@ -3242,7 +3260,7 @@ async function renderColoniesProfit(){
   const colonies=rows.map(r=>{
     const flow=colonyOutputFlow(r);
     return {
-      label:`${r.character} · ${r.system} ${r.planet}`,
+      label:`${r.character} · ${r.system} ${romanNumeral(r.planet)}`,
       product: flow?flow.pin.product:null,
       units_per_hour: flow?colonyOutputRatePerHour(r, sims.get(r)):null,
       planet_type: r.planet_type,
@@ -3645,7 +3663,7 @@ function openColony(id){
 
   const body=structureUnitsHTML(p.structures_detail, p.planet_type, {
     hasLoad:true, cpu:p.cpu_percent, pg:p.pg_percent, pgb:p.pg_breakdown||{},
-    resIn:p.res_in, resOut:p.res_out, real, expMs, planetLabel:p.planet,
+    resIn:p.res_in, resOut:p.res_out, real, expMs, planetLabel:romanNumeral(p.planet),
     ecuPin:ecuPins.length===1?ecuPins[0]:null,
   });
 
@@ -3655,7 +3673,7 @@ function openColony(id){
       <div>
         <div class="pilot-name">${p.character}${char?` <span class="skills">CCU ${char.ccu} · IC ${char.ic}</span>`:''}</div>
         <div class="sub">
-          <span class="sysbadge">${p.system} ${p.planet}</span>
+          <span class="sysbadge">${p.system} ${romanNumeral(p.planet)}</span>
           <span class="sec" style="color:${secColor(p.planet_type)}">${p.planet_type}</span>
           <span class="num">${nloc(Math.round(p.planet_radius_km))} ${t('km')}</span>
           <span>${roleLabel(p)}</span>
@@ -3702,9 +3720,9 @@ function openRealColonyDetail(id){
     cpuUsed:c.cpu_used, cpuCap:c.cpu_capacity, pgUsed:c.pg_used, pgCap:c.pg_capacity}:null;
 
   const body=(c.pins&&c.pins.length)
-    ? pinUnitsHTML(c.pins, ptype, c.planet_index, load, c.game_last_update, c.routes)
+    ? pinUnitsHTML(c.pins, ptype, romanNumeral(c.planet_index), load, c.game_last_update, c.routes)
     : structureUnitsHTML(c.structures, ptype, {hasLoad:!!load, cpu:load&&load.cpu, pg:load&&load.pg,
-        real:c, expMs, planetLabel:c.planet_index});
+        real:c, expMs, planetLabel:romanNumeral(c.planet_index)});
 
   document.getElementById('colonyPage').innerHTML=`
     <div class="cp-head">
@@ -3712,7 +3730,7 @@ function openRealColonyDetail(id){
       <div>
         <div class="pilot-name">${c.character}${char?` <span class="skills">CCU ${char.ccu} · IC ${char.ic}</span>`:''}</div>
         <div class="sub">
-          <span class="sysbadge">${c.system_name} ${c.planet_index}</span>
+          <span class="sysbadge">${c.system_name} ${romanNumeral(c.planet_index)}</span>
           <span class="sec" style="color:${secColor(ptype)}">${ptype}</span>
           <span class="synced">${t('syncedColony')}${c.upgrade_level?` · CC${c.upgrade_level}`:''} · ${pl(c.num_pins,'pPin')}</span>
         </div>
@@ -4802,7 +4820,7 @@ function renderAnswers(){
     {label:t('mPeak'),value:worst.pg_percent?Math.max(worst.cpu_percent,worst.pg_percent).toFixed(0):'—',
      unit:'%',warn:Math.max(worst.cpu_percent||0,worst.pg_percent||0)>=90,
      bad:Math.max(worst.cpu_percent||0,worst.pg_percent||0)>=95,
-     note:worst.system?`${worst.system} ${worst.planet}`:t('noData')},
+     note:worst.system?`${worst.system} ${romanNumeral(worst.planet)}`:t('noData')},
     {label:t('mSpread'),
      value:(lastLogistics&&lastLogistics.avg_systems_per_character)||'—',
      note:lastLogistics
@@ -4840,7 +4858,7 @@ function renderTable(){
       <td class="idx num">${i+1}</td>
       <td><div style="color:var(--bright)">${r.character}</div>
           <div style="margin-top:2px"><span class="rolebadge ${roleClass(r)}">${roleLabel(r)}</span></div></td>
-      <td><div class="num">${r.system} ${r.planet}</div>
+      <td><div class="num">${r.system} ${romanNumeral(r.planet)}</div>
           <div class="parts" style="margin:0">${r.planet_type} · ${nloc(Math.round(r.planet_radius_km))} ${t('km')}</div></td>
       <td><span style="color:var(--read)">${r.res_out}</span>
           <div class="parts" style="margin:0">${factoryLabel(r)}${r.res_in?' ← '+r.res_in:''}</div></td>

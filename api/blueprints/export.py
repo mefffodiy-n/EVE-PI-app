@@ -51,6 +51,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
 from api.cache import json_error
+from domain.planets import planet_number_to_roman
 
 bp = Blueprint("export", __name__)
 
@@ -157,6 +158,12 @@ def _write_rows_sheet(sheet, rows: list[dict], tr: dict) -> None:
                 value = _role_value(item, tr)
             elif key == "structures":
                 value = _structures_value(item, tr)
+            elif key == "planet":
+                # Римская цифра, как в игре («WMH-SO IV», не «16.0») —
+                # 18.09.2026, по прямому запросу пользователя. Один и тот
+                # же формат для «План» и «Мои колонии» — общая функция
+                # writer'а, менять нечего отдельно по листам.
+                value = planet_number_to_roman(item.get("planet"))
             else:
                 value = item.get(key)
             cell = sheet.cell(row=row_index, column=col_index, value=value)
@@ -394,7 +401,8 @@ def _write_summary_and_check_sheets(workbook: Workbook, rows: list[dict], tr: di
     )
     for row_index, item in enumerate(rows, start=2):
         check.cell(row=row_index, column=1, value=item.get("system")).font = BODY_FONT
-        check.cell(row=row_index, column=2, value=item.get("planet")).font = BODY_FONT
+        check.cell(row=row_index, column=2,
+                    value=planet_number_to_roman(item.get("planet"))).font = BODY_FONT
         check.cell(row=row_index, column=3, value=item.get("template_key")).font = BODY_FONT
         check.cell(row=row_index, column=4, value=item.get("cpu_percent")).font = BODY_FONT
         check.cell(row=row_index, column=5, value=item.get("pg_percent")).font = BODY_FONT

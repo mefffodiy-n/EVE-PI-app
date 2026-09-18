@@ -397,6 +397,24 @@ class TestExport:
         assert poco_cell.value == 0.03
         assert poco_cell.number_format == "0.0%"
 
+    def test_plan_sheet_shows_planet_number_as_roman_numeral(self, client):
+        """
+        18.09.2026, найдено пользователем: план показывал номер планеты
+        как «AV-VB6 16.0» — CSV-колонка «Planet» читается pandas float64,
+        дробь никуда не девалась при сериализации PlanRow. Просьба
+        пользователя была не просто убрать «.0», а показывать номер, как
+        в самой игре — римской цифрой («4» -> «IV»). Тот же формат
+        проверяется на листе «Проверка» (chk_planet), не только «План».
+        """
+        from io import BytesIO
+
+        from openpyxl import load_workbook
+
+        response = client.post("/api/export", json={"plan_data": [SAMPLE_PLAN_ROW]})
+        workbook = load_workbook(BytesIO(response.data))
+        assert workbook["План"]["E2"].value == "IV"
+        assert workbook["Проверка"]["B2"].value == "IV"
+
     def test_overloaded_planets_are_highlighted(self, client):
         """Планеты с загрузкой от 90% подсвечиваются — они сломаются первыми."""
         from io import BytesIO
@@ -473,7 +491,7 @@ class TestExportColonies:
         assert sheet["B2"].value == "Переработка"
         assert sheet["C2"].value == "ALPHA"  # 18.09.2026: раньше оставалась пустой
         assert sheet["D2"].value == "HOME"
-        assert sheet["E2"].value == "4"
+        assert sheet["E2"].value == "IV"  # 18.09.2026: римская цифра, как в игре, не «4.0»/«4»
         assert sheet["F2"].value == "Barren"  # ESI отдаёт строчными, здесь — с заглавной
         assert sheet["G2"].value == 5820  # радиус из того же файла, что и у плана
         assert sheet["H2"].value == "1x Barren Command Center"
