@@ -49,6 +49,12 @@ class StoredPlan:
     warnings: list[str] = field(default_factory=list)
     assumptions: list[str] = field(default_factory=list)
     account_id: str | None = None
+    # {продукт P1: единиц в час} — режим purchase_p1 (20.09.2026), нужен
+    # для списка закупки сырья при повторном открытии плана (см.
+    # infra/models.py::Plan.purchased_p1). {} в обычном плане и в
+    # планах, сохранённых до этой колонки — не None: и там, и там
+    # закупки не показать, разница не имеет значения потребителю.
+    purchased_p1: dict[str, float] = field(default_factory=dict)
 
     def summary(self) -> dict:
         """Краткая карточка для списка — без строк плана, они тяжёлые."""
@@ -80,6 +86,7 @@ class StoredPlan:
             "rows": self.rows,
             "warnings": self.warnings,
             "assumptions": self.assumptions,
+            "purchased_p1": self.purchased_p1,
         }
 
     @classmethod
@@ -93,6 +100,7 @@ class StoredPlan:
             warnings=row.warnings or [],
             assumptions=row.assumptions or [],
             account_id=row.account_id,
+            purchased_p1=row.purchased_p1 or {},
         )
 
 
@@ -105,7 +113,8 @@ def _valid_id(plan_id: str) -> str:
 def save(name: str, request: dict, rows: list[dict],
          warnings: list[str] | None = None,
          assumptions: list[str] | None = None,
-         account_id: str | None = None) -> StoredPlan:
+         account_id: str | None = None,
+         purchased_p1: dict[str, float] | None = None) -> StoredPlan:
     """
     Сохранить план под заданным именем.
 
@@ -140,6 +149,7 @@ def save(name: str, request: dict, rows: list[dict],
         warnings=list(warnings or []),
         assumptions=list(assumptions or []),
         account_id=account_id,
+        purchased_p1=dict(purchased_p1 or {}),
     )
 
     with session_scope() as session:
@@ -155,7 +165,7 @@ def save(name: str, request: dict, rows: list[dict],
             id=plan.id, name=plan.name, created_at=plan.created_at,
             request=plan.request, rows=plan.rows,
             warnings=plan.warnings, assumptions=plan.assumptions,
-            account_id=plan.account_id,
+            account_id=plan.account_id, purchased_p1=plan.purchased_p1,
         ))
 
     return plan
