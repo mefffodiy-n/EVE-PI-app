@@ -491,8 +491,19 @@ button { font-family:inherit; }
               background:var(--hull); border:1px solid var(--amber);
               background-image:linear-gradient(90deg,var(--accent-bg),transparent 60%); }
 .action-bar .save-inline { display:flex; gap:6px; align-items:center; margin-left:auto; flex-wrap:wrap; }
-.action-bar .save-inline input { background:var(--void); border:1px solid var(--seam); color:var(--read);
-                                  padding:6px 9px; font-size:12px; width:170px; font-family:inherit; }
+/* Поле и кнопка сохранения плана раньше выглядели как второстепенный
+   .mini-виджет (тусклая рамка var(--seam)) рядом с крупной кнопкой
+   «Построить план» — из-за этого терялись на панели (18.09.2026,
+   найдено пользователем по скриншоту). Рамка цвета акцента и кнопка
+   того же стиля, что и остальные явные действия — не залитая, чтобы
+   не спорить с «Построить план» за главное внимание, но заметно ярче
+   .mini по умолчанию. */
+.action-bar .save-inline input { background:var(--void); border:1px solid var(--amber); color:var(--read);
+                                  padding:8px 10px; font-size:13px; width:180px; font-family:inherit; }
+.action-bar .save-inline input:focus { outline:none; border-color:var(--amber-hi); }
+.action-bar .save-inline button { border-color:var(--amber); color:var(--amber);
+                                   padding:7px 16px; font-size:12px; font-weight:600; }
+.action-bar .save-inline button:hover { background:var(--accent-bg); }
 .action-bar #savedList { flex-basis:100%; }
 .action-bar #savedList:empty, .action-bar #cmpResult:empty { display:none; }
 .field { margin-bottom:11px; }
@@ -513,6 +524,12 @@ button { font-family:inherit; }
 .crew { max-height:210px; overflow-y:auto; }
 .crew div { display:flex; gap:8px; align-items:center; padding:4px 0; font-size:12px; }
 .crew .lv { margin-left:auto; color:var(--dim); font-family:'JetBrains Mono',monospace; font-size:11px; }
+/* Ширина метки «основной»/кнопки «Сделать основным» отличается по
+   тексту — без фиксированной колонки аватар и имя у каждой строки
+   сдвигались на свою величину (18.09.2026, найдено пользователем по
+   скриншоту). Один и тот же слот, даже пустой (dev-персонажи/группа
+   из одного человека), держит начало аватара на одном месте у всех строк. */
+.crew-primary-slot { flex:0 0 112px; display:flex; }
 
 table { width:100%; border-collapse:collapse; }
 thead .group th { text-align:left; padding:9px 10px 3px; font-size:11px; font-weight:600;
@@ -841,7 +858,12 @@ details.msgs[open] > summary::before { content:'▾ '; }
    прибыль» получала лишние padding/border-top и съезжала строкой ниже
    остальных (обнаружено пользователем 16.09.2026 по скриншоту). */
 .poco-profit { padding:14px; border-top:1px solid var(--seam); }
-.poco-profit .figures { display:grid; grid-template-columns:repeat(3,minmax(120px,1fr));
+/* auto-fit, не фиксированные 3 колонки (18.09.2026, найдено пользователем
+   по скриншоту): с добавлением плитки «Закупка P1 / мес» (режим
+   purchase_p1) четвёртая плитка «Чистая прибыль» при фиксированных 3
+   колонках уезжала на отдельную строку, хотя места в ряду хватало —
+   auto-fit сам подбирает число колонок по ширине контейнера. */
+.poco-profit .figures { display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
                          gap:8px 22px; margin-top:6px; }
 .poco-profit .figure .lbl { font-size:10px; letter-spacing:.1em; text-transform:uppercase;
                              color:var(--dim); }
@@ -2857,11 +2879,11 @@ function renderAdvice(){
     ${dup}
     ${rows?`<div class="sugg">${rows}</div>`:''}
     ${(a.notes||[]).map(n=>`<p class="lead" style="color:var(--dim);margin:8px 0 0">${n}</p>`).join('')}
-    <div class="foot">
+    ${(deficit || !purchaseP1)?`<div class="foot">
       <button class="mini" onclick="calculate(false, ${!deficit})">
         ${deficit?t('advIgnoreDeficit'):t('advIgnoreSurplus')}</button>
       <span class="hint">${deficit?t('advIgnoreDeficitHint'):t('advIgnoreSurplusHint')}</span>
-    </div>
+    </div>`:''}
   </div>`;
 }
 
@@ -4844,13 +4866,13 @@ function renderCrew(){
     // автогруппировки, не заменены новым способом выбора вручную).
     const isPrimary=c.esi_linked && c.character_id===currentPrimary;
     const primaryControl=(!c.esi_linked || linked.length<=1)?'':
-      isPrimary?`<span class="mini" style="padding:1px 6px;font-size:10px;margin-right:6px;
+      isPrimary?`<span class="mini" style="padding:1px 6px;font-size:10px;
           pointer-events:none;color:var(--amber);border-color:var(--amber)">${t('groupPrimary')}</span>`
-      :`<button class="mini" style="padding:1px 6px;font-size:10px;margin-right:6px"
+      :`<button class="mini" style="padding:1px 6px;font-size:10px"
           title="${t('groupHint')}" onclick="makePrimary(${c.character_id})">${t('groupSave')}</button>`;
     return `<div title="CCU ${c.ccu} · IC ${c.ic} · ${c.planet_slots} ${t('planetSlots')}${
       spread?' · '+spread.systems.join(', '):''}">
-      ${primaryControl}
+      <div class="crew-primary-slot">${primaryControl}</div>
       <div class="pilot-lg" style="width:22px;height:22px;font-size:9px">${initials(c.name)}${avatarImg(c.character_id)}</div>
       <span>${c.name}</span>
       <span class="lv">${used}/${c.planet_slots}${sys}</span>
