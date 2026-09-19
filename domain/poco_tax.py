@@ -133,6 +133,10 @@ class PlanProfitability:
     monthly_net_profit: float | None
     missing_prices: list[str]
     missing_rates: list[str]
+    # Стоимость P1, закупленного на бирже (purchase_p1, 18.09.2026) —
+    # None в обычном режиме плана (свой P1, стоимость закупки не
+    # применима), не 0 — это разные вещи (правило 1, честный пробел).
+    monthly_purchase_cost: float | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -144,6 +148,7 @@ class PlanProfitability:
                 None if self.monthly_export_tax is None or self.monthly_import_tax is None
                 else self.monthly_export_tax + self.monthly_import_tax
             ),
+            "monthly_purchase_cost": self.monthly_purchase_cost,
             "monthly_net_profit": self.monthly_net_profit,
             "missing_prices": sorted(self.missing_prices),
             "missing_rates": sorted(self.missing_rates),
@@ -262,6 +267,7 @@ def evaluate_plan_profitability(
     prices: dict[str, float],
     schematics: dict[str, Schematic] | None = None,
     planets: "PlanetBook | None" = None,
+    purchased_p1: dict[str, float] | None = None,
 ) -> PlanProfitability:
     """
     rows — строки построенного плана (формат PlanRow.to_dict()): нужны
@@ -269,6 +275,19 @@ def evaluate_plan_profitability(
     prices — {продукт: ISK за единицу}, из снимка рыночных цен.
     planets — для точной ставки POCO конкретной планеты из файла
     (planets.poco_rate()), см. докстринг модуля.
+    purchased_p1 — {продукт P1: единиц в час}, из PlanResult.to_dict()
+    ["purchased_p1"] (18.09.2026, режим planner.py::PlanRequest.purchase_p1)
+    — P1 этого плана не добыт, а закупается; стоимость закупки считается
+    по ТОЙ ЖЕ цене, что и выручка/импортный налог (`prices`, buy_max —
+    решение пользователя), второй словарь цен не нужен. Пустой/не
+    передан — как и раньше, стоимость закупки не участвует вовсе
+    (monthly_purchase_cost остаётся None, не 0).
+
+    Импортный налог на ввоз купленного P1 на планету переработки уже
+    считается ниже как обычно (по schematic.inputs каждой строки-
+    переработки) — ему всё равно, откуда физически взялся материал,
+    своя добыча или закупка. purchased_p1 добавляет только саму
+    СТОИМОСТЬ ПОКУПКИ, отдельную от налога на её ввоз.
 
     Честные пробелы, а не выдумка: продукт без цены — в missing_prices,
     его вклад в выручку/налог не считается (не подставляется 0, просто
@@ -282,11 +301,13 @@ def evaluate_plan_profitability(
     revenue = 0.0
     export_tax = 0.0
     import_tax = 0.0
+    purchase_cost = 0.0
     missing_prices: set[str] = set()
     missing_rates: set[str] = set()
     any_revenue = False
     any_export = False
     any_import = False
+    any_purchase = False
 
     for row in rows:
         flow = _row_flow(row, schematics)
@@ -318,6 +339,14 @@ def evaluate_plan_profitability(
                 import_tax += qty_per_hour * HOURS_PER_MONTH * input_price * rate
                 any_import = True
 
+    for name, rate_per_hour in (purchased_p1 or {}).items():
+        price = prices.get(name)
+        if price is None:
+            missing_prices.add(name)
+            continue
+        purchase_cost += rate_per_hour * HOURS_PER_MONTH * price
+        any_purchase = True
+
     # Итоговая чистая прибыль — только когда картина ПОЛНАЯ (ни одной
     # пропущенной цены/ставки нигде в плане): частичная сумма тут хуже
     # честного пробела — недостающий налог означал бы, что план выглядит
@@ -329,8 +358,9 @@ def evaluate_plan_profitability(
         monthly_revenue=revenue if any_revenue else None,
         monthly_export_tax=export_tax if any_export else None,
         monthly_import_tax=import_tax if any_import else None,
+        monthly_purchase_cost=purchase_cost if any_purchase else None,
         monthly_net_profit=(
-            revenue - export_tax - import_tax if (any_revenue and complete) else None
+            revenue - export_tax - import_tax - purchase_cost if (any_revenue and complete) else None
         ),
         missing_prices=missing_prices,
         missing_rates=missing_rates,

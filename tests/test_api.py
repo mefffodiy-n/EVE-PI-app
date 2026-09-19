@@ -200,6 +200,52 @@ class TestPlans:
         response = client.post("/api/calculate", json=payload)
         assert response.status_code == 400, reason
 
+    def test_calculate_purchase_p1_builds_no_mining_rows(self, client, seeded_characters, monkeypatch):
+        """
+        18.09.2026, по прямому запросу пользователя: purchase_p1=true —
+        план строит только переработку, весь P1 считается закупленным.
+        Констелляции по-прежнему нужны непустыми — фронтенд в этом режиме
+        сам подставляет все констелляции региона (togglePurchaseP1(),
+        web/index.html), сервер требование не ослабляет.
+
+        HOME/ALPHA — не настоящая система Fountain (та же синтетическая
+        планета, что и в tests/test_planner.py), поэтому domain.planets.load_planets
+        подменяется прямо в api.blueprints.plans — /api/calculate читает
+        его напрямую, не через api.blueprints.reference (тот мокает
+        фикстура client, но это другой импорт того же имени).
+        """
+        import api.blueprints.plans as plans
+
+        book = PlanetBook(pd.DataFrame([
+            {"Constellation": "ALPHA", "System": "HOME", "Planet": "4", "Type": "Barren",
+             RADIUS_COLUMN: 5820},
+            {"Constellation": "ALPHA", "System": "HOME", "Planet": "7", "Type": "Temperate",
+             RADIUS_COLUMN: 8100},
+        ]))
+        monkeypatch.setattr(plans, "load_planets", lambda: book)
+
+        response = client.post(
+            "/api/calculate",
+            json={
+                "constellations": ["ALPHA"],
+                "factory_sys": "HOME",
+                "target_products": ["Biocells"],
+                "purchase_p1": True,
+            },
+        )
+        body = response.get_json()
+        assert body["status"] == "success" and body["data"], body
+        assert all("Добыча" not in row["role"] for row in body["data"])
+        assert body["purchased_p1"], "P1 должен быть учтён как закупленный, не пропасть молча"
+
+    def test_calculate_without_purchase_p1_defaults_to_normal_plan(self, client):
+        """purchase_p1 отсутствует в теле запроса — как и раньше, поле не влияет."""
+        response = client.post(
+            "/api/calculate",
+            json={"constellations": ["ALPHA"], "factory_sys": "HOME", "target_products": ["Biocells"]},
+        )
+        assert response.get_json()["purchased_p1"] == {}
+
     def test_calculate_limits_product_count(self, client):
         """
         Ограничение защищает воркер: Flask синхронный, и один огромный
@@ -899,6 +945,43 @@ class TestPlanProfitability:
         body = r.get_json()
         assert "Barren" not in body["missing_rates"]
         assert body["monthly_export_tax"] is not None
+
+    def test_purchased_p1_cost_reduces_net_profit(self, monkeypatch):
+        """
+        18.09.2026, по прямому запросу пользователя: purchased_p1 в теле
+        запроса (из PlanResult.to_dict()["purchased_p1"], planner.py::
+        PlanRequest.purchase_p1) добавляет стоимость закупки к прибыли —
+        числа совпадают с tests/test_poco_tax.py::TestPurchaseP1.
+        """
+        self._mock_prices(monkeypatch, {"Water": 10.0, "Coolant": 100.0})
+        self._mock_schematics(monkeypatch)
+        self._mock_planets(monkeypatch, {("HOME", "2"): 0.05})
+        from api import create_app
+
+        with create_app({"TESTING": True}).test_client() as client:
+            r = client.post("/api/plan-profitability", json={
+                "rows": [self.PROCESSING_ROW],
+                "target_products": ["Coolant"],
+                "purchased_p1": {"Water": 600.0},
+            })
+        assert r.status_code == 200
+        body = r.get_json()
+        assert body["monthly_purchase_cost"] == 4_320_000.0
+        assert body["monthly_net_profit"] == 8_640_000.0 - 432_000.0 - 216_000.0 - 4_320_000.0
+
+    def test_without_purchased_p1_field_stays_normal_plan(self, monkeypatch):
+        """Поле необязательно — старые запросы фронтенда (без него) не ломаются."""
+        self._mock_prices(monkeypatch, {"Water": 10.0, "Coolant": 100.0})
+        self._mock_schematics(monkeypatch)
+        self._mock_planets(monkeypatch, {("HOME", "2"): 0.05})
+        from api import create_app
+
+        with create_app({"TESTING": True}).test_client() as client:
+            r = client.post("/api/plan-profitability", json={
+                "rows": [self.PROCESSING_ROW],
+                "target_products": ["Coolant"],
+            })
+        assert r.get_json()["monthly_purchase_cost"] is None
 
 
 class TestColoniesProfitability:

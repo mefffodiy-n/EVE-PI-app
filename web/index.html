@@ -455,6 +455,11 @@ button { font-family:inherit; }
               letter-spacing:.18em; text-transform:uppercase; color:var(--bright); }
 .step-count { margin-left:auto; color:var(--amber); font-size:11px; font-family:'JetBrains Mono',monospace; flex:0 0 auto; }
 .step-body { padding:12px 14px; display:flex; flex-direction:column; min-height:0; }
+/* Визуально гасит блок «Созвездия»/«Запас на истощение» под чекбоксом
+   «Покупать P1 на бирже» (togglePurchaseP1(), 18.09.2026) — выбор в нём
+   в этом режиме не читается расчётом (planner.py::PlanRequest.purchase_p1
+   отключает добычу целиком), не стоит делать вид, что он на что-то влияет. */
+.disabled-section { opacity:.4; pointer-events:none; }
 .step-subhead { font-family:'Inter',sans-serif; font-weight:600; font-size:10px;
                 letter-spacing:.18em; text-transform:uppercase; color:var(--dim);
                 margin:16px 0 8px; padding-top:13px; border-top:1px solid var(--seam); }
@@ -1090,19 +1095,27 @@ body.light .rolebadge.excess { background:rgba(154,107,18,.12); }
         </div>
         <div class="step-body">
           <div class="field">
-            <label data-i18n="constellations">Созвездия</label>
-            <div class="picker">
-              <div class="picker-bar">
-                <button class="mini" onclick="pickAllConstellations()" data-i18n="wholeRegion">Весь регион</button>
-                <button class="mini" onclick="clearPick('constellations')" data-i18n="clearAll">Снять всё</button>
-              </div>
-              <div class="picker-list" id="constList"></div>
-              <div class="chosen" id="constChosen"></div>
-            </div>
+            <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+              <input type="checkbox" id="purchaseP1" style="width:auto" onchange="togglePurchaseP1(this.checked)">
+              <span data-i18n="purchaseP1">Покупать весь P1 на бирже (не строить добычу)</span>
+            </label>
           </div>
-          <div class="field">
-            <label for="margin" data-i18n="margin">Запас на истощение месторождений</label>
-            <input id="margin" type="number" value="1.0" step="0.1" min="1" max="3">
+          <div class="field-group" id="mineSection">
+            <div class="field">
+              <label data-i18n="constellations">Созвездия</label>
+              <div class="picker">
+                <div class="picker-bar">
+                  <button class="mini" onclick="pickAllConstellations()" data-i18n="wholeRegion">Весь регион</button>
+                  <button class="mini" onclick="clearPick('constellations')" data-i18n="clearAll">Снять всё</button>
+                </div>
+                <div class="picker-list" id="constList"></div>
+                <div class="chosen" id="constChosen"></div>
+              </div>
+            </div>
+            <div class="field">
+              <label for="margin" data-i18n="margin">Запас на истощение месторождений</label>
+              <input id="margin" type="number" value="1.0" step="0.1" min="1" max="3">
+            </div>
           </div>
           <!-- Флажок «Прямое P2» убран из интерфейса (15.09.2026, решение
                пользователя, см. docs/ROADMAP.md Фаза 9): застройка в
@@ -1222,7 +1235,7 @@ const T={
   groupSave:'Сделать основным',groupSaved:'Теперь основной',groupSaveFail:'Не удалось назначить основного',
   groupPrimary:'основной',
   pocoProfitTitle:'Прогноз прибыльности плана',
-  pocoRevenue:'Выручка / мес',pocoTax:'Налог POCO / мес',pocoNetProfit:'Чистая прибыль / мес',
+  pocoRevenue:'Выручка / мес',pocoTax:'Налог POCO / мес',pocoPurchaseCost:'Закупка P1 / мес',pocoNetProfit:'Чистая прибыль / мес',
   pocoMissingPrices:'Нет цены: {list}',pocoMissingRates:'Нет данных о ставке POCO: {list}',
   pocoHigherThanBest:'Ставка POCO здесь выше, чем на других перерабатывающих колониях плана',
   pocoIncomplete:'Чистая прибыль не считается, пока не известны все ставки и не собраны все цены — частичная сумма выглядела бы точнее, чем есть на самом деле.',
@@ -1237,7 +1250,7 @@ const T={
   jobSyncColonies:'Статус колоний',jobBackup:'Резервная копия',
   unlinkedRevoked:'Персонаж отвязан, доступ отозван и на стороне CCP',
   unlinkedLocalOnly:'Персонаж отвязан на нашей стороне (секрет приложения не задан — настоящий отзыв недоступен)',
-  planetSlots:'слотов планет',wholeRegion:'Весь регион',clearAll:'Снять всё',nothingChosen:'ничего не выбрано',systems:'систем',selectAll:'Выбрать все',pickProducts:'Выберите хотя бы один продукт',pickConst:'Выберите хотя бы одно созвездие',export:'Экспорт в Excel',jumpPlan:'↑ План',jumpColonies:'↓ Мои колонии',jumpShopping:'↓ Список закупки',shopping:'Список закупки: командные центры',shopTotal:'Всего командных центров',exportEmpty:'Нечего экспортировать: нет ни плана, ни колоний',exportFail:'Не удалось выгрузить файл',profitTitle:'Что выгоднее производить',collectedAgo:'снимок собран',minutesAgo:'мин назад',stale:'устарел',colProduct:'Продукт',colColonies:'Планет',colPerColony:'ISK / колония-час',colPerHour:'ISK / час',colPrice:'Цена за единицу',noPrice:'нет цены',noSnapshot:'Снимок цен не собран',advDeficit:'Персонажей не хватает на эту цепочку',advSurplus:'Персонажей больше, чем нужно',advDeficitLead:'Полный цикл требует {need} колоний, а в пуле {have} слотов. Вот что поместится целиком:',advSurplusLead:'Выбранное занимает {need} колоний из {have}. Свободно {spare} — можно добавить:',advTake:'Взять',advIgnoreDeficit:'Строить как есть',advIgnoreSurplus:'Занять свободных добычей',advIgnoreDeficitHint:'план будет с дефицитом сырья',advIgnoreSurplusHint:'добыча сырья той же цепочки, по убыванию дефицитности',colonies3:'колоний',excess:'Добыча (избыток)',mSpread:'Разброс по системам',logi:'всего задействовано',systemsAvg:'систем на персонажа',sysOne:'система',sysFew:'системы',sysMany:'систем',logiGood:'колонии собраны компактно',logiPoor:'урожай придётся собирать в разъездах',mColonies:'Колоний в плане',mChars:'Персонажей занято',mPeak:'Самая нагруженная',mShort:'Не хватает персонажей',planClosed:'план закрыт',fitsUpTo:'двойной шаблон помещается на планеты до',km:'км',suitableHere:'подходящих планет в системе',ofThem:'из них',decisionTitle:'План упёрся в размер планет',decisionText:'В выбранной домашней системе двойной шаблон не помещается ни на одну планету. Выберите, как поступить.',chooseOther:'Выбрать другую систему',useSingle:'Ставить по одному шаблону',singleNote:'планет и персонажей потребуется вдвое больше',savedPlans:'Сохранённые планы',save:'Сохранить',load:'Открыть',del:'Удалить',compare:'Сравнить',noSaved:'Пока ничего не сохранено',saveFirst:'Сначала постройте план',pickTwo:'Отметьте два плана для сравнения',cmpTitle:'Разница',colonies2:'колоний',chars2:'персонажей',peak2:'пиковая загрузка',onlyLeft:'Только в первом',onlyRight:'Только во втором',same:'Совпало',
+  planetSlots:'слотов планет',purchaseP1:'Покупать весь P1 на бирже (не строить добычу)',wholeRegion:'Весь регион',clearAll:'Снять всё',nothingChosen:'ничего не выбрано',systems:'систем',selectAll:'Выбрать все',pickProducts:'Выберите хотя бы один продукт',pickConst:'Выберите хотя бы одно созвездие',export:'Экспорт в Excel',jumpPlan:'↑ План',jumpColonies:'↓ Мои колонии',jumpShopping:'↓ Список закупки',shopping:'Список закупки: командные центры',shopTotal:'Всего командных центров',exportEmpty:'Нечего экспортировать: нет ни плана, ни колоний',exportFail:'Не удалось выгрузить файл',profitTitle:'Что выгоднее производить',collectedAgo:'снимок собран',minutesAgo:'мин назад',stale:'устарел',colProduct:'Продукт',colColonies:'Планет',colPerColony:'ISK / колония-час',colPerHour:'ISK / час',colPrice:'Цена за единицу',noPrice:'нет цены',noSnapshot:'Снимок цен не собран',advDeficit:'Персонажей не хватает на эту цепочку',advSurplus:'Персонажей больше, чем нужно',advDeficitLead:'Полный цикл требует {need} колоний, а в пуле {have} слотов. Вот что поместится целиком:',advSurplusLead:'Выбранное занимает {need} колоний из {have}. Свободно {spare} — можно добавить:',advTake:'Взять',advIgnoreDeficit:'Строить как есть',advIgnoreSurplus:'Занять свободных добычей',advIgnoreDeficitHint:'план будет с дефицитом сырья',advIgnoreSurplusHint:'добыча сырья той же цепочки, по убыванию дефицитности',colonies3:'колоний',excess:'Добыча (избыток)',mSpread:'Разброс по системам',logi:'всего задействовано',systemsAvg:'систем на персонажа',sysOne:'система',sysFew:'системы',sysMany:'систем',logiGood:'колонии собраны компактно',logiPoor:'урожай придётся собирать в разъездах',mColonies:'Колоний в плане',mChars:'Персонажей занято',mPeak:'Самая нагруженная',mShort:'Не хватает персонажей',planClosed:'план закрыт',fitsUpTo:'двойной шаблон помещается на планеты до',km:'км',suitableHere:'подходящих планет в системе',ofThem:'из них',decisionTitle:'План упёрся в размер планет',decisionText:'В выбранной домашней системе двойной шаблон не помещается ни на одну планету. Выберите, как поступить.',chooseOther:'Выбрать другую систему',useSingle:'Ставить по одному шаблону',singleNote:'планет и персонажей потребуется вдвое больше',savedPlans:'Сохранённые планы',save:'Сохранить',load:'Открыть',del:'Удалить',compare:'Сравнить',noSaved:'Пока ничего не сохранено',saveFirst:'Сначала постройте план',pickTwo:'Отметьте два плана для сравнения',cmpTitle:'Разница',colonies2:'колоний',chars2:'персонажей',peak2:'пиковая загрузка',onlyLeft:'Только в первом',onlyRight:'Только во втором',same:'Совпало',
   noPlanLong:'План не построен. Откройте вкладку «Настройки», выберите продукты и постройте план.',
   planEmpty:'План пуст.',searchPh:'поиск…',planNamePh:'название плана',
   crewPre:'Появятся после расчёта: планировщик сам распределяет персонажей по планетам с учётом их прокачки.',
@@ -1298,7 +1311,7 @@ const T={
   groupSave:'Make primary',groupSaved:'Now primary',groupSaveFail:'Could not set as primary',
   groupPrimary:'primary',
   pocoProfitTitle:'Plan profitability forecast',
-  pocoRevenue:'Revenue / mo',pocoTax:'POCO tax / mo',pocoNetProfit:'Net profit / mo',
+  pocoRevenue:'Revenue / mo',pocoTax:'POCO tax / mo',pocoPurchaseCost:'P1 purchase / mo',pocoNetProfit:'Net profit / mo',
   pocoMissingPrices:'No price: {list}',pocoMissingRates:'POCO rate unknown: {list}',
   pocoHigherThanBest:'This POCO rate is higher than on other processing colonies in the plan',
   pocoIncomplete:'Net profit is not shown until every rate is known and every price is available — a partial sum would look more accurate than it really is.',
@@ -1313,7 +1326,7 @@ const T={
   jobSyncColonies:'Colony status',jobBackup:'Backup',
   unlinkedRevoked:'Character unlinked — access revoked on CCP’s side too',
   unlinkedLocalOnly:'Character unlinked on our side (no app secret configured — real revocation unavailable)',
-  planetSlots:'planet slots',wholeRegion:'Whole region',clearAll:'Clear all',nothingChosen:'nothing selected',systems:'systems',selectAll:'Select all',pickProducts:'Select at least one product',pickConst:'Select at least one constellation',export:'Export to Excel',jumpPlan:'↑ Plan',jumpColonies:'↓ My colonies',jumpShopping:'↓ Shopping list',shopping:'Shopping list: command centres',shopTotal:'Command centres in total',exportEmpty:'Nothing to export: no plan and no colonies',exportFail:'Export failed',profitTitle:'What is most profitable to produce',collectedAgo:'snapshot taken',minutesAgo:'min ago',stale:'stale',colProduct:'Product',colColonies:'Planets',colPerColony:'ISK / colony-hour',colPerHour:'ISK / hour',colPrice:'Unit price',noPrice:'no price',noSnapshot:'No price snapshot yet',advDeficit:'Not enough characters for this chain',advSurplus:'More characters than needed',advDeficitLead:'A full cycle needs {need} colonies, the pool has {have} slots. These fit entirely:',advSurplusLead:'Your choice takes {need} of {have} colonies. {spare} free — you could add:',advTake:'Take',advIgnoreDeficit:'Build as is',advIgnoreSurplus:'Put spare on extraction',advIgnoreDeficitHint:'the plan will report a raw material shortage',advIgnoreSurplusHint:'extraction of the same chain, scarcest first',colonies3:'colonies',excess:'Extraction (surplus)',mSpread:'Systems per character',logi:'systems used in total',systemsAvg:'systems each',sysOne:'system',sysFew:'systems',sysMany:'systems',logiGood:'colonies are compact',logiPoor:'harvesting will need travel',mColonies:'Colonies in the plan',mChars:'Characters used',mPeak:'Most loaded',mShort:'Characters missing',planClosed:'plan is complete',fitsUpTo:'a double template fits planets up to',km:'km',suitableHere:'suitable planets in this system',ofThem:'of them',decisionTitle:'The plan hit planet size limits',decisionText:'No planet in the chosen home system fits a double template. Pick how to proceed.',chooseOther:'Pick another system',useSingle:'Use single templates',singleNote:'twice as many planets and characters will be needed',savedPlans:'Saved plans',save:'Save',load:'Open',del:'Delete',compare:'Compare',noSaved:'Nothing saved yet',saveFirst:'Build a plan first',pickTwo:'Tick two plans to compare',cmpTitle:'Difference',colonies2:'colonies',chars2:'characters',peak2:'peak load',onlyLeft:'Only in the first',onlyRight:'Only in the second',same:'Unchanged',
+  planetSlots:'planet slots',purchaseP1:'Buy all P1 on the market (do not build extraction)',wholeRegion:'Whole region',clearAll:'Clear all',nothingChosen:'nothing selected',systems:'systems',selectAll:'Select all',pickProducts:'Select at least one product',pickConst:'Select at least one constellation',export:'Export to Excel',jumpPlan:'↑ Plan',jumpColonies:'↓ My colonies',jumpShopping:'↓ Shopping list',shopping:'Shopping list: command centres',shopTotal:'Command centres in total',exportEmpty:'Nothing to export: no plan and no colonies',exportFail:'Export failed',profitTitle:'What is most profitable to produce',collectedAgo:'snapshot taken',minutesAgo:'min ago',stale:'stale',colProduct:'Product',colColonies:'Planets',colPerColony:'ISK / colony-hour',colPerHour:'ISK / hour',colPrice:'Unit price',noPrice:'no price',noSnapshot:'No price snapshot yet',advDeficit:'Not enough characters for this chain',advSurplus:'More characters than needed',advDeficitLead:'A full cycle needs {need} colonies, the pool has {have} slots. These fit entirely:',advSurplusLead:'Your choice takes {need} of {have} colonies. {spare} free — you could add:',advTake:'Take',advIgnoreDeficit:'Build as is',advIgnoreSurplus:'Put spare on extraction',advIgnoreDeficitHint:'the plan will report a raw material shortage',advIgnoreSurplusHint:'extraction of the same chain, scarcest first',colonies3:'colonies',excess:'Extraction (surplus)',mSpread:'Systems per character',logi:'systems used in total',systemsAvg:'systems each',sysOne:'system',sysFew:'systems',sysMany:'systems',logiGood:'colonies are compact',logiPoor:'harvesting will need travel',mColonies:'Colonies in the plan',mChars:'Characters used',mPeak:'Most loaded',mShort:'Characters missing',planClosed:'plan is complete',fitsUpTo:'a double template fits planets up to',km:'km',suitableHere:'suitable planets in this system',ofThem:'of them',decisionTitle:'The plan hit planet size limits',decisionText:'No planet in the chosen home system fits a double template. Pick how to proceed.',chooseOther:'Pick another system',useSingle:'Use single templates',singleNote:'twice as many planets and characters will be needed',savedPlans:'Saved plans',save:'Save',load:'Open',del:'Delete',compare:'Compare',noSaved:'Nothing saved yet',saveFirst:'Build a plan first',pickTwo:'Tick two plans to compare',cmpTitle:'Difference',colonies2:'colonies',chars2:'characters',peak2:'peak load',onlyLeft:'Only in the first',onlyRight:'Only in the second',same:'Unchanged',
   noPlanLong:'No plan yet. Open the Settings tab, pick products and build a plan.',
   planEmpty:'The plan is empty.',searchPh:'search…',planNamePh:'plan name',
   crewPre:'They appear after the calculation: the planner spreads characters across planets by their skills.',
@@ -3212,6 +3225,7 @@ async function renderPocoProfit(){
       method:'POST', headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
         rows:plan, target_products:lastRequest.target_products,
+        purchased_p1:(lastPlanResp&&lastPlanResp.purchased_p1)||{},
       }),
     });
     d=await r.json();
@@ -3232,6 +3246,8 @@ async function renderPocoProfit(){
         <div class="val${d.monthly_revenue==null?' dim':''}">${d.monthly_revenue==null?t('noData'):isk(d.monthly_revenue)}</div></div>
       <div class="figure"><div class="lbl">${t('pocoTax')}</div>
         <div class="val${d.monthly_tax==null?' dim':''}">${d.monthly_tax==null?t('noData'):isk(d.monthly_tax)}</div></div>
+      ${d.monthly_purchase_cost!=null?`<div class="figure"><div class="lbl">${t('pocoPurchaseCost')}</div>
+        <div class="val">${isk(d.monthly_purchase_cost)}</div></div>`:''}
       <div class="figure net"><div class="lbl">${t('pocoNetProfit')}</div>
         <div class="val${netKnown?'':' dim'}">${netKnown?isk(d.monthly_net_profit):t('noData')}</div></div>
     </div>
@@ -3781,7 +3797,11 @@ const DOC={
     сразу — список с поиском и иконками, отмеченное показано внизу. Кнопки P2/P3/P4
     над списком сужают его по тиру продукта, вместе с текстовым поиском, не вместо него.</li>
     <li>Отметьте созвездия для добычи (все — в регионе Fountain). Кнопка «Весь регион» отмечает все сразу;
-    если в выгрузке есть колонка региона, созвездия сгруппированы по ним.</li>
+    если в выгрузке есть колонка региона, созвездия сгруппированы по ним.
+    Либо отметьте «Покупать весь P1 на бирже (не строить добычу)» —
+    тогда созвездия можно не выбирать вовсе: план построит только
+    перерабатывающие колонии, а стоимость закупки P1 (Jita, buy-ордер)
+    появится отдельной строкой в прогнозе прибыльности.</li>
     <li>Задайте запас на истощение месторождений, если нужен. Это не расчёт,
     а поправка: плотность сырья у нас статичная, а в игре месторождения истощаются.</li>
     <li>Выберите домашнюю систему для заводов. Переработка ставится на
@@ -4053,7 +4073,11 @@ const DOC={
     above the list narrow it by product tier, alongside the text search, not instead of it.</li>
     <li>Tick the constellations you extract from (all of them are in Fountain). “Whole
     region” ticks them all; if your export has a region column, constellations are
-    grouped by region.</li>
+    grouped by region.
+    Or tick “Buy all P1 on the market (do not build extraction)” instead —
+    then you don't need to pick constellations at all: the plan builds
+    only processing colonies, and the P1 purchase cost (Jita buy order)
+    shows up as its own line in the profitability forecast.</li>
     <li>Set a depletion safety margin if you need one. It is not a calculation but a
     correction: our resource density is static, while deposits deplete in game.</li>
     <li>Pick a home system for the factories. Processing goes on the preferred
@@ -4611,6 +4635,29 @@ function pickRegion(name,on){
   renderConstellations(); loadSystems();
 }
 
+/* «Покупать P1 на бирже» (18.09.2026, planner.py::PlanRequest.purchase_p1) —
+   добывающие констелляции в этом режиме не нужны планировщику вовсе, но
+   loadSystems() (ниже) заполняет «Домашнюю систему» ИЗ выбранных
+   констелляций — без них список систем остался бы пустым. Поэтому при
+   включении подставляются все констелляции региона той же
+   pickAllConstellations(), что и у кнопки «Весь регион», а прежний
+   выбор пользователя запоминается и возвращается при выключении, не
+   теряется молча. */
+let purchaseP1=false, savedConstellationsBeforePurchaseP1=null;
+function togglePurchaseP1(checked){
+  purchaseP1=checked;
+  document.getElementById('mineSection').classList.toggle('disabled-section', checked);
+  if(checked){
+    savedConstellationsBeforePurchaseP1=picked('constellations');
+    pickAllConstellations();
+  } else {
+    clearPick('constellations');
+    (savedConstellationsBeforePurchaseP1||[]).forEach(c=>chosen.constellations.add(c));
+    savedConstellationsBeforePurchaseP1=null;
+    renderConstellations(); loadSystems();
+  }
+}
+
 function fill(id,items){ document.getElementById(id).innerHTML=items.map(v=>`<option value="${v}">${v}</option>`).join(''); }
 function picked(id){ return chosen[id] ? [...chosen[id]] : []; }
 function msg(t,bad){ document.getElementById('messages').insertAdjacentHTML('beforeend',
@@ -4649,7 +4696,7 @@ async function relocalizePlan(){
 
 async function calculate(allowSingle, surplusMining){
   if(!picked('products').length){ msg(t('pickProducts'),true); return; }
-  if(!picked('constellations').length){ msg(t('pickConst'),true); return; }
+  if(!purchaseP1 && !picked('constellations').length){ msg(t('pickConst'),true); return; }
   const body={constellations:picked('constellations'),
     factory_sys:document.getElementById('factorySys').value,
     target_products:picked('products'),
@@ -4659,7 +4706,8 @@ async function calculate(allowSingle, surplusMining){
     // Флажок убран из интерфейса (15.09.2026) — сервер и так игнорирует
     // это поле (api/blueprints/plans.py форсирует False), но не шлём
     // выдуманное значение несуществующего чекбокса.
-    direct_p2:false};
+    direct_p2:false,
+    purchase_p1:purchaseP1};
   document.getElementById('messages').innerHTML='';
   document.getElementById('decision').innerHTML='';
   const d=await postCalculate(body);
