@@ -115,6 +115,12 @@ class Advice:
     spare_slots: int = 0
     alternatives: list[Suggestion] = field(default_factory=list)
     additions: list[Suggestion] = field(default_factory=list)
+    # Сколько ЕЩЁ раз можно продублировать ВЕСЬ выбранный набор продуктов
+    # целиком (18.09.2026, по прямому запросу пользователя) — 0, если
+    # места нет вовсе или verdict не surplus. Не гарантия точного числа
+    # (см. _chain_size_for_targets()), а консервативная оценка, как и у
+    # additions/alternatives.
+    extra_lines_available: int = 0
     notes: list[str] = field(default_factory=list)       # рендер по-русски, для тестов
     note_data: list[dict] = field(default_factory=list)  # {code, ...} для перевода
 
@@ -142,6 +148,7 @@ class Advice:
             "spare_slots": self.spare_slots,
             "alternatives": [s.to_dict() for s in self.alternatives],
             "additions": [s.to_dict() for s in self.additions],
+            "extra_lines_available": self.extra_lines_available,
             "notes": self.notes if lang == "ru" or not self.note_data
                      else [render_message(e, lang) for e in self.note_data],
         }
@@ -169,6 +176,30 @@ def pool_capacity(characters: list) -> PoolCapacity:
 
 def _chain_size(product: str, schematics, recipes, purchase_p1: bool = False) -> tuple[int, int]:
     processing, mining, _ = colonies_for(product, schematics, recipes, purchase_p1=purchase_p1)
+    return processing, mining
+
+
+def _chain_size_for_targets(
+    target_products: list[str], schematics, recipes, purchase_p1: bool = False,
+) -> tuple[int, int]:
+    """
+    Сумма `_chain_size()` по всем выбранным продуктам — размер ОДНОЙ
+    линии всего набора (18.09.2026, по прямому запросу пользователя:
+    «продублировать выбранную цепочку столько раз, сколько позволят
+    персонажи», не подбирать второй-третий отдельный продукт).
+
+    Продукт без данных для расчёта — молча пропускается (advise() уже
+    честно предупредил о нём отдельно через advice_no_production_data,
+    здесь дублировать нечего).
+    """
+    processing = mining = 0
+    for product in target_products:
+        try:
+            p, m = _chain_size(product, schematics, recipes, purchase_p1=purchase_p1)
+        except KeyError:
+            continue
+        processing += p
+        mining += m
     return processing, mining
 
 
@@ -248,6 +279,7 @@ def advise(
     schematics: dict[str, Schematic] | None = None,
     recipes: RecipeBook | None = None,
     purchase_p1: bool = False,
+    lines_per_target: int = 1,
 ) -> Advice:
     """
     Разобрать, помещается ли задуманное, и предложить выход.
@@ -265,10 +297,22 @@ def advise(
     неиспользованным, а подсказка про него уже не сообщала). Без этого
     флага needed_colonies здесь и в build_plan() расходятся всегда,
     когда пользователь выбрал закупку P1 — не только в этом случае.
+
+    lines_per_target (18.09.2026, по прямому запросу пользователя:
+    «продублировать выбранную цепочку столько раз, сколько позволят
+    персонажи») — уже выбранное число линий (planner.py::PlanRequest.
+    lines_per_target), учитывается в needed_colonies/needed_mining,
+    чтобы «избыток»/«дефицит» не расходились с тем, что реально построит
+    build_plan() при этом значении. Линейное приближение (сумма по
+    продуктам, каждый умножен отдельно) — не точное число колоний
+    build_plan() (тот считает общий expand_demand() и может округлить
+    чуть экономнее), но не хуже: как и у остальных Suggestion, это
+    консервативная оценка, не гарантия.
     """
     recipes = load_recipes() if recipes is None else recipes
     schematics = load_schematics() if schematics is None else schematics
     prices = prices or {}
+    lines_per_target = max(1, lines_per_target)
 
     capacity = pool_capacity(characters)
     advice = Advice(status="fits", requested=list(target_products), capacity=capacity)
@@ -285,8 +329,8 @@ def advise(
         except KeyError:
             advice.note("advice_no_production_data", product=product)
             continue
-        needed_processing += processing
-        needed_mining += mining
+        needed_processing += processing * lines_per_target
+        needed_mining += mining * lines_per_target
 
     advice.needed_colonies = needed_processing + needed_mining
     advice.needed_mining = needed_mining
@@ -319,6 +363,29 @@ def advise(
                           for p in target_products if recipes.get(p))]
             if higher:
                 advice.note("advice_higher_tier_available")
+
+            # Сколько ЕЩЁ раз влезет весь выбранный набор целиком —
+            # приоритетнее «взять другой продукт» (пользователь сам об
+            # этом попросил вместо ручного подбора второго-третьего
+            # продукта). Считается на размере ОДНОЙ линии (без текущего
+            # lines_per_target), а сравнивается с уже уменьшенным на
+            # needed_processing/needed_mining остатком — так число
+            # получается «сколько ЕЩЁ», а не «сколько всего».
+            one_line_processing, one_line_mining = _chain_size_for_targets(
+                target_products, schematics, recipes, purchase_p1=purchase_p1
+            )
+            one_line_total = one_line_processing + one_line_mining
+            if one_line_total > 0:
+                by_total = spare // one_line_total
+                by_mining = (
+                    (capacity.mining_capable_slots - needed_mining) // one_line_mining
+                    if one_line_mining else by_total
+                )
+                by_processing = (
+                    (capacity.processing_capable_slots - needed_processing) // one_line_processing
+                    if one_line_processing else by_total
+                )
+                advice.extra_lines_available = max(0, min(by_total, by_mining, by_processing))
         return advice
 
     advice.status = "deficit"

@@ -46,6 +46,18 @@ def calculate():
     allow_single = bool(payload.get("allow_single_template_fallback", False))
     surplus_mining = bool(payload.get("surplus_mining", False))
     purchase_p1 = bool(payload.get("purchase_p1", False))
+    # Сколько раз строить весь набор целевых продуктов целиком
+    # (18.09.2026, по прямому запросу пользователя — продублировать
+    # выбранную цепочку, а не подбирать второй-третий продукт вручную).
+    # Зажато в [1, 50]: build_plan() и без верхней границы деградирует
+    # честными предупреждениями (не крашится), но заведомо большее
+    # значение не имеет смысла ни для одного реального пула персонажей;
+    # нечисловое значение — тихо как 1, не 400 (не критично для расчёта).
+    try:
+        lines_per_target = int(payload.get("lines_per_target", 1))
+    except (TypeError, ValueError):
+        lines_per_target = 1
+    lines_per_target = max(1, min(lines_per_target, 50))
     # Прямое P2 приостановлено (15.09.2026, решение пользователя): состав
     # застройки (domain/direct_p2.py) — расчёт из стоимостей отдельных
     # структур, а не выписка из проверенного игрового шаблона (готового
@@ -80,7 +92,7 @@ def calculate():
     # (разные персонажи!) вернул бы план ОДНОГО из них другому из кэша
     # (найдено 11.09.2026, тот же класс ошибки, что и в load_characters()).
     key = cache_key(account_id, sorted(constellations), factory_sys, sorted(targets),
-                    allow_single, surplus_mining, direct_p2, purchase_p1)
+                    allow_single, surplus_mining, direct_p2, purchase_p1, lines_per_target)
 
     def compute() -> PlanResult:
         # Персонажи — только этого визита (api/session.py). На Фазе 1
@@ -101,6 +113,7 @@ def calculate():
             surplus_mining=surplus_mining,
             direct_p2=direct_p2,
             purchase_p1=purchase_p1,
+            lines_per_target=lines_per_target,
         )
         return build_plan(
             request_obj,
@@ -136,6 +149,14 @@ def advice():
     # build_plan() в режиме purchase_p1 не строит вовсе — подсказка
     # переставала предлагать продукты раньше, чем пул реально заполнялся.
     purchase_p1 = bool(payload.get("purchase_p1", False))
+    # Уже выбранное число линий (18.09.2026, по прямому запросу
+    # пользователя) — чтобы «избыток»/«дефицит» не расходились с тем,
+    # что реально построит build_plan() при этом значении.
+    try:
+        lines_per_target = int(payload.get("lines_per_target", 1))
+    except (TypeError, ValueError):
+        lines_per_target = 1
+    lines_per_target = max(1, min(lines_per_target, 50))
     if not targets:
         return json_error("Не выбрано ни одного целевого продукта")
 
@@ -161,7 +182,9 @@ def advice():
     except Exception:
         prices = {}
 
-    return json_ok(**advise(targets, characters, prices, purchase_p1=purchase_p1).to_dict(lang))
+    return json_ok(**advise(
+        targets, characters, prices, purchase_p1=purchase_p1, lines_per_target=lines_per_target
+    ).to_dict(lang))
 
 
 def _load_prices() -> dict[str, float]:

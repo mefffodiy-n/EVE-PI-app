@@ -264,6 +264,53 @@ class TestPlans:
         assert purchasing["needed_mining"] == 0
         assert purchasing["needed_colonies"] < normal["needed_colonies"]
 
+    def test_calculate_lines_per_target_multiplies_colonies(self, client, seeded_characters, monkeypatch):
+        """
+        18.09.2026, по прямому запросу пользователя: продублировать
+        выбранную цепочку столько раз, сколько позволят персонажи, а не
+        подбирать второй-третий отдельный продукт вручную.
+        """
+        import api.blueprints.plans as plans
+
+        book = PlanetBook(pd.DataFrame([
+            {"Constellation": "ALPHA", "System": "HOME", "Planet": "4", "Type": "Barren",
+             RADIUS_COLUMN: 5820},
+            {"Constellation": "ALPHA", "System": "HOME", "Planet": "7", "Type": "Temperate",
+             RADIUS_COLUMN: 8100},
+        ]))
+        monkeypatch.setattr(plans, "load_planets", lambda: book)
+
+        base_payload = {
+            "constellations": ["ALPHA"], "factory_sys": "HOME",
+            "target_products": ["Biocells"], "purchase_p1": True,
+        }
+        one_line = client.post("/api/calculate", json=base_payload).get_json()
+        three_lines = client.post(
+            "/api/calculate", json={**base_payload, "lines_per_target": 3}
+        ).get_json()
+        assert one_line["status"] == "success" and one_line["data"]
+        assert three_lines["status"] == "success" and three_lines["data"]
+        assert len(three_lines["data"]) > len(one_line["data"])
+
+    def test_calculate_lines_per_target_bad_value_defaults_to_one(self, client):
+        """Нечисловое значение не должно ронять эндпоинт — тихо как 1."""
+        response = client.post(
+            "/api/calculate",
+            json={
+                "constellations": ["ALPHA"], "factory_sys": "HOME",
+                "target_products": ["Biocells"], "lines_per_target": "abc",
+            },
+        )
+        assert response.status_code == 200
+
+    def test_advice_reports_extra_lines_available(self, client, seeded_characters):
+        """
+        HTTP-контракт: поле extra_lines_available доходит из
+        domain.advice.advise() — числа сверены в tests/test_advice.py.
+        """
+        body = client.post("/api/advice", json={"target_products": ["Biocells"]}).get_json()
+        assert "extra_lines_available" in body
+
     def test_calculate_limits_product_count(self, client):
         """
         Ограничение защищает воркер: Flask синхронный, и один огромный
