@@ -156,6 +156,46 @@ class TestPurchaseP1:
             planets=planets,
         )
         assert result.monthly_purchase_cost is None
+        assert result.purchase_items == []
+
+    def test_purchase_items_carries_monthly_qty_and_price_per_product(self):
+        """
+        19.09.2026, по прямому запросу пользователя: список закупки
+        постатейно — не только суммарная стоимость.
+        """
+        planets = _FakePlanetBook({("HOME", 2.0): 0.05})
+        result = evaluate_plan_profitability(
+            rows=[_processing_row()],
+            target_products=["Coolant"],
+            prices={"Water": 10.0, "Coolant": 100.0},
+            schematics=_schematics(),
+            planets=planets,
+            purchased_p1={"Water": 600.0},
+        )
+        assert len(result.purchase_items) == 1
+        item = result.purchase_items[0]
+        assert item.product == "Water"
+        assert item.monthly_qty == 600.0 * HOURS_PER_MONTH
+        assert item.price == 10.0
+        assert item.monthly_cost == 4_320_000.0
+
+    def test_purchase_items_reports_missing_price_honestly(self):
+        """Продукт без цены — в списке с price=None/monthly_cost=None, не с 0."""
+        planets = _FakePlanetBook({("HOME", 2.0): 0.05})
+        result = evaluate_plan_profitability(
+            rows=[_processing_row()],
+            target_products=["Coolant"],
+            prices={"Coolant": 100.0},
+            schematics=_schematics(),
+            planets=planets,
+            purchased_p1={"Water": 600.0},
+        )
+        assert len(result.purchase_items) == 1
+        item = result.purchase_items[0]
+        assert item.product == "Water"
+        assert item.price is None
+        assert item.monthly_cost is None
+        assert item.monthly_qty == 600.0 * HOURS_PER_MONTH
 
 
 class TestHonestGaps:
@@ -414,3 +454,19 @@ class TestToDict:
             purchased_p1={"Water": 600.0},
         )
         assert result.to_dict()["monthly_purchase_cost"] == 4_320_000.0
+
+    def test_to_dict_includes_purchase_items(self):
+        planets = _FakePlanetBook({("HOME", 2.0): 0.05})
+        result = evaluate_plan_profitability(
+            rows=[_processing_row()],
+            target_products=["Coolant"],
+            prices={"Water": 10.0, "Coolant": 100.0},
+            schematics=_schematics(),
+            planets=planets,
+            purchased_p1={"Water": 600.0},
+        )
+        items = result.to_dict()["purchase_items"]
+        assert items == [{
+            "product": "Water", "monthly_qty": 600.0 * HOURS_PER_MONTH,
+            "price": 10.0, "monthly_cost": 4_320_000.0,
+        }]

@@ -23,7 +23,16 @@
                           colonies_data непуст), тем же форматом колонок,
                           что и «План» — единственным листом, без своих
                           сводки/проверки (решение пользователя: они не
-                          нужны для уже построенного).
+                          нужны для уже построенного);
+  «Закупка P1» / P1 purchase — сырьё на месяц с ценой на момент
+                          построения плана (19.09.2026, по прямому
+                          запросу пользователя), только когда фронтенд
+                          прислал непустой purchase_items (режим
+                          purchase_p1) — то же самое, что уже показано
+                          на экране в панели «Список закупки сырья»,
+                          не пересчитывается заново здесь: цены
+                          «прямо сейчас» на сервере разошлись бы с тем,
+                          что видел пользователь при построении плана.
 
 Если plan_data пуст, а colonies_data — нет: книга состоит из ОДНОГО
 листа «Мои колонии», без «Плана»/«Сводки»/«Проверки» вовсе.
@@ -73,7 +82,7 @@ COLUMNS = [
 _L = {
     "ru": {
         "sheet_plan": "План", "sheet_summary": "Сводка", "sheet_check": "Проверка",
-        "sheet_colonies": "Мои колонии",
+        "sheet_colonies": "Мои колонии", "sheet_purchase": "Закупка P1",
         "character": "Персонаж", "role": "Роль", "constellation": "Констелляция",
         "system": "Система", "planet": "Планета", "planet_type": "Тип планеты",
         "planet_radius_km": "Радиус, км", "cc_type": "Командный центр",
@@ -91,10 +100,16 @@ _L = {
         "role_mine": "Добыча", "role_mine_surplus": "Добыча (избыток)",
         "role_proc": "Переработка", "role_direct_p2": "Прямое P2",
         "fact": "фабрик",
+        "purchase_title": "Список закупки сырья P1",
+        "purchase_product": "Продукт", "purchase_qty": "Кол-во / мес",
+        "purchase_price": "Цена, ISK", "purchase_cost": "Стоимость / мес",
+        "purchase_no_price": "нет цены", "purchase_total": "Итого",
+        "purchase_as_of": "Цены на момент построения плана: {stamp}",
+        "purchase_no_snapshot": "Цены на момент построения плана: снимок не найден",
     },
     "en": {
         "sheet_plan": "Plan", "sheet_summary": "Summary", "sheet_check": "Check",
-        "sheet_colonies": "My colonies",
+        "sheet_colonies": "My colonies", "sheet_purchase": "P1 purchase",
         "character": "Character", "role": "Role", "constellation": "Constellation",
         "system": "System", "planet": "Planet", "planet_type": "Planet type",
         "planet_radius_km": "Radius, km", "cc_type": "Command centre",
@@ -112,6 +127,12 @@ _L = {
         "role_mine": "Extraction", "role_mine_surplus": "Extraction (surplus)",
         "role_proc": "Processing", "role_direct_p2": "Direct P2",
         "fact": "factories",
+        "purchase_title": "P1 raw material purchase list",
+        "purchase_product": "Product", "purchase_qty": "Qty / mo",
+        "purchase_price": "Price, ISK", "purchase_cost": "Cost / mo",
+        "purchase_no_price": "no price", "purchase_total": "Total",
+        "purchase_as_of": "Prices as of plan build: {stamp}",
+        "purchase_no_snapshot": "Prices as of plan build: no snapshot found",
     },
 }
 
@@ -320,7 +341,10 @@ def _load_planets_and_recipes():
     return planets, load_recipes()
 
 
-def _build_workbook(rows: list[dict], colony_rows: list[dict], lang: str = "ru") -> Workbook:
+def _build_workbook(
+    rows: list[dict], colony_rows: list[dict], lang: str = "ru",
+    purchase_items: list[dict] | None = None, prices_collected_at: str | None = None,
+) -> Workbook:
     tr = _L.get(lang, _L["ru"])
     workbook = Workbook()
     first_sheet_used = False
@@ -336,8 +360,78 @@ def _build_workbook(rows: list[dict], colony_rows: list[dict], lang: str = "ru")
         colonies_sheet = workbook.active if not first_sheet_used else workbook.create_sheet()
         colonies_sheet.title = tr["sheet_colonies"]
         _write_rows_sheet(colonies_sheet, colony_rows, tr)
+        first_sheet_used = True
+
+    if purchase_items:
+        purchase_sheet = workbook.active if not first_sheet_used else workbook.create_sheet()
+        purchase_sheet.title = tr["sheet_purchase"]
+        _write_purchase_sheet(purchase_sheet, purchase_items, prices_collected_at, tr)
 
     return workbook
+
+
+def _write_purchase_sheet(
+    sheet, purchase_items: list[dict], prices_collected_at: str | None, tr: dict,
+) -> None:
+    """
+    Список закупки P1 на месяц (19.09.2026) — то же самое, что панель
+    «Список закупки сырья» на дашборде (renderPurchaseList(),
+    web/index.html): фронтенд присылает уже готовый purchase_items
+    (тот же ответ /api/plan-profitability, что построил панель), здесь
+    только записывается в лист, без пересчёта — иначе снимок цен в
+    Excel не совпал бы с тем, что видел пользователь на экране.
+
+    Числа, не формулы (в отличие от «Сводки»/«Проверки»): monthly_cost
+    зависит от рыночной цены, которой в самом plan_data нет — Excel
+    неоткуда было бы её пересчитать при правке листа «План».
+    """
+    sheet.cell(row=1, column=1, value=tr["purchase_title"]).font = Font(
+        name="Arial", bold=True, size=12
+    )
+    _style_header(
+        sheet,
+        [tr["purchase_product"], tr["purchase_qty"], tr["purchase_price"], tr["purchase_cost"]],
+        [26, 16, 16, 16],
+        start_row=2,
+    )
+
+    total_cost = 0.0
+    any_cost = False
+    row_index = 3
+    for item in purchase_items:
+        sheet.cell(row=row_index, column=1, value=item.get("product")).font = BODY_FONT
+        qty_cell = sheet.cell(row=row_index, column=2, value=item.get("monthly_qty"))
+        qty_cell.font = BODY_FONT
+        qty_cell.number_format = "#,##0"
+        price = item.get("price")
+        cost = item.get("monthly_cost")
+        price_cell = sheet.cell(
+            row=row_index, column=3, value=price if price is not None else tr["purchase_no_price"]
+        )
+        price_cell.font = BODY_FONT
+        if isinstance(price, (int, float)):
+            price_cell.number_format = "#,##0"
+        cost_cell = sheet.cell(row=row_index, column=4, value=cost)
+        cost_cell.font = BODY_FONT
+        if isinstance(cost, (int, float)):
+            cost_cell.number_format = "#,##0"
+            total_cost += cost
+            any_cost = True
+        row_index += 1
+
+    if any_cost:
+        sheet.cell(row=row_index, column=1, value=tr["purchase_total"]).font = Font(
+            name="Arial", bold=True
+        )
+        total_cell = sheet.cell(row=row_index, column=4, value=total_cost)
+        total_cell.font = Font(name="Arial", bold=True)
+        total_cell.number_format = "#,##0"
+        row_index += 1
+
+    note_row = row_index + 1
+    stamp_key = "purchase_as_of" if prices_collected_at else "purchase_no_snapshot"
+    note = tr[stamp_key].format(stamp=prices_collected_at) if prices_collected_at else tr[stamp_key]
+    sheet.cell(row=note_row, column=1, value=note).font = Font(name="Arial", italic=True, size=9)
 
 
 def _write_summary_and_check_sheets(workbook: Workbook, rows: list[dict], tr: dict) -> None:
@@ -430,11 +524,15 @@ def export_plan():
 
     rows = payload.get("plan_data") or []
     colonies = payload.get("colonies_data") or []
+    purchase_items = payload.get("purchase_items") or []
+    prices_collected_at = payload.get("prices_collected_at")
     lang = "en" if str(payload.get("lang", "ru")).lower().startswith("en") else "ru"
 
     if not rows and not colonies:
         return json_error("Нечего экспортировать: нет ни плана, ни колоний")
-    for field_name, value in (("plan_data", rows), ("colonies_data", colonies)):
+    for field_name, value in (
+        ("plan_data", rows), ("colonies_data", colonies), ("purchase_items", purchase_items),
+    ):
         error = _validate_rows(value, field_name)
         if error:
             return json_error(error)
@@ -445,7 +543,11 @@ def export_plan():
         colony_rows = [_colony_to_row(c, planets, recipes) for c in colonies]
 
     stream = BytesIO()
-    _build_workbook(rows, colony_rows, lang).save(stream)
+    _build_workbook(
+        rows, colony_rows, lang,
+        purchase_items=purchase_items,
+        prices_collected_at=prices_collected_at if isinstance(prices_collected_at, str) else None,
+    ).save(stream)
     stream.seek(0)
 
     filename = f"pi-plan-{datetime.now(timezone.utc):%Y%m%d-%H%M}.xlsx"

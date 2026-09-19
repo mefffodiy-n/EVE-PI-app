@@ -882,6 +882,15 @@ details.msgs[open] > summary::before { content:'▾ '; }
 .poco-profit-note { margin-top:8px; color:var(--dim); font-size:11px; max-width:82ch; }
 @media (max-width:520px){ .poco-profit .figures { grid-template-columns:repeat(2,minmax(120px,1fr)); } }
 
+/* ── Список закупки сырья P1 (19.09.2026) ──────────────────────── */
+.purchase-list-table { width:100%; border-collapse:collapse; margin-top:6px; font-size:12px; }
+.purchase-list-table th { text-align:left; color:var(--dim); font-size:10px; letter-spacing:.08em;
+                           text-transform:uppercase; padding:4px 8px; border-bottom:1px solid var(--seam); }
+.purchase-list-table th.r, .purchase-list-table td.r { text-align:right; }
+.purchase-list-table td { padding:4px 8px; color:var(--read); }
+.purchase-list-table tr.purchase-list-total td { border-top:1px solid var(--seam); font-weight:600;
+                                                  color:var(--amber); padding-top:6px; }
+
 /* ── Сохранённые планы ────────────────────────────────────────── */
 .saved { border-top:1px solid var(--seam); padding:12px 14px; }
 .saved h3 { font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--dim);
@@ -1085,6 +1094,7 @@ body.light .rolebadge.excess { background:rgba(154,107,18,.12); }
     <div class="counts" id="counts"></div>
   </div>
   <div id="pocoProfit"></div>
+  <div id="purchaseList"></div>
   <div id="dashBody"><div class="empty" data-i18n="noPlanLong">План не построен. Откройте вкладку «Настройки», выберите продукты и постройте план.</div></div>
   <div id="coloniesProfit"></div>
   <div id="colonies"></div>
@@ -1281,6 +1291,10 @@ const T={
   pocoHigherThanBest:'Ставка POCO здесь выше, чем на других перерабатывающих колониях плана',
   pocoIncomplete:'Чистая прибыль не считается, пока не известны все ставки и не собраны все цены — частичная сумма выглядела бы точнее, чем есть на самом деле.',
   pocoAssumption:'Оценка при полной загрузке цепочки без простоев и истощения месторождений, {hours} часов в месяце. Налог — и на вывоз, и на ввоз на каждом перемещении между планетами по цепочке.',
+  purchaseListTitle:'Список закупки сырья (P1)',
+  purchaseListProduct:'Продукт',purchaseListQty:'Кол-во / мес',purchaseListPrice:'Цена, ISK',
+  purchaseListCost:'Стоимость / мес',purchaseListTotal:'Итого',purchaseListNoPrice:'нет цены',
+  purchaseListAsOf:'Цены на момент построения плана{stamp}',purchaseListNoSnapshot:' (снимок цен не найден)',
   coloniesProfitTitle:'Прогноз прибыльности по факту',
   coloniesProfitMissingOutput:'Неизвестна текущая скорость: {list}',
   coloniesProfitAssumption:'По реальной текущей скорости каждой колонии (с поправкой на затухание добычи и простой фабрик), не по теоретическому максимуму. Налог — только на вывоз с самой планеты, без учёта того, куда сырьё едет дальше между разными колониями: этой связи ESI не отдаёт.',
@@ -1357,6 +1371,10 @@ const T={
   pocoHigherThanBest:'This POCO rate is higher than on other processing colonies in the plan',
   pocoIncomplete:'Net profit is not shown until every rate is known and every price is available — a partial sum would look more accurate than it really is.',
   pocoAssumption:'Estimate at full chain throughput, no downtime, no deposit depletion, {hours} hours per month. Tax applies on both export and import at every hop between planets in the chain.',
+  purchaseListTitle:'Raw material purchase list (P1)',
+  purchaseListProduct:'Product',purchaseListQty:'Qty / mo',purchaseListPrice:'Price, ISK',
+  purchaseListCost:'Cost / mo',purchaseListTotal:'Total',purchaseListNoPrice:'no price',
+  purchaseListAsOf:'Prices as of plan build{stamp}',purchaseListNoSnapshot:' (no price snapshot found)',
   coloniesProfitTitle:'Actual profitability forecast',
   coloniesProfitMissingOutput:'Current rate unknown: {list}',
   coloniesProfitAssumption:'By each colony’s real current rate (adjusted for extraction decay and factory downtime), not the theoretical maximum. Tax only on what leaves the planet itself — not tracked further between different colonies, since ESI does not report that link.',
@@ -3291,7 +3309,7 @@ function renderProfit(){
    её из расчёта (missing_rates), не подставляет «без налога». */
 async function renderPocoProfit(){
   const box=document.getElementById('pocoProfit'); if(!box) return;
-  if(!plan.length || !lastRequest){ box.innerHTML=''; return; }
+  if(!plan.length || !lastRequest){ box.innerHTML=''; renderPurchaseList(null); return; }
 
   let d;
   try{
@@ -3303,8 +3321,9 @@ async function renderPocoProfit(){
       }),
     });
     d=await r.json();
-  }catch(e){ box.innerHTML=''; return; }
-  if(!d || d.status!=='success'){ box.innerHTML=''; return; }
+  }catch(e){ box.innerHTML=''; renderPurchaseList(null); return; }
+  if(!d || d.status!=='success'){ box.innerHTML=''; renderPurchaseList(null); return; }
+  renderPurchaseList(d);
 
   const gaps=[];
   if(d.missing_prices && d.missing_prices.length)
@@ -3328,6 +3347,54 @@ async function renderPocoProfit(){
     ${gaps.length?`<div class="poco-profit-note">${gaps.join(' · ')}</div>`:''}
     ${!netKnown&&(d.monthly_revenue!=null||d.monthly_tax!=null)?`<div class="poco-profit-note">${t('pocoIncomplete')}</div>`:''}
     <div class="poco-profit-note">${fmtPlain(t('pocoAssumption'),{hours:d.hours_per_month})}</div>
+  </div>`;
+}
+
+/* ── Список закупки сырья P1 (19.09.2026, по прямому запросу
+   пользователя: «в список покупок должно быть добавлено сырьё на
+   месяц с кол-вом по виду ресурса и ценой на момент построения
+   плана») ────────────────────────────────────────────────────────
+   Данные — из того же ответа /api/plan-profitability, что и панель
+   прибыльности (purchase_items/prices_collected_at,
+   domain/poco_tax.py::PurchaseItem) — не отдельный запрос: план уже
+   считался единожды, повторный вызов дал бы другой снимок цен и
+   разошёлся бы с «Закупка P1 / мес» в соседней панели. Пусто —
+   когда план не в режиме purchase_p1 или закупать нечего (лишний
+   пустой блок хуже отсутствия блока). Результат кладётся в
+   lastPurchaseData — тем же снимком цен пользуется exportPlan(), чтобы
+   в Excel попали ИМЕННО те цены, что видел пользователь на экране, а
+   не более свежие с сервера на момент нажатия «Экспорт». */
+let lastPurchaseData=null;
+function renderPurchaseList(d){
+  const box=document.getElementById('purchaseList'); if(!box) return;
+  const items=(d&&d.purchase_items)||[];
+  if(!items.length){ box.innerHTML=''; lastPurchaseData=null; return; }
+  lastPurchaseData={items, prices_collected_at:d.prices_collected_at||null};
+
+  let stamp='';
+  if(d.prices_collected_at){
+    try{ stamp=': '+new Date(d.prices_collected_at).toLocaleString(lang==='ru'?'ru':'en-US'); }
+    catch(e){ stamp=''; }
+  }
+  const totalCost=items.reduce((sum,it)=>sum+(it.monthly_cost||0),0);
+  const anyKnown=items.some(it=>it.monthly_cost!=null);
+
+  box.innerHTML=`<div class="poco-profit">
+    <div class="profit-head"><h3>${t('purchaseListTitle')}</h3></div>
+    <table class="purchase-list-table"><thead><tr>
+      <th>${t('purchaseListProduct')}</th><th class="r">${t('purchaseListQty')}</th>
+      <th class="r">${t('purchaseListPrice')}</th><th class="r">${t('purchaseListCost')}</th>
+    </tr></thead><tbody>
+    ${items.map(it=>`<tr>
+      <td>${it.product}</td>
+      <td class="r num">${nloc(Math.round(it.monthly_qty))}</td>
+      <td class="r num">${it.price==null?t('purchaseListNoPrice'):nloc(Math.round(it.price))}</td>
+      <td class="r num">${it.monthly_cost==null?'—':isk(it.monthly_cost)}</td>
+    </tr>`).join('')}
+    ${anyKnown?`<tr class="purchase-list-total"><td colspan="3">${t('purchaseListTotal')}</td>
+      <td class="r num">${isk(totalCost)}</td></tr>`:''}
+    </tbody></table>
+    <div class="poco-profit-note">${fmtPlain(t('purchaseListAsOf'),{stamp:stamp||t('purchaseListNoSnapshot')})}</div>
   </div>`;
 }
 
@@ -3457,7 +3524,16 @@ async function exportPlan(){
   try{
     const r=await fetch(`${API}/export`,{method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({plan_data:plan,colonies_data:coloniesForExport(),lang})});
+      body:JSON.stringify({
+        plan_data:plan,colonies_data:coloniesForExport(),lang,
+        // Тот же снимок, что уже показан на панели «Список закупки
+        // сырья» (lastPurchaseData, renderPurchaseList()) — не
+        // пересчитывается заново на сервере: свежий снимок цен на
+        // момент нажатия «Экспорт» разошёлся бы с тем, что видел
+        // пользователь на экране секундами раньше.
+        purchase_items:(lastPurchaseData&&lastPurchaseData.items)||[],
+        prices_collected_at:(lastPurchaseData&&lastPurchaseData.prices_collected_at)||null,
+      })});
     if(!r.ok){
       const d=await r.json().catch(()=>({}));
       throw new Error(d.message||`HTTP ${r.status}`);
@@ -4003,6 +4079,16 @@ const DOC={
    известны все нужные ставки — частичная сумма выглядела бы точнее, чем
    есть на самом деле.</p>
 
+   <h3>Список закупки сырья (P1)</h3>
+   <p>Панель под прогнозом прибыльности — показывается только в режиме
+   «покупать P1 на бирже»: по каждому виду сырья P1 — сколько единиц
+   нужно закупать в месяц и цена на момент построения плана (тот же
+   снимок рыночных цен, что и у прогноза прибыльности выше, не
+   пересчитывается заново при каждом открытии страницы). Строка без
+   цены в снимке помечена «нет цены», а не подставляет ноль. Тот же
+   список попадает в экспорт в Excel отдельным листом «Закупка P1» с
+   теми же ценами, что были на экране при построении плана.</p>
+
    <h3>Индикаторы вверху</h3>
    <p>Плашка «ESI» — число игроков онлайн из снимка сервера; жёлтая точка значит,
    что снимок давно не обновлялся (сборщик мог не запуститься), при наведении
@@ -4277,6 +4363,15 @@ const DOC={
    excludes that planet rather than treating it as tax-free. Net profit is only shown once
    every needed price is available and every needed rate is known — a partial sum would look
    more accurate than it really is.</p>
+
+   <h3>Raw material purchase list (P1)</h3>
+   <p>A panel below the profitability forecast — shown only in "buy all P1 on the
+   market" mode: for each P1 raw material, how many units to buy per month, with
+   prices as of plan build (the same market price snapshot as the profitability
+   forecast above — it is not re-fetched every time the page opens). A product missing
+   a price in the snapshot is marked "no price" rather than shown as zero. The same
+   list is included in the Excel export as its own "P1 purchase" sheet, with the same
+   prices that were on screen when the plan was built.</p>
 
    <h3>Top bar indicators</h3>
    <p>The "ESI" chip shows online players from a server snapshot; an amber dot means the

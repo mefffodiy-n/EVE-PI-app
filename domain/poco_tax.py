@@ -126,6 +126,31 @@ def _row_flow(row: dict, schematics: dict[str, Schematic]) -> RowFlow | None:
 
 
 @dataclass
+class PurchaseItem:
+    """
+    Одна строка списка закупки P1 (19.09.2026, по прямому запросу
+    пользователя: «в список покупок должно быть добавлено сырьё на
+    месяц с кол-вом по виду ресурса и ценой на момент построения
+    плана»). `price`/`monthly_cost` — `None`, когда цены этого продукта
+    нет в снимке (честный пробел, не 0 — правило 1); `monthly_qty`
+    известно всегда — она приходит из самого плана, не из цен.
+    """
+
+    product: str
+    monthly_qty: float
+    price: float | None
+    monthly_cost: float | None
+
+    def to_dict(self) -> dict:
+        return {
+            "product": self.product,
+            "monthly_qty": self.monthly_qty,
+            "price": self.price,
+            "monthly_cost": self.monthly_cost,
+        }
+
+
+@dataclass
 class PlanProfitability:
     monthly_revenue: float | None
     monthly_export_tax: float | None
@@ -137,6 +162,12 @@ class PlanProfitability:
     # None в обычном режиме плана (свой P1, стоимость закупки не
     # применима), не 0 — это разные вещи (правило 1, честный пробел).
     monthly_purchase_cost: float | None = None
+    # Список закупки постатейно (19.09.2026) — та же сумма, что и
+    # monthly_purchase_cost, но по каждому продукту отдельно, для
+    # панели «Список закупки сырья» и листа экспорта. Пусто в обычном
+    # режиме плана (purchased_p1 не передан) — не отдельное поле «нет
+    # закупки», просто пустой список.
+    purchase_items: list[PurchaseItem] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -152,6 +183,7 @@ class PlanProfitability:
             "monthly_net_profit": self.monthly_net_profit,
             "missing_prices": sorted(self.missing_prices),
             "missing_rates": sorted(self.missing_rates),
+            "purchase_items": [item.to_dict() for item in self.purchase_items],
         }
 
 
@@ -339,13 +371,22 @@ def evaluate_plan_profitability(
                 import_tax += qty_per_hour * HOURS_PER_MONTH * input_price * rate
                 any_import = True
 
+    purchase_items: list[PurchaseItem] = []
     for name, rate_per_hour in (purchased_p1 or {}).items():
+        monthly_qty = rate_per_hour * HOURS_PER_MONTH
         price = prices.get(name)
         if price is None:
             missing_prices.add(name)
+            purchase_items.append(
+                PurchaseItem(product=name, monthly_qty=monthly_qty, price=None, monthly_cost=None)
+            )
             continue
-        purchase_cost += rate_per_hour * HOURS_PER_MONTH * price
+        monthly_cost = monthly_qty * price
+        purchase_cost += monthly_cost
         any_purchase = True
+        purchase_items.append(
+            PurchaseItem(product=name, monthly_qty=monthly_qty, price=price, monthly_cost=monthly_cost)
+        )
 
     # Итоговая чистая прибыль — только когда картина ПОЛНАЯ (ни одной
     # пропущенной цены/ставки нигде в плане): частичная сумма тут хуже
@@ -364,4 +405,5 @@ def evaluate_plan_profitability(
         ),
         missing_prices=missing_prices,
         missing_rates=missing_rates,
+        purchase_items=sorted(purchase_items, key=lambda item: item.product),
     )

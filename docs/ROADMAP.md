@@ -3492,6 +3492,60 @@ PNG-логотип + скрипт компонента); статическая 
       после `renderMessages()` в DOM осталась одна; `getComputedStyle`
       заголовка подтвердил новую заметную стилизацию (жирный,
       амбер-рамка, подсветка фона).
+- [x] **Список закупки сырья P1 на месяц с ценой на момент построения
+      плана, тот же список — в экспорт (19.09.2026).** По прямому
+      запросу пользователя: «при выбранной переработке из покупаемого
+      сырья в список покупок должно быть добавлено сырьё на месяц с
+      кол-вом по виду ресурса и ценой на момент построения плана,
+      добавить также в экспорт».
+
+      **Реализация:**
+      - `domain/poco_tax.py` — новый `PurchaseItem` (`product`,
+        `monthly_qty`, `price`, `monthly_cost`) и поле
+        `PlanProfitability.purchase_items: list[PurchaseItem]`.
+        `evaluate_plan_profitability()` строит список постатейно по
+        `purchased_p1` — та же величина (`rate_per_hour * HOURS_PER_MONTH
+        * price`), что уже суммировалась в `monthly_purchase_cost`,
+        только не сворачивается в одну сумму. Продукт без цены — в
+        списке с `price=None`/`monthly_cost=None` (честный пробел,
+        правило 1), не пропадает и не считается нулём.
+      - `api/blueprints/plans.py::plan_profitability()` — тот же ответ
+        `/api/plan-profitability` дополнен `prices_collected_at`
+        (метка снимка `data/cache/market_prices.json`, `_prices_collected_at()`)
+        — «на момент построения плана» в буквальном смысле означает
+        «когда фронтенд получил этот ответ», не «прямо сейчас на
+        сервере»: цена и её метка едут в одном ответе и дальше нигде не
+        перезапрашиваются.
+      - `web/index.html` — новая панель `#purchaseList` под прогнозом
+        прибыльности плана, `renderPurchaseList()` вызывается из
+        `renderPocoProfit()` (тот же fetch, не отдельный запрос — иначе
+        два соседних блока могли бы показать цены из разных снимков).
+        Результат кладётся в `lastPurchaseData` (глобальная переменная)
+        — именно этот замороженный снимок, а не новый запрос, уходит и
+        в `exportPlan()`, чтобы Excel показывал ТЕ ЖЕ цены, что были на
+        экране, а не более свежие на момент нажатия «Экспорт».
+      - `api/blueprints/export.py` — `/api/export` принимает
+        `purchase_items`/`prices_collected_at`, `_write_purchase_sheet()`
+        пишет их в новый лист «Закупка P1» (числа, не формулы COUNTIF,
+        как у «Сводки»/«Проверки» — стоимость зависит от рыночной цены,
+        которой в самом листе «План» нет и взять неоткуда). Лист
+        появляется, только когда `purchase_items` непуст — обычный план
+        не обзаводится лишним пустым листом.
+      - `domain/features.py` — новая запись `p1_purchase_list`; справка
+        (RU/EN) дополнена разделом «Список закупки сырья (P1)».
+
+      **Тесты:** `tests/test_poco_tax.py::TestPurchaseP1` — новые
+      `test_purchase_items_carries_monthly_qty_and_price_per_product`,
+      `test_purchase_items_reports_missing_price_honestly`;
+      `TestToDict::test_to_dict_includes_purchase_items`.
+      `tests/test_api.py::TestPlanProfitability::test_returns_purchase_items_and_prices_snapshot_stamp`,
+      `TestExport::test_export_adds_purchase_sheet_when_purchase_items_present`/
+      `test_export_skips_purchase_sheet_when_no_purchase_items`. `python
+      -m pytest tests/ -q` — 530 прошли. Проверено вручную в браузере
+      (`preview_start`+`javascript_tool`): синтетический `purchase_items`
+      с одним продуктом с ценой и одним без — панель показала кол-во,
+      цену, «нет цены» вторым продуктом, итоговую строку только по
+      продукту с известной ценой, и метку времени снимка.
 
 После сверки с четырьмя источниками оба спорных числа закрыты — ничего
 не возвращается в ответе `/api/calculate` в поле `assumptions` (кроме
