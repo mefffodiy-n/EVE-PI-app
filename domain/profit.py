@@ -107,6 +107,7 @@ def colonies_for(
     product: str,
     schematics: dict[str, Schematic] | None = None,
     recipes: RecipeBook | None = None,
+    purchase_p1: bool = False,
 ) -> tuple[int, int, float]:
     """
     Сколько колоний требует одна линия продукта и сколько единиц в час она даёт.
@@ -115,6 +116,14 @@ def colonies_for(
 
     Считается тем же разворотом дерева, что и в планировщике, поэтому
     оценка выгоды и построенный план не разойдутся в числе планет.
+
+    purchase_p1 (18.09.2026) — тот же режим, что и у
+    `domain.planner.PlanRequest.purchase_p1`/`expand_demand()`: P1 не
+    добывается, добывающих колоний в ответе не будет вовсе (mining=0).
+    Нужен `domain/advice.py`, чтобы подсказка «персонажей больше, чем
+    нужно» не считала колонии под добычу, которая в этом режиме не
+    строится — иначе оценка вместимости расходится с тем, что реально
+    построит build_plan().
     """
     schematics = load_schematics() if schematics is None else schematics
     recipes = load_recipes() if recipes is None else recipes
@@ -129,7 +138,9 @@ def colonies_for(
         raise KeyError(f"Продукт {product} не является целевым (тир {recipe.tier})")
 
     units_per_hour = schematic.output_per_hour * factories
-    demand = expand_demand({product: units_per_hour}, schematics=schematics, recipes=recipes)
+    demand = expand_demand(
+        {product: units_per_hour}, schematics=schematics, recipes=recipes, purchase_p1=purchase_p1
+    )
 
     processing = 0
     mining = 0

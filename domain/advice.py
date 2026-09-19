@@ -142,8 +142,8 @@ def pool_capacity(characters: list) -> PoolCapacity:
     )
 
 
-def _chain_size(product: str, schematics, recipes) -> tuple[int, int]:
-    processing, mining, _ = colonies_for(product, schematics, recipes)
+def _chain_size(product: str, schematics, recipes, purchase_p1: bool = False) -> tuple[int, int]:
+    processing, mining, _ = colonies_for(product, schematics, recipes, purchase_p1=purchase_p1)
     return processing, mining
 
 
@@ -168,6 +168,7 @@ def _candidates(
     recipes: RecipeBook,
     exclude: set[str],
     max_colonies: int | None = None,
+    purchase_p1: bool = False,
 ) -> list[Suggestion]:
     """Продукты, помещающиеся в заданный запас слотов, по убыванию выгоды."""
     result: list[Suggestion] = []
@@ -175,7 +176,7 @@ def _candidates(
         if recipe.tier not in TIER_ORDER or recipe.name in exclude:
             continue
         try:
-            processing, mining = _chain_size(recipe.name, schematics, recipes)
+            processing, mining = _chain_size(recipe.name, schematics, recipes, purchase_p1=purchase_p1)
         except KeyError:
             continue
 
@@ -218,6 +219,7 @@ def advise(
     prices: dict[str, float] | None = None,
     schematics: dict[str, Schematic] | None = None,
     recipes: RecipeBook | None = None,
+    purchase_p1: bool = False,
 ) -> Advice:
     """
     Разобрать, помещается ли задуманное, и предложить выход.
@@ -226,6 +228,15 @@ def advise(
     считается всё равно, а порядок предложений становится произвольным —
     об этом говорится в notes, чтобы список не выглядел осмысленнее,
     чем он есть.
+
+    purchase_p1 (18.09.2026, найдено пользователем: план на закупаемом
+    P1 использовал только 24 колонии из 84 — подсказка «персонажей
+    больше, чем нужно» предлагала продукты до тех пор, пока СЧИТАЛА пул
+    заполненным, включая в счёт добывающие колонии, которых в этом
+    режиме build_plan() не строит вовсе; реальный запас оставался
+    неиспользованным, а подсказка про него уже не сообщала). Без этого
+    флага needed_colonies здесь и в build_plan() расходятся всегда,
+    когда пользователь выбрал закупку P1 — не только в этом случае.
     """
     recipes = load_recipes() if recipes is None else recipes
     schematics = load_schematics() if schematics is None else schematics
@@ -242,7 +253,7 @@ def advise(
     needed_processing = needed_mining = 0
     for product in target_products:
         try:
-            processing, mining = _chain_size(product, schematics, recipes)
+            processing, mining = _chain_size(product, schematics, recipes, purchase_p1=purchase_p1)
         except KeyError:
             advice.note("advice_no_production_data", product=product)
             continue
@@ -269,7 +280,7 @@ def advise(
             advice.status = "surplus"
             advice.additions = _candidates(
                 prices, capacity, schematics, recipes,
-                exclude=set(target_products), max_colonies=spare,
+                exclude=set(target_products), max_colonies=spare, purchase_p1=purchase_p1,
             )
             higher = [s for s in advice.additions
                       if TIER_ORDER.get(s.tier, 0) > max(
@@ -282,7 +293,7 @@ def advise(
     advice.status = "deficit"
     advice.missing_colonies = advice.needed_colonies - capacity.total_slots
     advice.alternatives = _candidates(
-        prices, capacity, schematics, recipes, exclude=set(),
+        prices, capacity, schematics, recipes, exclude=set(), purchase_p1=purchase_p1,
     )
     if not advice.alternatives:
         advice.note("advice_nothing_fits")

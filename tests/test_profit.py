@@ -72,6 +72,22 @@ class TestColonyCount:
         with pytest.raises(KeyError):
             colonies_for("Water", schematics)
 
+    def test_purchase_p1_reports_zero_mining_colonies(self, schematics):
+        """
+        18.09.2026, найдено пользователем: план на закупаемом P1
+        использовал куда меньше колоний, чем предполагала подсказка
+        «персонажей больше, чем нужно» — та считала добывающие колонии,
+        которых build_plan() в этом режиме не строит. colonies_for()
+        должен согласованно вернуть mining=0, processing — как обычно.
+        """
+        processing_normal, mining_normal, _ = colonies_for("Biocells", schematics)
+        processing_purchase, mining_purchase, _ = colonies_for(
+            "Biocells", schematics, purchase_p1=True
+        )
+        assert mining_normal > 0
+        assert mining_purchase == 0
+        assert processing_purchase == processing_normal
+
 
 class TestRanking:
     def test_ranked_by_isk_per_colony_hour(self, schematics):
