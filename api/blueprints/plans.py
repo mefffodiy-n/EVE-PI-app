@@ -202,6 +202,22 @@ def _load_prices() -> dict[str, float]:
         return {}
 
 
+def _prices_collected_at() -> str | None:
+    """
+    Метка времени снимка цен (19.09.2026) — для «цена на момент
+    построения плана» в панели/экспорте списка закупки P1: показывает,
+    насколько свежи цены, а не выдаёт их за собранные прямо сейчас
+    (правило 3 — снимок собирает scripts/refresh_market_prices.py по
+    расписанию, обработчик его не обновляет).
+    """
+    try:
+        from api.blueprints.market import _load_snapshot
+
+        return (_load_snapshot() or {}).get("collected_at")
+    except Exception:
+        return None
+
+
 def _load_planets_book():
     """
     Для точной автоматической ставки POCO по конкретной планете
@@ -254,7 +270,7 @@ def plan_profitability():
     result = evaluate_plan_profitability(
         rows, targets, _load_prices(), planets=_load_planets_book(), purchased_p1=purchased_p1
     )
-    return json_ok(**result.to_dict())
+    return json_ok(**result.to_dict(), prices_collected_at=_prices_collected_at())
 
 
 @bp.post("/colonies-profitability")

@@ -456,6 +456,49 @@ class TestExport:
         assert workbook["План"].max_row == 2
         assert workbook["План"].freeze_panes == "A2"
 
+    def test_export_adds_purchase_sheet_when_purchase_items_present(self, client):
+        """
+        19.09.2026, по прямому запросу пользователя: список закупки P1
+        (те же данные, что уже показаны на панели «Список закупки
+        сырья») попадает в экспорт отдельным листом — только когда
+        фронтенд его прислал, обычный план (без purchase_p1) не должен
+        обзаводиться пустым лишним листом.
+        """
+        from io import BytesIO
+
+        from openpyxl import load_workbook
+
+        response = client.post("/api/export", json={
+            "plan_data": [SAMPLE_PLAN_ROW],
+            "purchase_items": [
+                {"product": "Water", "monthly_qty": 432000.0, "price": 10.0, "monthly_cost": 4320000.0},
+                {"product": "Oxygen", "monthly_qty": 216000.0, "price": None, "monthly_cost": None},
+            ],
+            "prices_collected_at": "2026-09-19T00:00:00+00:00",
+        })
+        workbook = load_workbook(BytesIO(response.data))
+        assert "Закупка P1" in workbook.sheetnames
+        sheet = workbook["Закупка P1"]
+        assert sheet["A3"].value == "Water"
+        assert sheet["B3"].value == 432000.0
+        assert sheet["C3"].value == 10.0
+        assert sheet["D3"].value == 4320000.0
+        assert sheet["A4"].value == "Oxygen"
+        assert sheet["C4"].value == "нет цены"
+        assert sheet["D4"].value is None
+        # Итоговая строка — только по продуктам с известной ценой.
+        assert sheet["D5"].value == 4320000.0
+        assert "2026-09-19T00:00:00+00:00" in str(sheet["A7"].value)
+
+    def test_export_skips_purchase_sheet_when_no_purchase_items(self, client):
+        from io import BytesIO
+
+        from openpyxl import load_workbook
+
+        response = client.post("/api/export", json={"plan_data": [SAMPLE_PLAN_ROW]})
+        workbook = load_workbook(BytesIO(response.data))
+        assert "Закупка P1" not in workbook.sheetnames
+
     def test_summary_uses_formulas_not_precomputed_values(self, client):
         """
         Сводка должна пересчитываться, если пользователь правит лист
@@ -1010,6 +1053,34 @@ class TestPlanProfitability:
         body = r.get_json()
         assert "Barren" not in body["missing_rates"]
         assert body["monthly_export_tax"] is not None
+
+    def test_returns_purchase_items_and_prices_snapshot_stamp(self, monkeypatch):
+        """
+        19.09.2026, по прямому запросу пользователя: список закупки P1
+        постатейно, с меткой времени снимка цен — для панели «Список
+        закупки сырья» и одноимённого листа экспорта.
+        """
+        import api.blueprints.market as market
+
+        monkeypatch.setattr(market, "_load_snapshot", lambda: {
+            "prices": {"Water": {"buy_max": 10.0}},
+            "collected_at": "2026-09-19T00:00:00+00:00",
+        })
+        self._mock_schematics(monkeypatch)
+        self._mock_planets(monkeypatch, {("HOME", "2"): 0.05})
+        from api import create_app
+
+        with create_app({"TESTING": True}).test_client() as client:
+            r = client.post("/api/plan-profitability", json={
+                "rows": [self.PROCESSING_ROW],
+                "target_products": ["Coolant"],
+                "purchased_p1": {"Water": 600.0},
+            })
+        body = r.get_json()
+        assert body["purchase_items"] == [{
+            "product": "Water", "monthly_qty": 432000.0, "price": 10.0, "monthly_cost": 4320000.0,
+        }]
+        assert body["prices_collected_at"] == "2026-09-19T00:00:00+00:00"
 
     def test_purchased_p1_cost_reduces_net_profit(self, monkeypatch):
         """
