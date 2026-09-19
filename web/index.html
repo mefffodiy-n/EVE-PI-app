@@ -2787,9 +2787,13 @@ async function loadAdvice(){
   const box=document.getElementById('advice');
   if(!targets.length){ box.innerHTML=''; adviceData=null; return; }
   try{
+    // purchase_p1 (18.09.2026, найдено пользователем): без него подсказка
+    // считала добывающие колонии, которых в этом режиме build_plan() не
+    // строит — «персонажей больше, чем нужно» переставала предлагать
+    // продукты раньше, чем пул реально заполнялся.
     adviceData=await (await fetch(`${API}/advice`,{method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({target_products:targets,lang})})).json();
+      body:JSON.stringify({target_products:targets,lang,purchase_p1:purchaseP1})})).json();
   }catch(e){ adviceData=null; }
   renderAdvice();
 }
@@ -4656,6 +4660,10 @@ function togglePurchaseP1(checked){
     savedConstellationsBeforePurchaseP1=null;
     renderConstellations(); loadSystems();
   }
+  // Подсказка «персонажей больше/меньше, чем нужно» считает добывающие
+  // колонии по-разному в этих двух режимах (18.09.2026) — пересчитать
+  // сразу, а не ждать, пока пользователь тронет список продуктов.
+  loadAdvice();
 }
 
 function fill(id,items){ document.getElementById(id).innerHTML=items.map(v=>`<option value="${v}">${v}</option>`).join(''); }

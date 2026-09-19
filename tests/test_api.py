@@ -246,6 +246,24 @@ class TestPlans:
         )
         assert response.get_json()["purchased_p1"] == {}
 
+    def test_advice_purchase_p1_excludes_mining_from_needed_colonies(self, client, seeded_characters):
+        """
+        18.09.2026, найдено пользователем: /api/advice считал добывающие
+        колонии даже для режима, где build_plan() их не строит — подсказка
+        «персонажей больше, чем нужно» переставала предлагать продукты
+        раньше, чем реальный пул заполнялся. Числа сверены в tests/test_advice.py
+        — здесь только HTTP-контракт (поле доходит до domain.advice.advise()).
+        """
+        normal = client.post(
+            "/api/advice", json={"target_products": ["Biocells"]}
+        ).get_json()
+        purchasing = client.post(
+            "/api/advice", json={"target_products": ["Biocells"], "purchase_p1": True}
+        ).get_json()
+        assert normal["needed_mining"] > 0
+        assert purchasing["needed_mining"] == 0
+        assert purchasing["needed_colonies"] < normal["needed_colonies"]
+
     def test_calculate_limits_product_count(self, client):
         """
         Ограничение защищает воркер: Flask синхронный, и один огромный

@@ -135,6 +135,41 @@ class TestSurplus:
         assert result.status == "fits"
 
 
+class TestPurchaseP1:
+    """
+    18.09.2026, найдено пользователем: план на закупаемом P1 (planner.py::
+    PlanRequest.purchase_p1) использовал куда меньше колоний, чем
+    предполагала подсказка «персонажей больше, чем нужно» — та считала
+    добывающие колонии, которых build_plan() в этом режиме не строит
+    вовсе, и переставала предлагать продукты раньше, чем пул реально
+    заполнялся.
+    """
+
+    def test_no_mining_counted_toward_needed_colonies(self, schematics, recipes):
+        normal = advise(["Biocells"], crew(20), PRICES, schematics, recipes)
+        purchasing = advise(["Biocells"], crew(20), PRICES, schematics, recipes, purchase_p1=True)
+        assert normal.needed_mining > 0
+        assert purchasing.needed_mining == 0
+        # Переработка — та же, разница ровно в добыче.
+        assert purchasing.needed_colonies == normal.needed_colonies - normal.needed_mining
+
+    def test_more_spare_slots_reported_when_purchasing_p1(self, schematics, recipes):
+        normal = advise(["Biocells"], crew(20), PRICES, schematics, recipes)
+        purchasing = advise(["Biocells"], crew(20), PRICES, schematics, recipes, purchase_p1=True)
+        assert normal.status == "surplus" and purchasing.status == "surplus"
+        assert purchasing.spare_slots > normal.spare_slots
+
+    def test_low_ccu_pool_not_flagged_when_purchasing_p1(self, schematics, recipes):
+        """Добычи нет вовсе — низкий CCU пула не должен считаться препятствием."""
+        result = advise(["Biocells"], crew(10, ccu=3), PRICES, schematics, recipes, purchase_p1=True)
+        assert not any(str(MINER_MIN_CCU) in note for note in result.notes)
+
+    def test_suggested_additions_do_not_require_mining_slots(self, schematics, recipes):
+        result = advise(["Biocells"], crew(20), PRICES, schematics, recipes, purchase_p1=True)
+        assert result.status == "surplus"
+        assert all(s.mining == 0 for s in result.additions)
+
+
 class TestSurplusMining:
     def test_targets_come_from_the_chosen_chain(self, schematics, recipes):
         """

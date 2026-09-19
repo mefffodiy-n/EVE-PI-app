@@ -131,6 +131,11 @@ def advice():
 
     targets = [str(t) for t in payload["target_products"]]
     lang = "en" if str(payload.get("lang", "ru")).lower().startswith("en") else "ru"
+    # 18.09.2026, найдено пользователем: без этого флага подсказка о
+    # свободных персонажах считала добывающие колонии, которых
+    # build_plan() в режиме purchase_p1 не строит вовсе — подсказка
+    # переставала предлагать продукты раньше, чем пул реально заполнялся.
+    purchase_p1 = bool(payload.get("purchase_p1", False))
     if not targets:
         return json_error("Не выбрано ни одного целевого продукта")
 
@@ -156,7 +161,7 @@ def advice():
     except Exception:
         prices = {}
 
-    return json_ok(**advise(targets, characters, prices).to_dict(lang))
+    return json_ok(**advise(targets, characters, prices, purchase_p1=purchase_p1).to_dict(lang))
 
 
 def _load_prices() -> dict[str, float]:
