@@ -2879,11 +2879,11 @@ function renderAdvice(){
     ${dup}
     ${rows?`<div class="sugg">${rows}</div>`:''}
     ${(a.notes||[]).map(n=>`<p class="lead" style="color:var(--dim);margin:8px 0 0">${n}</p>`).join('')}
-    <div class="foot">
+    ${(deficit || !purchaseP1)?`<div class="foot">
       <button class="mini" onclick="calculate(false, ${!deficit})">
         ${deficit?t('advIgnoreDeficit'):t('advIgnoreSurplus')}</button>
       <span class="hint">${deficit?t('advIgnoreDeficitHint'):t('advIgnoreSurplusHint')}</span>
-    </div>
+    </div>`:''}
   </div>`;
 }
 
