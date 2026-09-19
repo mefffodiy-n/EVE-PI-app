@@ -783,6 +783,16 @@ def build_plan(
                 product = queue.pop(0)
                 character = pool.take(
                     require_ccu5=assignment.template_count == 2,
+                    # min_ccu (18.09.2026, найдено пользователем): для
+                    # переработки эта проверка вообще отсутствовала —
+                    # персонаж с CCU 0-1 мог получить колонию, которая
+                    # по игре ему физически не помещается (тот же пробел,
+                    # что уже закрыт для добычи — min_ccu_level_that_fits
+                    # ("miner_00", radius) чуть ниже). Растёт с радиусом
+                    # площадки, поэтому берётся из САМОГО назначения
+                    # (select_factory_sites() уже посчитал его для этой
+                    # конкретной планеты), не константа тира.
+                    min_ccu=assignment.min_ccu_level,
                     # Одиночный шаблон не нуждается в CCU V — как и у
                     # добычи (см. take() docstring), тратить на него
                     # прокачанного персонажа расточительно: только CCU V
@@ -795,7 +805,7 @@ def build_plan(
                     planet=(assignment.candidate.system, assignment.candidate.planet),
                 )
                 if character is None:
-                    needed_level = 5 if assignment.template_count == 2 else 0
+                    needed_level = 5 if assignment.template_count == 2 else assignment.min_ccu_level
                     result.staffing_gaps.append(
                         StaffingGap(
                             role="Переработка",

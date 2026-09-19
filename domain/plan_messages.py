@@ -240,6 +240,12 @@ _CATALOG: dict[str, dict[str, str]] = {
         "en": "No character has Command Center Upgrades {ccu} — "
               "the extraction template will not fit any planet.",
     },
+    "advice_no_processing_ccu": {
+        "ru": "Ни у одного персонажа нет Command Center Upgrades {ccu} — "
+              "переработка не поместится ни на одну планету.",
+        "en": "No character has Command Center Upgrades {ccu} — "
+              "processing will not fit any planet.",
+    },
     "advice_higher_tier_available": {
         "ru": "Есть цепочки более высокого тира, помещающиеся в остаток.",
         "en": "Higher-tier chains fit within the spare capacity.",

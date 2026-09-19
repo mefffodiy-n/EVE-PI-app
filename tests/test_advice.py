@@ -73,6 +73,25 @@ class TestCapacity:
         assert result.status == "deficit"
         assert any(str(MINER_MIN_CCU) in note for note in result.notes)
 
+    def test_slots_counted_for_processing_capability_too(self):
+        """
+        18.09.2026, найдено пользователем: подсказка не проверяла
+        минимальный CCU для переработки вовсе (только для добычи) —
+        персонаж с CCU 0-1 не может даже одиночный шаблон переработки.
+        """
+        mixed = [CharacterSlot(1, "A", 5, 5), CharacterSlot(2, "B", 1, 5)]
+        capacity = pool_capacity(mixed)
+        assert capacity.processing_capable_slots == 6      # только у первого CCU >= 2
+        assert capacity.has_processing_capable
+
+    def test_pool_without_processing_capable_characters_is_flagged(self, schematics, recipes):
+        """Ни у кого нет CCU II — переработка не поместится, и подсказка обязана сказать об этом."""
+        result = advise(["Biocells"], crew(10, ccu=1), PRICES, schematics, recipes)
+        assert result.status == "deficit"
+        from domain.advice import PROCESSING_MIN_CCU
+
+        assert any(str(PROCESSING_MIN_CCU) in note for note in result.notes)
+
 
 class TestDeficit:
     def test_deficit_offers_chains_that_fit(self, schematics, recipes):

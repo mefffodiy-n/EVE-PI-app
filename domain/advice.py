@@ -39,6 +39,21 @@ from domain.throughput import Schematic, load_schematics
 # любого размера (см. _derived_min_ccu в data/pi_reference.json).
 MINER_MIN_CCU = 4
 
+# Минимальный CCU, при котором ОДИНОЧНЫЙ шаблон переработки вообще
+# помещается хоть на какую-то планету — 18.09.2026, найдено пользователем:
+# ни здесь, ни в domain/planner.py эта проверка раньше не делалась
+# вовсе для переработки (в отличие от добычи выше), и персонаж с CCU
+# 0-1 мог получить колонию, которая по игре ему физически не помещается.
+# Настоящий порог растёт с радиусом планеты (P2/P3 — CCU 2 на мелких,
+# 3 на крупных; P4 — CCU 3 везде, см. domain/capacity.py::
+# min_ccu_level_that_fits()) — здесь взят САМЫЙ МЯГКИЙ вариант (P2/P3
+# на самой мелкой планете), потому что colonies_for()/advise() не знают
+# заранее ни системы, ни конкретных планет, только продукты и пул.
+# Честная, но неполная защита: ловит явный случай CCU 0-1, не ловит
+# «CCU 2 есть, но для P4 или крупной планеты нужен CCU 3» — та проверка
+# точная и уже есть на уровне build_plan()/select_factory_sites().
+PROCESSING_MIN_CCU = 2
+
 # Сколько вариантов показывать. Больше пяти — это уже не подсказка,
 # а второй список продуктов, в котором снова надо выбирать.
 MAX_SUGGESTIONS = 5
@@ -54,10 +69,15 @@ class PoolCapacity:
     total_slots: int
     mining_capable_slots: int   # слоты персонажей с CCU >= MINER_MIN_CCU
     double_template_slots: int  # слоты персонажей с CCU V
+    processing_capable_slots: int = 0  # слоты персонажей с CCU >= PROCESSING_MIN_CCU
 
     @property
     def has_mining_capable(self) -> bool:
         return self.mining_capable_slots > 0
+
+    @property
+    def has_processing_capable(self) -> bool:
+        return self.processing_capable_slots > 0
 
 
 @dataclass
@@ -116,6 +136,7 @@ class Advice:
                 "total_slots": self.capacity.total_slots,
                 "mining_capable_slots": self.capacity.mining_capable_slots,
                 "double_template_slots": self.capacity.double_template_slots,
+                "processing_capable_slots": self.capacity.processing_capable_slots,
             } if self.capacity else None,
             "missing_colonies": self.missing_colonies,
             "spare_slots": self.spare_slots,
@@ -139,6 +160,10 @@ def pool_capacity(characters: list) -> PoolCapacity:
             c.planet_slots for c in characters
             if c.command_center_upgrades_level >= 5
         ),
+        processing_capable_slots=sum(
+            c.planet_slots for c in characters
+            if c.command_center_upgrades_level >= PROCESSING_MIN_CCU
+        ),
     )
 
 
@@ -151,13 +176,16 @@ def _fits(processing: int, mining: int, capacity: PoolCapacity) -> bool:
     """
     Помещается ли цепочка.
 
-    Две проверки, а не одна: общего числа слотов может хватать, но если
-    все свободные слоты у персонажей с низкой прокачкой, добывать ими
-    нельзя — добывающий шаблон требует Command Center Upgrades IV.
+    Три проверки, а не одна: общего числа слотов может хватать, но если
+    все свободные слоты у персонажей с низкой прокачкой — добывать ими
+    нельзя (добывающий шаблон требует Command Center Upgrades IV), а
+    перерабатывать нельзя персонажем с CCU 0-1 (18.09.2026, найдено
+    пользователем — см. PROCESSING_MIN_CCU выше).
     """
     return (
         processing + mining <= capacity.total_slots
         and mining <= capacity.mining_capable_slots
+        and processing <= capacity.processing_capable_slots
     )
 
 
@@ -268,6 +296,9 @@ def advise(
 
     if not capacity.has_mining_capable and needed_mining:
         advice.note("advice_no_mining_ccu", ccu=MINER_MIN_CCU)
+
+    if not capacity.has_processing_capable and needed_processing:
+        advice.note("advice_no_processing_ccu", ccu=PROCESSING_MIN_CCU)
 
     fits = _fits(needed_processing, needed_mining, capacity)
 
