@@ -491,8 +491,19 @@ button { font-family:inherit; }
               background:var(--hull); border:1px solid var(--amber);
               background-image:linear-gradient(90deg,var(--accent-bg),transparent 60%); }
 .action-bar .save-inline { display:flex; gap:6px; align-items:center; margin-left:auto; flex-wrap:wrap; }
-.action-bar .save-inline input { background:var(--void); border:1px solid var(--seam); color:var(--read);
-                                  padding:6px 9px; font-size:12px; width:170px; font-family:inherit; }
+/* Поле и кнопка сохранения плана раньше выглядели как второстепенный
+   .mini-виджет (тусклая рамка var(--seam)) рядом с крупной кнопкой
+   «Построить план» — из-за этого терялись на панели (18.09.2026,
+   найдено пользователем по скриншоту). Рамка цвета акцента и кнопка
+   того же стиля, что и остальные явные действия — не залитая, чтобы
+   не спорить с «Построить план» за главное внимание, но заметно ярче
+   .mini по умолчанию. */
+.action-bar .save-inline input { background:var(--void); border:1px solid var(--amber); color:var(--read);
+                                  padding:8px 10px; font-size:13px; width:180px; font-family:inherit; }
+.action-bar .save-inline input:focus { outline:none; border-color:var(--amber-hi); }
+.action-bar .save-inline button { border-color:var(--amber); color:var(--amber);
+                                   padding:7px 16px; font-size:12px; font-weight:600; }
+.action-bar .save-inline button:hover { background:var(--accent-bg); }
 .action-bar #savedList { flex-basis:100%; }
 .action-bar #savedList:empty, .action-bar #cmpResult:empty { display:none; }
 .field { margin-bottom:11px; }
