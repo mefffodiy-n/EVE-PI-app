@@ -90,6 +90,59 @@ def test_double_template_used_when_it_fits():
     assert not result.warnings
 
 
+class TestMaxDoubleTemplates:
+    """
+    18.09.2026, найдено пользователем: план планировал двойные шаблоны
+    на КАЖДУЮ колонию тира, если хоть у одного персонажа во всём пуле
+    был CCU V, не считаясь с тем, сколько именно CCU5-персонажей
+    реально свободно — реальные CCU5-персонажи заканчивались, и все
+    следующие колонии массово проваливались с «не хватило персонажей»,
+    хотя двойной шаблон физически помещался. Каждое двойное назначение
+    (одна планета) — это ДВА разных персонажа (build_plan() зовёт
+    pool.take() дважды с одной и той же планетой; второй раз тот же
+    персонаж уже исключён), поэтому предел в слотах делится на 2, чтобы
+    получить предел в назначениях.
+    """
+
+    def test_unbounded_by_default(self):
+        """max_double_templates не передан — прежнее поведение, без ограничения."""
+        result = select_factory_sites(_book(SMALL_SYSTEM), "HOME", "P2_P3", 5, 4)
+        assert all(a.template_count == 2 for a in result.assignments)
+        assert not result.warnings
+
+    def test_falls_back_to_single_once_ccu5_slots_run_out(self):
+        """
+        4 шаблона нужно (значит по 2 двойных назначения максимум), но
+        только 2 CCU5-слота свободно — хватает ровно на ОДНО двойное
+        назначение (два персонажа), остаток обязан уйти одиночными,
+        не провалиться.
+        """
+        result = select_factory_sites(
+            _book(SMALL_SYSTEM), "HOME", "P2_P3", 5, 4, max_double_templates=2
+        )
+        assert result.satisfied
+        doubles = [a for a in result.assignments if a.template_count == 2]
+        singles = [a for a in result.assignments if a.template_count == 1]
+        assert len(doubles) == 1
+        assert singles
+        assert any("не хватило" in w for w in result.warnings)
+
+    def test_zero_slots_means_all_single(self):
+        result = select_factory_sites(
+            _book(SMALL_SYSTEM), "HOME", "P2_P3", 5, 4, max_double_templates=0
+        )
+        assert result.satisfied
+        assert all(a.template_count == 1 for a in result.assignments)
+
+    def test_enough_slots_means_no_downgrade_note(self):
+        """Предела хватает с запасом — предупреждения о нехватке CCU5 быть не должно."""
+        result = select_factory_sites(
+            _book(SMALL_SYSTEM), "HOME", "P2_P3", 5, 4, max_double_templates=100
+        )
+        assert all(a.template_count == 2 for a in result.assignments)
+        assert not result.warnings
+
+
 def test_warns_and_places_nothing_when_planets_too_large():
     """
     Главное правило: не подставлять одиночный шаблон молча.

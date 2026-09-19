@@ -530,6 +530,32 @@ class _CharacterPool:
     def systems_of(self, character_id: int) -> set[str]:
         return set(self._systems.get(character_id, set()))
 
+    def free_slots_matching(self, require_ccu5: bool = False, min_ccu: int = 0) -> int:
+        """
+        Сколько слотов ещё свободно у персонажей, отвечающих условию —
+        не привязано к конкретной планете (в отличие от `take()`), и не
+        путать со свойством `free_slots` (общий остаток без фильтра).
+
+        18.09.2026, найдено пользователем: `select_factory_sites()`
+        решал, ставить ли двойные шаблоны, по одному биту «есть ли
+        ХОТЬ ОДИН персонаж с CCU V во всём пуле», а не по тому, сколько
+        именно слотов с CCU V ещё свободно. План планировал двойные
+        шаблоны на КАЖДУЮ колонию тира, а `pool.take(require_ccu5=True)`
+        начинал отказывать, как только реальные CCU5-персонажи
+        заканчивались — с этого момента ВСЕ оставшиеся колонии этого
+        тира проваливались с «не хватило персонажей», хотя обычных
+        IC-слотов оставалось много. Нужен точный счётчик ДО подбора
+        площадок, чтобы `select_factory_sites()` мог сам ограничить
+        число двойных шаблонов тем, что реально можно укомплектовать,
+        и отдать остаток одиночными — без ложного отказа.
+        """
+        return sum(
+            character.planet_slots - self._used[character.character_id]
+            for character in self._characters
+            if (not require_ccu5 or character.can_place_two_templates)
+            and character.command_center_upgrades_level >= min_ccu
+        )
+
     @property
     def free_slots(self) -> int:
         return sum(c.planet_slots - self._used[c.character_id] for c in self._characters)
@@ -730,6 +756,16 @@ def build_plan(
             ccu_level=max((c.command_center_upgrades_level for c in characters), default=0),
             templates_needed=templates_needed,
             allow_single_fallback=request.allow_single_template_fallback,
+            # 18.09.2026, найдено пользователем: без этого предела
+            # select_factory_sites() планировал двойные шаблоны на КАЖДУЮ
+            # колонию тира, если хоть у одного персонажа во всём пуле
+            # был CCU V — реальных CCU5-персонажей на всё не хватало, и
+            # оставшиеся колонии массово проваливались с «не хватило
+            # персонажей» чуть ниже. Снимок СВОБОДНЫХ (ещё не занятых
+            # добычей/предыдущим тиром) CCU5-слотов прямо перед подбором
+            # площадок — сам подбор ограничивает число двойных шаблонов
+            # тем, что реально можно укомплектовать, без ложного отказа.
+            max_double_templates=pool.free_slots_matching(require_ccu5=True),
         )
         result.site_selections.append(selection)
         result.warnings.extend(selection.warnings)
@@ -747,6 +783,15 @@ def build_plan(
                 product = queue.pop(0)
                 character = pool.take(
                     require_ccu5=assignment.template_count == 2,
+                    # Одиночный шаблон не нуждается в CCU V — как и у
+                    # добычи (см. take() docstring), тратить на него
+                    # прокачанного персонажа расточительно: только CCU V
+                    # умеет ставить двойной шаблон, а его на плане может
+                    # не хватить (18.09.2026, найдено пользователем —
+                    # без этого одиночные колонии одного тира выбирали
+                    # CCU5-персонажей раньше двойных колоний другого
+                    # тира, обработанного позже в этом же цикле).
+                    prefer_least_skilled=assignment.template_count == 1,
                     planet=(assignment.candidate.system, assignment.candidate.planet),
                 )
                 if character is None:
