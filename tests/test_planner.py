@@ -407,6 +407,56 @@ class TestScarcePlanetsFallback:
         assert all(g.min_ccu_level < 5 for g in proc_gaps)
 
 
+class TestStaffingGapAccuracy:
+    """
+    18.09.2026, найдено пользователем: сводка плана честно показывала
+    «не хватает персонажей: 0» (план «закрыт»), хотя строкой ниже
+    висело предупреждение «Переработка P4: не хватило свободных
+    персонажей» — прямое противоречие.
+
+    Причина: `StaffingGap.planets_placed` считался как общее число УЖЕ
+    построенных строк переработки СО ВСЕХ тиров (`len([r for r in
+    result.rows if ...])`), а не только текущего тира. К моменту, когда
+    очередь доходит до P4 (обрабатывается после P2/P3 в том же цикле),
+    `result.rows` уже содержит десятки строк P2/P3 — заведомо больше,
+    чем `planets_needed` именно для P4, поэтому `planets_missing =
+    max(0, planets_needed - planets_placed)` всегда получался нулём,
+    даже когда P4 реально не хватило персонажей на своё же значение
+    `planets_needed`.
+    """
+
+    def test_p4_gap_is_not_masked_by_earlier_p2p3_rows(self):
+        """
+        Обильный P2/P3 (строит десятки строк) + P4, которому категорически
+        не хватает персонажей — общий счётчик со всех тиров раньше прятал
+        нехватку P4 за уже построенными P2/P3-колониями. Настоящие
+        recipes/schematics нужны напрямую — мок SCHEMATICS в этом файле
+        знает только про Biocells-цепочку, не про реальные P3/P4-продукты.
+        """
+        book = PlanetBook(pd.DataFrame(
+            [{"Constellation": "ALPHA", "System": "HOME", "Planet": str(n), "Type": "Barren",
+              RADIUS_COLUMN: 4000 + n * 50} for n in range(1, 20)]
+        ))
+        crew = [CharacterSlot(1, "C1", 5, 5), CharacterSlot(2, "C2", 5, 5)]
+        request = PlanRequest(
+            constellations=["ALPHA"], factory_system="HOME",
+            target_products=["Hermetic Membranes", "Self-Harmonizing Power Core"],
+            purchase_p1=True, lines_per_target=6, allow_single_template_fallback=True,
+        )
+        from domain.throughput import load_schematics
+
+        result = build_plan(request, crew, recipes=load_recipes(), planets=book,
+                             schematics=load_schematics())
+        p4_gaps = [g for g in result.staffing_gaps if "P4" in g.details]
+        assert p4_gaps, "в этом сценарии P4 не должно хватить персонажей"
+        assert all(g.planets_placed <= g.planets_needed for g in p4_gaps), (
+            "planets_placed не должен включать строки других тиров"
+        )
+        assert any(g.planets_missing > 0 for g in p4_gaps)
+        # Сводка обязана видеть тот же дефицит, что и предупреждения.
+        assert result.characters_required()
+
+
 class TestProcessingMinCcu:
     """
     18.09.2026, найдено пользователем: назначение переработки не несло
