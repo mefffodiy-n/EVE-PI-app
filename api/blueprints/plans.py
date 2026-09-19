@@ -335,6 +335,7 @@ def save_plan():
             warnings=payload.get("warnings") or [],
             assumptions=payload.get("assumptions") or [],
             account_id=current_account_id(),
+            purchased_p1=payload.get("purchased_p1") or {},
         )
     except PlanStorageError as exc:
         return json_error(str(exc))

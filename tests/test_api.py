@@ -246,6 +246,29 @@ class TestPlans:
         )
         assert response.get_json()["purchased_p1"] == {}
 
+    def test_saved_plan_round_trips_purchased_p1(self, client):
+        """
+        20.09.2026, по прямому запросу пользователя: план на закупаемом
+        P1 при повторном открытии должен снова показывать список
+        закупки сырья — для этого purchased_p1 сохраняется вместе с
+        планом (не только в теле /api/calculate, откуда он временный).
+        """
+        saved = client.post("/api/plans", json={
+            "name": "Закупка", "rows": [SAMPLE_PLAN_ROW],
+            "purchased_p1": {"Water": 600.0},
+        })
+        assert saved.status_code == 200
+        plan_id = saved.get_json()["plan"]["id"]
+
+        loaded = client.get(f"/api/plans/{plan_id}").get_json()["plan"]
+        assert loaded["purchased_p1"] == {"Water": 600.0}
+
+    def test_saved_plan_without_purchase_p1_reports_empty_dict(self, client):
+        saved = client.post("/api/plans", json={"name": "Обычный", "rows": [SAMPLE_PLAN_ROW]})
+        plan_id = saved.get_json()["plan"]["id"]
+        loaded = client.get(f"/api/plans/{plan_id}").get_json()["plan"]
+        assert loaded["purchased_p1"] == {}
+
     def test_advice_purchase_p1_excludes_mining_from_needed_colonies(self, client, seeded_characters):
         """
         18.09.2026, найдено пользователем: /api/advice считал добывающие

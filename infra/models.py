@@ -102,6 +102,13 @@ class Plan(Base):
     rows: Mapped[list] = mapped_column(JSON, default=list)
     warnings: Mapped[list] = mapped_column(JSON, default=list)
     assumptions: Mapped[list] = mapped_column(JSON, default=list)
+    # {продукт P1: единиц в час} из PlanResult.to_dict()["purchased_p1"]
+    # (режим purchase_p1, 20.09.2026) — без него открытие сохранённого
+    # плана на закупаемом P1 не могло показать список закупки сырья
+    # (панель читает purchased_p1 из lastPlanResp, а сохранённый план
+    # его не помнил вовсе). Nullable — планы, сохранённые до этой
+    # колонки, честно возвращают {} (см. StoredPlan._from_row), не None.
+    purchased_p1: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
 
 class Credential(Base):

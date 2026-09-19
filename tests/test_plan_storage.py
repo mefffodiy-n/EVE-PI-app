@@ -29,6 +29,7 @@ class TestSaving:
         assert again.name == "Вариант A"
         assert len(again.rows) == 2
         assert again.request["factory_sys"] == "AV-VB6"
+        assert again.to_dict()["purchased_p1"] == {}
 
     def test_empty_plan_rejected(self):
         with pytest.raises(PlanStorageError):
@@ -49,6 +50,23 @@ class TestSaving:
         save("2", {}, ROWS)
         with pytest.raises(PlanStorageError):
             save("3", {}, ROWS)
+
+    def test_purchased_p1_round_trips(self):
+        """
+        20.09.2026, по прямому запросу пользователя: план на закупаемом
+        P1 при повторном открытии должен снова показывать список
+        закупки — для этого purchased_p1 сохраняется вместе с планом,
+        не только request/rows.
+        """
+        plan = save("Закупка", {}, ROWS, purchased_p1={"Water": 600.0})
+        again = load(plan.id)
+        assert again.purchased_p1 == {"Water": 600.0}
+
+    def test_no_purchased_p1_stores_empty_dict_not_none(self):
+        """Обычный план — {} при чтении, не None (правило 1, честный пробел)."""
+        plan = save("Обычный", {}, ROWS)
+        again = load(plan.id)
+        assert again.purchased_p1 == {}
 
 
 class TestSafety:

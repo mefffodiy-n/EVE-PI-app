@@ -2996,7 +2996,11 @@ async function savePlan(){
   const r=await fetch(`${API}/plans`,{method:'POST',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({name,rows:plan,request:lastRequest||{},
       warnings:[...((lastPlanResp&&lastPlanResp.critical_warnings)||[]),...(lastWarnings||[])],
-      assumptions:lastAssumptions||[]})});
+      assumptions:lastAssumptions||[],
+      // Режим purchase_p1 (20.09.2026) — без этого поля список закупки
+      // сырья не восстанавливался бы при открытии сохранённого плана
+      // (renderPurchaseList() читает его из lastPlanResp.purchased_p1).
+      purchased_p1:(lastPlanResp&&lastPlanResp.purchased_p1)||{}})});
   const d=await r.json();
   if(d.status!=='success'){ alert(d.message); return; }
   currentPlanId=d.plan.id;
@@ -3016,13 +3020,14 @@ async function openSaved(id){
   // при открытии сохранённого плана (найдено пользователем 20.09.2026).
   lastRequest=d.plan.request||null;
   lastWarnings=d.plan.warnings||[]; lastAssumptions=d.plan.assumptions||[];
-  // Сохранённый план не хранит purchased_p1 (величины сырья в час,
-  // не часть request) — список закупки P1 для такого плана честно не
-  // покажется (renderPurchaseList получит пустой purchased_p1), но это
-  // не то же самое, что пропавшая прибыльность: выручка/налог/чистая
-  // прибыль считаются по rows+target_products, они не зависят от
-  // purchased_p1.
-  lastPlanResp={critical_warnings:[]};
+  // purchased_p1 (величины сырья в час, режим purchase_p1) хранится
+  // рядом с планом с 20.09.2026 (infra/models.py::Plan.purchased_p1) —
+  // без него renderPurchaseList() не смог бы показать список закупки
+  // сырья при повторном открытии плана «переработка без добычи».
+  // Планы, сохранённые до этой колонки, честно возвращают {} — список
+  // закупки для них не покажется, а прибыльность (выручка/налог) от
+  // purchased_p1 не зависит и считается верно в любом случае.
+  lastPlanResp={critical_warnings:[], purchased_p1:d.plan.purchased_p1||{}};
   renderMessages();
   renderAnswers(); renderTable(); renderDash(); renderCrew(); renderShopping(); renderPocoProfit(); renderSaved();
   show('dash');
