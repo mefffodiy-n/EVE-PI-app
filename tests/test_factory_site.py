@@ -143,6 +143,39 @@ class TestMaxDoubleTemplates:
         assert not result.warnings
 
 
+class TestMinCcuLevel:
+    """
+    18.09.2026, найдено пользователем: назначение переработки не несло
+    минимальный CCU, при котором именно этот шаблон на именно этой
+    планете физически помещается — build_plan() мог отдать колонию
+    персонажу с CCU 0-1, который её по игре не построит (тот же пробел,
+    что уже был закрыт для добычи через min_ccu_level_that_fits("miner_00", radius)).
+    """
+
+    def test_single_assignment_carries_a_positive_min_ccu(self):
+        result = select_factory_sites(_book(SMALL_SYSTEM), "HOME", "P2_P3", 5, 2, max_double_templates=0)
+        assert result.assignments
+        assert all(a.min_ccu_level > 0 for a in result.assignments)
+
+    def test_double_assignment_min_ccu_is_five(self):
+        result = select_factory_sites(_book(SMALL_SYSTEM), "HOME", "P2_P3", 5, 4)
+        doubles = [a for a in result.assignments if a.template_count == 2]
+        assert doubles and all(a.min_ccu_level == 5 for a in doubles)
+
+    def test_bigger_planet_needs_higher_min_ccu(self):
+        """Радиус влияет на минимальный CCU — не константа тира."""
+        small = select_factory_sites(
+            _book([{"System": "HOME", "Planet": "1", "Type": "Barren", RADIUS_COLUMN: 2000}]),
+            "HOME", "P2_P3", 5, 1, max_double_templates=0,
+        )
+        big = select_factory_sites(
+            _book([{"System": "HOME", "Planet": "1", "Type": "Barren", RADIUS_COLUMN: 90000}]),
+            "HOME", "P2_P3", 5, 1, max_double_templates=0, allow_single_fallback=True,
+        )
+        assert small.assignments and big.assignments
+        assert big.assignments[0].min_ccu_level >= small.assignments[0].min_ccu_level
+
+
 def test_warns_and_places_nothing_when_planets_too_large():
     """
     Главное правило: не подставлять одиночный шаблон молча.

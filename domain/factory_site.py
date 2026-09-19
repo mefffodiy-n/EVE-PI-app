@@ -55,6 +55,7 @@ from domain.capacity import (
     calculate_colony_load,
     load_templates,
     max_planet_radius_that_fits,
+    min_ccu_level_that_fits,
 )
 from domain.planets import PREFERRED_FACTORY_PLANET_TYPES, RADIUS_COLUMN, PlanetBook
 from domain.plan_messages import render as render_message
@@ -93,6 +94,16 @@ class SiteAssignment:
     # колонии нескольких персонажей, поэтому одна и та же планета
     # встречается в плане несколько раз.
     colony_index: int = 1
+
+    # Наименьший CCU, при котором ИМЕННО ЭТОТ шаблон на ИМЕННО ЭТОЙ
+    # планете физически помещается (18.09.2026, найдено пользователем:
+    # build_plan() назначал колонии переработки персонажу без проверки
+    # минимального CCU вовсе — тот же пробел, что уже был закрыт для
+    # добычи, min_ccu_level_that_fits("miner_00", radius)). Растёт с
+    # радиусом планеты (крупнее планета — дороже линки — нужен более
+    # высокий CCU), поэтому это не константа тира, а свойство конкретной
+    # площадки; build_plan() передаёт это значение в pool.take(min_ccu=...).
+    min_ccu_level: int = 0
 
 
 @dataclass
@@ -372,6 +383,9 @@ def select_factory_sites(
                         cpu_percent=load.cpu_percent,
                         pg_percent=load.pg_percent,
                         colony_index=colony_index,
+                        min_ccu_level=min_ccu_level_that_fits(
+                            double_key, candidate.radius_km, planet_type=candidate.planet_type
+                        ) or 5,
                     )
                 )
                 used[candidate.planet] = colony_index
@@ -406,6 +420,9 @@ def select_factory_sites(
                     cpu_percent=load.cpu_percent,
                     pg_percent=load.pg_percent,
                     colony_index=colony_index,
+                    min_ccu_level=min_ccu_level_that_fits(
+                        single_key, candidate.radius_km, planet_type=candidate.planet_type
+                    ) or 0,
                 )
             )
             used[candidate.planet] = colony_index

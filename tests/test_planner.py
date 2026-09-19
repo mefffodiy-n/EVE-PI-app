@@ -329,7 +329,26 @@ class TestCcu5Scarcity:
         assert singles and doubles
 
 
-class TestHonesty:
+class TestProcessingMinCcu:
+    """
+    18.09.2026, найдено пользователем: назначение переработки не несло
+    минимальный CCU персонажа, при котором шаблон физически помещается —
+    build_plan() мог отдать колонию персонажу с CCU 0-1 (тот же пробел,
+    что уже был закрыт для добычи — min_ccu_level_that_fits("miner_00",
+    radius)).
+    """
+
+    def test_low_ccu_character_never_gets_a_processing_colony(self, planets):
+        """
+        Один способный (CCU III) и один неспособный (CCU 0) персонаж,
+        потребность — две колонии: неспособный не должен занять вторую
+        колонию просто потому, что слот формально свободен.
+        """
+        crew = [CharacterSlot(1, "Capable", 3, 5), CharacterSlot(2, "Rookie CCU0", 0, 5)]
+        result = _plan(planets, crew, lines_per_target=2)
+        rows = [r for r in result.rows if "Добыча" not in r.role]
+        assert rows
+        assert all(r.character != "Rookie CCU0" for r in rows)
     def test_extractor_timer_is_never_invented(self, planets, characters):
         """
         hours_left = None означает «неизвестно». Подставлять сюда
