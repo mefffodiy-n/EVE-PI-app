@@ -747,7 +747,20 @@ def build_plan(
             continue
         processing[_processing_tier_key(tier)].append((product, factory_count))
 
-    for tier_key, items in processing.items():
+    # Меньший спрос — первым (18.09.2026, найдено пользователем: план
+    # с P2/P3 и P4 вместе отдавал P4 ноль колоний, хотя ему было нужно
+    # всего 2, — P2/P3 обрабатывался первым по порядку словаря {"P2_P3",
+    # "P4"} и, если его собственный спрос превышал весь пул персонажей,
+    # успевал забрать ВСЕХ свободных персонажей на ВСЕХ подходящих
+    # планетах до того, как очередь доходила до P4 вообще). Порядок по
+    # возрастанию суммарного спроса — тир с маленькой, реально
+    # закрываемой потребностью получает первый шанс на ограниченный пул,
+    # а не остаётся ни с чем только из-за порядка словаря; тир с
+    # заведомо большим спросом всё равно останется недоукомплектован,
+    # просто честно, а не за счёт того, что меньшему не досталось вовсе.
+    tier_order = sorted(processing, key=lambda k: sum(count for _, count in processing[k]))
+    for tier_key in tier_order:
+        items = processing[tier_key]
         if not items:
             continue
         single_key = TEMPLATE_BY_TIER[tier_key][1]
@@ -783,6 +796,20 @@ def build_plan(
         for product, count in items:
             queue.extend([product] * int(math.ceil(count / per_template)))
 
+        # Только колонии ЭТОГО тира — не общий счётчик result.rows
+        # (18.09.2026, найдено пользователем: «не хватает персонажей: 0»
+        # в сводке плана противоречило собственному предупреждению
+        # «Переработка P4: не хватило свободных персонажей» строкой
+        # ниже). StaffingGap.planets_placed раньше считался как
+        # `len([r for r in result.rows if ...])` — общее число УЖЕ
+        # построенных строк переработки СО ВСЕХ тиров, включая P2/P3,
+        # обработанный раньше в этом же цикле. К моменту, когда доходит
+        # очередь до P4, result.rows уже содержит десятки строк P2/P3 —
+        # заведомо больше, чем templates_needed именно для P4, поэтому
+        # `planets_missing = max(0, planets_needed - planets_placed)`
+        # всегда получался нулём, даже когда P4 реально не хватило
+        # персонажей на своё же значение planets_needed.
+        placed_in_tier = 0
         for assignment in selection.assignments:
             for _ in range(assignment.template_count):
                 if not queue:
@@ -846,7 +873,7 @@ def build_plan(
                         StaffingGap(
                             role="Переработка",
                             planets_needed=len(selection.assignments),
-                            planets_placed=len([r for r in result.rows if "Добыча" not in r.role]),
+                            planets_placed=placed_in_tier,
                             min_ccu_level=needed_level,
                             details=f"{tier_key.replace('_', '/')}: не хватило персонажей",
                         )
@@ -855,6 +882,7 @@ def build_plan(
                                 tier=tier_key.replace("_", "/"))
                     break
                 row_counter += 1
+                placed_in_tier += 1
                 load = calculate_colony_load(
                     template_key,
                     character.command_center_upgrades_level,

@@ -407,6 +407,88 @@ class TestScarcePlanetsFallback:
         assert all(g.min_ccu_level < 5 for g in proc_gaps)
 
 
+class TestStaffingGapAccuracy:
+    """
+    18.09.2026, найдено пользователем: сводка плана честно показывала
+    «не хватает персонажей: 0» (план «закрыт»), хотя строкой ниже
+    висело предупреждение «Переработка P4: не хватило свободных
+    персонажей» — прямое противоречие.
+
+    Причина: `StaffingGap.planets_placed` считался как общее число УЖЕ
+    построенных строк переработки СО ВСЕХ тиров (`len([r for r in
+    result.rows if ...])`), а не только текущего тира. К моменту, когда
+    очередь доходит до P4 (обрабатывается после P2/P3 в том же цикле),
+    `result.rows` уже содержит десятки строк P2/P3 — заведомо больше,
+    чем `planets_needed` именно для P4, поэтому `planets_missing =
+    max(0, planets_needed - planets_placed)` всегда получался нулём,
+    даже когда P4 реально не хватило персонажей на своё же значение
+    `planets_needed`.
+    """
+
+    def test_gap_placed_never_exceeds_needed_for_its_own_tier(self):
+        """
+        Обильный спрос на оба тира сразу (P2/P3 и P4) с крохотным пулом —
+        общий счётчик со ВСЕХ тиров раньше мог сделать `planets_placed`
+        у одного тира больше его же `planets_needed` (строки ДРУГОГО
+        тира, уже построенные раньше в том же цикле, попадали в счёт) —
+        тогда `planets_missing` уходил в ноль, даже когда этому тиру
+        реально не хватило персонажей. Настоящие recipes/schematics
+        нужны напрямую — мок SCHEMATICS в этом файле знает только про
+        Biocells-цепочку, не про реальные P3/P4-продукты.
+        """
+        book = PlanetBook(pd.DataFrame(
+            [{"Constellation": "ALPHA", "System": "HOME", "Planet": str(n), "Type": "Barren",
+              RADIUS_COLUMN: 4000 + n * 50} for n in range(1, 20)]
+        ))
+        crew = [CharacterSlot(1, "C1", 5, 5), CharacterSlot(2, "C2", 5, 5)]
+        request = PlanRequest(
+            constellations=["ALPHA"], factory_system="HOME",
+            target_products=["Hermetic Membranes", "Self-Harmonizing Power Core"],
+            purchase_p1=True, lines_per_target=6, allow_single_template_fallback=True,
+        )
+        from domain.throughput import load_schematics
+
+        result = build_plan(request, crew, recipes=load_recipes(), planets=book,
+                             schematics=load_schematics())
+        assert result.staffing_gaps, "с 2 персонажами на такой спрос дефицит неизбежен"
+        assert all(g.planets_placed <= g.planets_needed for g in result.staffing_gaps), (
+            "planets_placed не должен включать строки другого тира"
+        )
+        assert any(g.planets_missing > 0 for g in result.staffing_gaps)
+        # Сводка обязана видеть тот же дефицит, что и предупреждения.
+        assert result.characters_required()
+
+    def test_smaller_demand_tier_is_served_first_not_starved(self):
+        """
+        18.09.2026, найдено пользователем на реальном плане: P4 (спрос
+        всего на 2 колонии) получал НОЛЬ колоний, потому что P2/P3
+        (спрос на 35) обрабатывался первым по порядку словаря и успевал
+        забрать весь пул персонажей раньше, чем очередь доходила до P4
+        вообще. Тир с меньшим суммарным спросом должен обрабатываться
+        первым — тогда его маленькая, реально закрываемая потребность
+        не приносится в жертву порядку словаря.
+        """
+        book = PlanetBook(pd.DataFrame(
+            [{"Constellation": "ALPHA", "System": "HOME", "Planet": str(n), "Type": "Barren",
+              RADIUS_COLUMN: 3000 + n * 700} for n in range(1, 10)]
+        ))
+        crew = [CharacterSlot(i, f"C{i}", 5, 5) for i in range(1, 8)]
+        request = PlanRequest(
+            constellations=["ALPHA"], factory_system="HOME",
+            target_products=["Hermetic Membranes", "Self-Harmonizing Power Core"],
+            purchase_p1=True, lines_per_target=2, allow_single_template_fallback=True,
+        )
+        from domain.throughput import load_schematics
+
+        result = build_plan(request, crew, recipes=load_recipes(), planets=book,
+                             schematics=load_schematics())
+        p4_rows = [r for r in result.rows if r.role == "Переработка P4"]
+        assert p4_rows, "маленький спрос P4 не должен остаться совсем без колоний"
+        assert not any(g.details.startswith("P4") for g in result.staffing_gaps), (
+            "P4 (меньший спрос) должен быть закрыт целиком раньше, чем начнётся P2/P3"
+        )
+
+
 class TestProcessingMinCcu:
     """
     18.09.2026, найдено пользователем: назначение переработки не несло
