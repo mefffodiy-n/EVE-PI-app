@@ -513,6 +513,12 @@ button { font-family:inherit; }
 .crew { max-height:210px; overflow-y:auto; }
 .crew div { display:flex; gap:8px; align-items:center; padding:4px 0; font-size:12px; }
 .crew .lv { margin-left:auto; color:var(--dim); font-family:'JetBrains Mono',monospace; font-size:11px; }
+/* Ширина метки «основной»/кнопки «Сделать основным» отличается по
+   тексту — без фиксированной колонки аватар и имя у каждой строки
+   сдвигались на свою величину (18.09.2026, найдено пользователем по
+   скриншоту). Один и тот же слот, даже пустой (dev-персонажи/группа
+   из одного человека), держит начало аватара на одном месте у всех строк. */
+.crew-primary-slot { flex:0 0 112px; display:flex; }
 
 table { width:100%; border-collapse:collapse; }
 thead .group th { text-align:left; padding:9px 10px 3px; font-size:11px; font-weight:600;
@@ -4849,13 +4855,13 @@ function renderCrew(){
     // автогруппировки, не заменены новым способом выбора вручную).
     const isPrimary=c.esi_linked && c.character_id===currentPrimary;
     const primaryControl=(!c.esi_linked || linked.length<=1)?'':
-      isPrimary?`<span class="mini" style="padding:1px 6px;font-size:10px;margin-right:6px;
+      isPrimary?`<span class="mini" style="padding:1px 6px;font-size:10px;
           pointer-events:none;color:var(--amber);border-color:var(--amber)">${t('groupPrimary')}</span>`
-      :`<button class="mini" style="padding:1px 6px;font-size:10px;margin-right:6px"
+      :`<button class="mini" style="padding:1px 6px;font-size:10px"
           title="${t('groupHint')}" onclick="makePrimary(${c.character_id})">${t('groupSave')}</button>`;
     return `<div title="CCU ${c.ccu} · IC ${c.ic} · ${c.planet_slots} ${t('planetSlots')}${
       spread?' · '+spread.systems.join(', '):''}">
-      ${primaryControl}
+      <div class="crew-primary-slot">${primaryControl}</div>
       <div class="pilot-lg" style="width:22px;height:22px;font-size:9px">${initials(c.name)}${avatarImg(c.character_id)}</div>
       <span>${c.name}</span>
       <span class="lv">${used}/${c.planet_slots}${sys}</span>
