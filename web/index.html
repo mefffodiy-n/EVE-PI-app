@@ -841,7 +841,12 @@ details.msgs[open] > summary::before { content:'▾ '; }
    прибыль» получала лишние padding/border-top и съезжала строкой ниже
    остальных (обнаружено пользователем 16.09.2026 по скриншоту). */
 .poco-profit { padding:14px; border-top:1px solid var(--seam); }
-.poco-profit .figures { display:grid; grid-template-columns:repeat(3,minmax(120px,1fr));
+/* auto-fit, не фиксированные 3 колонки (18.09.2026, найдено пользователем
+   по скриншоту): с добавлением плитки «Закупка P1 / мес» (режим
+   purchase_p1) четвёртая плитка «Чистая прибыль» при фиксированных 3
+   колонках уезжала на отдельную строку, хотя места в ряду хватало —
+   auto-fit сам подбирает число колонок по ширине контейнера. */
+.poco-profit .figures { display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
                          gap:8px 22px; margin-top:6px; }
 .poco-profit .figure .lbl { font-size:10px; letter-spacing:.1em; text-transform:uppercase;
                              color:var(--dim); }
