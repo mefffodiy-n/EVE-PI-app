@@ -3008,10 +3008,23 @@ async function openSaved(id){
   const d=await (await fetch(`${API}/plans/${id}`)).json();
   if(d.status!=='success'){ alert(d.message); return; }
   plan=d.plan.rows||[]; currentPlanId=id;
+  // lastRequest — то же тело, что уходило в /api/calculate при
+  // сохранении (domain/plan_storage.py::StoredPlan.request), в нём
+  // уже есть target_products/purchase_p1 — без него renderPocoProfit()
+  // не вызывает /api/plan-profitability вовсе (её собственная защита
+  // от вызова без построенного плана) и прогноз прибыльности молчал
+  // при открытии сохранённого плана (найдено пользователем 20.09.2026).
+  lastRequest=d.plan.request||null;
   lastWarnings=d.plan.warnings||[]; lastAssumptions=d.plan.assumptions||[];
-  lastPlanResp={critical_warnings:[]};  // сохранённый план хранит строки как есть
+  // Сохранённый план не хранит purchased_p1 (величины сырья в час,
+  // не часть request) — список закупки P1 для такого плана честно не
+  // покажется (renderPurchaseList получит пустой purchased_p1), но это
+  // не то же самое, что пропавшая прибыльность: выручка/налог/чистая
+  // прибыль считаются по rows+target_products, они не зависят от
+  // purchased_p1.
+  lastPlanResp={critical_warnings:[]};
   renderMessages();
-  renderAnswers(); renderTable(); renderDash(); renderCrew(); renderShopping(); renderSaved();
+  renderAnswers(); renderTable(); renderDash(); renderCrew(); renderShopping(); renderPocoProfit(); renderSaved();
   show('dash');
 }
 
