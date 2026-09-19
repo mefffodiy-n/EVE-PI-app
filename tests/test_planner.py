@@ -329,6 +329,84 @@ class TestCcu5Scarcity:
         assert singles and doubles
 
 
+class TestScarcePlanetsFallback:
+    """
+    18.09.2026, найдено пользователем на реальном плане: с двумя
+    подходящими планетами в системе и большим спросом переработка
+    массово проваливалась с «не хватило персонажей» при CCU5, хотя
+    max_double_templates (см. TestCcu5Scarcity выше) в теории должен был
+    это предотвратить. Настоящая причина глубже: max_double_templates
+    ограничивает ОБЩЕЕ число свободных CCU5-слотов, но не то, что
+    ОДНОМУ И ТОМУ ЖЕ человеку нельзя дать вторую колонию на ТОЙ ЖЕ
+    планете — с малым числом планет разных CCU5-персонажей на каждую
+    из них может просто не хватить, даже когда общих CCU5-слотов
+    формально много (IC-слоты одного и того же человека не помогают,
+    если ему больше некуда столько раз ставить колонию на ЭТОЙ планете).
+
+    Фикс — build_plan() пробует одиночный шаблон НА ТОЙ ЖЕ площадке,
+    когда для второго места в двойном назначении не находится ЕЩЁ
+    ОДНОГО подходящего персонажа, вместо того чтобы сразу сдаваться.
+    """
+
+    TWO_PLANETS = PlanetBook(pd.DataFrame([
+        {"Constellation": "ALPHA", "System": "HOME", "Planet": "4", "Type": "Barren",
+         RADIUS_COLUMN: 5820, "Carbon Compounds": 0, "Noble Metals": 0},
+        {"Constellation": "ALPHA", "System": "HOME", "Planet": "7", "Type": "Temperate",
+         RADIUS_COLUMN: 7080, "Carbon Compounds": 0, "Noble Metals": 0},
+    ]))
+
+    def test_falls_back_to_single_when_no_second_ccu5_character_for_this_planet(self):
+        """
+        4 персонажа с CCU V (по одной колонии на планету каждый) — на 2
+        планетах это ровно 4 колонии максимум (2 планеты × 2 человека на
+        двойной шаблон). Спрос на 6 шаблонов: остаток обязан уйти
+        одиночными на тех же двух планетах — персонажей с CCU IV тоже
+        хватает, просто не на двойной.
+        """
+        crew = (
+            [CharacterSlot(i, f"CCU5 {i}", 5, 5) for i in range(1, 5)]
+            + [CharacterSlot(i, f"CCU4 {i}", 4, 5) for i in range(10, 14)]
+        )
+        result = _plan(self.TWO_PLANETS, crew, purchase_p1=True, lines_per_target=6)
+        rows = [r for r in result.rows if "Добыча" not in r.role]
+        assert sum(r.template_count for r in rows) >= 6
+        assert not any(g.role_key == "proc" for g in result.staffing_gaps)
+
+    def test_more_suitable_planets_raise_the_ceiling(self):
+        """
+        Тот же пул, но система с бОльшим числом подходящих планет —
+        план должен успеть построить не меньше колоний, чем с двумя
+        планетами (обычно больше, если исходно не хватало именно площадок).
+        """
+        crew = (
+            [CharacterSlot(i, f"CCU5 {i}", 5, 5) for i in range(1, 5)]
+            + [CharacterSlot(i, f"CCU4 {i}", 4, 5) for i in range(10, 14)]
+        )
+        many_planets = PlanetBook(pd.DataFrame([
+            {"Constellation": "ALPHA", "System": "HOME", "Planet": str(n), "Type": "Barren",
+             RADIUS_COLUMN: 4000 + n * 100, "Carbon Compounds": 0, "Noble Metals": 0}
+            for n in range(1, 9)
+        ]))
+        two = _plan(self.TWO_PLANETS, crew, purchase_p1=True, lines_per_target=6)
+        many = _plan(many_planets, crew, purchase_p1=True, lines_per_target=6)
+        two_rows = sum(r.template_count for r in two.rows if "Добыча" not in r.role)
+        many_rows = sum(r.template_count for r in many.rows if "Добыча" not in r.role)
+        assert many_rows >= two_rows
+
+    def test_honest_min_ccu_reported_when_fallback_also_fails(self):
+        """
+        Когда не хватает вообще никого (даже под одиночный шаблон),
+        сообщение о нехватке обязано называть РЕАЛЬНЫЙ нижний порог
+        (тот, что не смогли закрыть), а не всегда «нужен CCU V» — иначе
+        пользователь тренирует не тот навык / выбирает не то решение.
+        """
+        crew = [CharacterSlot(1, "Solo", 5, 5)]
+        result = _plan(self.TWO_PLANETS, crew, purchase_p1=True, lines_per_target=6)
+        proc_gaps = [g for g in result.staffing_gaps if g.role_key == "proc"]
+        assert proc_gaps
+        assert all(g.min_ccu_level < 5 for g in proc_gaps)
+
+
 class TestProcessingMinCcu:
     """
     18.09.2026, найдено пользователем: назначение переработки не несло

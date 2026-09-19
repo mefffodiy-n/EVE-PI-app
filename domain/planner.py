@@ -811,8 +811,37 @@ def build_plan(
                     prefer_least_skilled=assignment.template_count == 1,
                     planet=(assignment.candidate.system, assignment.candidate.planet),
                 )
+                template_key = assignment.template_key
+                template_count = assignment.template_count
+                fallback_min_ccu = None
+                if character is None and assignment.template_count == 2:
+                    # 18.09.2026, найдено пользователем на реальном плане
+                    # (2 подходящих планеты в системе, много двойных
+                    # назначений): max_double_templates выше ограничивает
+                    # ОБЩЕЕ число свободных CCU5-слотов, но не то, что
+                    # одному и тому же человеку нельзя дать ВТОРУЮ колонию
+                    # на ТОЙ ЖЕ планете (pool.take(planet=...) уже
+                    # исключает его сам). Если РАЗНЫХ CCU5-персонажей
+                    # меньше, чем планет × назначений, эта планета не
+                    # получит второго — но одиночный шаблон здесь всё
+                    # равно физически помещается и годится любому
+                    # подходящему персонажу. Пробуем его, прежде чем
+                    # честно сдаться.
+                    fallback_min_ccu = min_ccu_level_that_fits(
+                        single_key, assignment.candidate.radius_km,
+                        planet_type=assignment.candidate.planet_type,
+                    ) or 0
+                    character = pool.take(
+                        min_ccu=fallback_min_ccu,
+                        prefer_least_skilled=True,
+                        planet=(assignment.candidate.system, assignment.candidate.planet),
+                    )
+                    if character is not None:
+                        template_key = single_key
+                        template_count = 1
+
                 if character is None:
-                    needed_level = 5 if assignment.template_count == 2 else assignment.min_ccu_level
+                    needed_level = fallback_min_ccu if fallback_min_ccu is not None else assignment.min_ccu_level
                     result.staffing_gaps.append(
                         StaffingGap(
                             role="Переработка",
@@ -826,6 +855,12 @@ def build_plan(
                                 tier=tier_key.replace("_", "/"))
                     break
                 row_counter += 1
+                load = calculate_colony_load(
+                    template_key,
+                    character.command_center_upgrades_level,
+                    assignment.candidate.radius_km,
+                    planet_type=assignment.candidate.planet_type,
+                )
                 result.rows.append(
                     PlanRow(
                         id=f"row-{row_counter}",
@@ -840,25 +875,18 @@ def build_plan(
                         res_in=", ".join(sorted(schematics[product].inputs))
                         if product in schematics
                         else None,
-                        structures=f"{FACTORIES_PER_TEMPLATE[assignment.template_key]} фабрик",
+                        structures=f"{FACTORIES_PER_TEMPLATE[template_key]} фабрик",
                         structures_detail=_structures_detail(
-                            assignment.template_key, assignment.candidate.planet_type
+                            template_key, assignment.candidate.planet_type
                         ),
                         type_id=_type_ids().get(product),
-                        template_key=assignment.template_key,
-                        template_count=assignment.template_count,
+                        template_key=template_key,
+                        template_count=template_count,
                         planet_type=assignment.candidate.planet_type,
                         planet_radius_km=assignment.candidate.radius_km,
-                        cpu_percent=assignment.cpu_percent,
-                        pg_percent=assignment.pg_percent,
-                        **_breakdown(
-                            calculate_colony_load(
-                                assignment.template_key,
-                                character.command_center_upgrades_level,
-                                assignment.candidate.radius_km,
-                                planet_type=assignment.candidate.planet_type,
-                            )
-                        ),
+                        cpu_percent=load.cpu_percent,
+                        pg_percent=load.pg_percent,
+                        **_breakdown(load),
                     )
                 )
 
