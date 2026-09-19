@@ -734,7 +734,7 @@ details.msgs[open] > summary::before { content:'▾ '; }
 .modal-body { overflow-y:auto; padding:18px; }
 .modal-body h3 { font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--amber);
                  font-family:'Inter',sans-serif; font-weight:600; margin:22px 0 8px; }
-.modal-body h3:first-child { margin-top:0; }
+.modal-body h3:first-child, .modal-body .modal-toc:first-child + h3 { margin-top:0; }
 .modal-body p { margin:0 0 10px; max-width:74ch; }
 .modal-body ol, .modal-body ul { margin:0 0 10px; padding-left:22px; max-width:74ch; }
 .modal-body li { margin-bottom:6px; }
@@ -746,6 +746,14 @@ details.msgs[open] > summary::before { content:'▾ '; }
 .modal-body .rows > div { padding:8px 0; border-bottom:1px solid var(--seam); }
 .modal-body .rows > div:nth-child(odd) { color:var(--read); font-weight:500; padding-right:16px; }
 .modal-body .rows > div:nth-child(even) { color:var(--dim); }
+/* Оглавление справки (собирается в openModal() из отрисованных <h3 id>)
+   — узкие ссылки в 2 колонки, чтобы длинный список заголовков не
+   растягивал модалку по высоте больше, чем сам текст под ним. */
+.modal-toc { display:grid; grid-template-columns:1fr 1fr; gap:2px 18px;
+             margin:0 0 18px; padding-bottom:14px; border-bottom:1px solid var(--seam); }
+.modal-toc a, .modal-toc a:visited { color:var(--dim); font-size:12px; text-decoration:none; padding:2px 0; }
+.modal-toc a:hover { color:var(--amber); }
+@media (max-width:520px){ .modal-toc { grid-template-columns:1fr; } }
 
 /* ── Списки множественного выбора ─────────────────────────────
    Обычный <select multiple> для этой задачи плох: выбор делается
@@ -762,6 +770,13 @@ details.msgs[open] > summary::before { content:'▾ '; }
         cursor:pointer; font-size:11px; white-space:nowrap; }
 .mini:hover { color:var(--amber); border-color:var(--amber); }
 .mini.active { color:var(--amber); border-color:var(--amber); background:color-mix(in srgb, var(--amber) 12%, transparent); }
+/* Контекстный якорь на справку (helpTag()) — маленький кружок рядом с
+   заголовком панели/полем, не растягивает строку заголовка. */
+.help-tag { display:inline-grid; place-items:center; width:16px; height:16px;
+            border-radius:50%; border:1px solid var(--seam); background:none;
+            color:var(--dim); font-size:10px; line-height:1; cursor:pointer;
+            padding:0; margin-left:4px; vertical-align:middle; }
+.help-tag:hover { color:var(--amber); border-color:var(--amber); }
 .tier-filter { display:flex; gap:6px; margin-bottom:6px; }
 /* Персонажу нужно перезайти через EVE SSO — токен протух/отозван,
    колонии и скиллы больше не обновляются (см. needs_reconnect,
@@ -1077,6 +1092,8 @@ body.light .rolebadge.excess { background:rgba(154,107,18,.12); }
     <button class="tool" data-view="grid" title="Сетка" data-i18n-title="viewGrid">
       <svg viewBox="0 0 16 16" fill="currentColor"><rect width="6" height="6"/><rect x="10" width="6" height="6"/><rect y="10" width="6" height="6"/><rect x="10" y="10" width="6" height="6"/></svg>
     </button>
+    <button type="button" class="help-tag" style="margin-left:6px" onclick="openModal('help','h-dashboard')"
+            data-i18n-title="help" title="Справка">?</button>
     <div class="menu" id="sortMenu" style="margin-left:8px">
       <button class="tool" onclick="document.getElementById('sortMenu').classList.toggle('open')" title="Сортировка" data-i18n-title="sortTitle">
         <svg viewBox="0 0 16 16" fill="currentColor"><rect y="2" width="14" height="2"/><rect y="7" width="10" height="2"/><rect y="12" width="6" height="2"/></svg>
@@ -1108,6 +1125,8 @@ body.light .rolebadge.excess { background:rgba(154,107,18,.12); }
   <div class="split">
     <div class="brief-head">
       <h2 data-i18n="planBrief">Задание на план</h2>
+      <button type="button" class="help-tag" onclick="openModal('help','h-howto')"
+              data-i18n-title="help" title="Справка">?</button>
       <span class="sub" data-i18n="planBriefSub">три шага — что, откуда, куда</span>
     </div>
 
@@ -1149,6 +1168,8 @@ body.light .rolebadge.excess { background:rgba(154,107,18,.12); }
             <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
               <input type="checkbox" id="purchaseP1" style="width:auto" onchange="togglePurchaseP1(this.checked)">
               <span data-i18n="purchaseP1">Покупать весь P1 на бирже (не строить добычу)</span>
+              <button type="button" class="help-tag" onclick="event.preventDefault();openModal('help','h-purchase-list')"
+                      data-i18n-title="help" title="Справка">?</button>
             </label>
           </div>
           <div class="field-group" id="mineSection">
@@ -1205,6 +1226,8 @@ body.light .rolebadge.excess { background:rgba(154,107,18,.12); }
       <div class="save-inline">
         <input id="planName" placeholder="название плана" data-i18n-ph="planNamePh">
         <button class="mini" onclick="savePlan()" data-i18n="save">Сохранить</button>
+        <button type="button" class="help-tag" onclick="openModal('help','h-saved')"
+                data-i18n-title="help" title="Справка">?</button>
       </div>
       <div id="savedList"></div>
       <div id="cmpResult"></div>
@@ -2896,7 +2919,7 @@ function renderAdvice(){
     </div>`:'';
 
   box.innerHTML=`<div class="advice ${a.verdict}">
-    <h4>${deficit?t('advDeficit'):t('advSurplus')}</h4>
+    <h4>${deficit?t('advDeficit'):t('advSurplus')} ${helpTag('h-staffing')}</h4>
     <p class="lead">${deficit
       ? fmt(t('advDeficitLead'),{need:a.needed_colonies,have:a.capacity.total_slots})
       : fmt(t('advSurplusLead'),{need:a.needed_colonies,have:a.capacity.total_slots,spare:a.spare_slots})}</p>
@@ -3255,7 +3278,7 @@ function renderColonies(){
   const deficitN=rows.filter(isColonyDeficient).length;
   const summary=`${pl(rows.length,'pPlanetN')} · ${idleN} ${t('coloniesIdle')} · ${attnN} ${t('coloniesAttention')}`
     + ` · ${deficitN} ${t('coloniesDeficit')}`;
-  box.innerHTML=`<div class="colonies"><h3>${t('inGameColonies')} <span class="colsum">${summary}</span></h3>${body}</div>`;
+  box.innerHTML=`<div class="colonies"><h3>${t('inGameColonies')} ${helpTag('h-ingame')} <span class="colsum">${summary}</span></h3>${body}</div>`;
   fixTipOverflowIn(box);
 }
 
@@ -3293,13 +3316,13 @@ function renderProfit(){
   const box=document.getElementById('profit'); if(!box) return;
   const snap=profitData && profitData.snapshot;
   if(!snap || !snap.has_data){
-    box.innerHTML=`<div class="profit"><div class="profit-head"><h3>${t('profitTitle')}</h3></div>
+    box.innerHTML=`<div class="profit"><div class="profit-head"><h3>${t('profitTitle')} ${helpTag('h-profit-ranking')}</h3></div>
       <div style="color:var(--dim);font-size:12px">${t('noSnapshot')}. ${t('noSnapshotHint')}</div></div>`;
     return;
   }
   const rows=(profitData.analytics||[]).slice(0,12);
   box.innerHTML=`<div class="profit">
-    <div class="profit-head"><h3>${t('profitTitle')}</h3>
+    <div class="profit-head"><h3>${t('profitTitle')} ${helpTag('h-profit-ranking')}</h3>
       <span class="age${snap.stale?' stale':''}">${t('collectedAgo')} ${snap.age_minutes} ${t('minutesAgo')}`
       +(snap.stale?` · ${t('stale')}`:'')+` · ${snap.station||''}</span></div>
     <table><thead><tr class="cols">
@@ -3351,7 +3374,7 @@ async function renderPocoProfit(){
 
   const netKnown=d.monthly_net_profit!=null;
   box.innerHTML=`<div class="poco-profit">
-    <div class="profit-head"><h3>${t('pocoProfitTitle')}</h3></div>
+    <div class="profit-head"><h3>${t('pocoProfitTitle')} ${helpTag('h-profitability')}</h3></div>
     <div class="figures">
       <div class="figure"><div class="lbl">${t('pocoRevenue')}</div>
         <div class="val${d.monthly_revenue==null?' dim':''}">${d.monthly_revenue==null?t('noData'):isk(d.monthly_revenue)}</div></div>
@@ -3398,7 +3421,7 @@ function renderPurchaseList(d){
   const anyKnown=items.some(it=>it.monthly_cost!=null);
 
   box.innerHTML=`<div class="poco-profit">
-    <div class="profit-head"><h3>${t('purchaseListTitle')}</h3></div>
+    <div class="profit-head"><h3>${t('purchaseListTitle')} ${helpTag('h-purchase-list')}</h3></div>
     <table class="purchase-list-table"><thead><tr>
       <th>${t('purchaseListProduct')}</th><th class="r">${t('purchaseListQty')}</th>
       <th class="r">${t('purchaseListPrice')}</th><th class="r">${t('purchaseListCost')}</th>
@@ -3466,7 +3489,7 @@ async function renderColoniesProfit(){
 
   const netKnown=d.monthly_net_profit!=null;
   box.innerHTML=`<div class="poco-profit">
-    <div class="profit-head"><h3>${t('coloniesProfitTitle')}</h3></div>
+    <div class="profit-head"><h3>${t('coloniesProfitTitle')} ${helpTag('h-ingame')}</h3></div>
     <div class="figures">
       <div class="figure"><div class="lbl">${t('pocoRevenue')}</div>
         <div class="val${d.monthly_revenue==null?' dim':''}">${d.monthly_revenue==null?t('noData'):isk(d.monthly_revenue)}</div></div>
@@ -3947,7 +3970,7 @@ let currentModal=null;
 const DOC={
  help:{
   ru:{title:'Справка',html:`
-   <h3>Что считает планировщик</h3>
+   <h3 id="h-overview">Что считает планировщик</h3>
    <p>PI Director отвечает на один вопрос: сколько колоний и каких нужно, чтобы
    производить выбранные продукты непрерывно, и хватит ли на это ваших персонажей.</p>
    <p>Расчёт идёт сверху вниз: целевой продукт разворачивается до сырья через дерево
@@ -3959,7 +3982,7 @@ const DOC={
    пределах — расчёт для других регионов New Eden недоступен, пока для них
    нет такого же файла данных.</p>
 
-   <h3>Как пользоваться</h3>
+   <h3 id="h-howto">Как пользоваться</h3>
    <ol>
     <li>На вкладке «Настройки» отметьте целевые продукты. Можно выбрать несколько
     сразу — список с поиском и иконками, отмеченное показано внизу. Кнопки P2/P3/P4
@@ -3993,7 +4016,7 @@ const DOC={
    или ставить по одному шаблону на планету. Второй вариант работает, но
    планет и персонажей потребуется вдвое больше, поэтому решение за вами.</p>
 
-   <h3>Что показывает дашборд</h3>
+   <h3 id="h-dashboard">Что показывает дашборд</h3>
    <div class="rows">
     <div>Три режима вида</div><div>Детальный со всеми структурами, список по персонажам
     и плотная сетка. Переключаются кнопками слева вверху, там же сортировка.</div>
@@ -4017,7 +4040,7 @@ const DOC={
     колонии есть — оба набора листов в одной книге.</div>
    </div>
 
-   <h3>Если персонажей не хватает или слишком много</h3>
+   <h3 id="h-staffing">Если персонажей не хватает или слишком много</h3>
    <p>Как только вы отметили целевые продукты, программа считает, поместится ли
    полный цикл в ваш пул. Учитываются не только слоты планет, но и прокачка:
    добывающий шаблон требует Command Center Upgrades IV, и «слотов хватает»
@@ -4034,16 +4057,7 @@ const DOC={
    констелляциях. Такие колонии помечены в плане как «Добыча (избыток)» —
    это не часть расчётной потребности, а загрузка простаивающих.</p>
 
-   <h3>P2 прямо на добывающей планете (пока приостановлено)</h3>
-   <p>Идея: если на планете есть оба нужных вида сырья, всю цепочку P2 можно
-   уместить на ней целиком — два экстрактора, basic-фабрики под оба P1 и
-   advanced-фабрики под сам P2, без перевозки P1 между планетами. Временно
-   убрано из интерфейса (15.09.2026): готового шаблона такой застройки в
-   источнике нет, состав считался из стоимостей отдельных структур, и сама
-   компоновка ни разу не была сверена в игре. Появится снова, когда это
-   будет проверено.</p>
-
-   <h3>Логистика: почему колонии кучкуются</h3>
+   <h3 id="h-logistics">Логистика: почему колонии кучкуются</h3>
    <p>Добывающие колонии одного персонажа планировщик старается держать в одной
    системе. Разница практическая: шесть колоний в одной системе собираются за
    один заход, шесть в разных — за шесть перелётов.</p>
@@ -4054,7 +4068,7 @@ const DOC={
    на персонажа. Значение около единицы означает, что урожай собирается компактно;
    если оно заметно больше двух, стоит присмотреться к набору созвездий.</p>
 
-   <h3>Как читать цвета</h3>
+   <h3 id="h-colors">Как читать цвета</h3>
    <p>Цвет здесь не украшение, а способ не читать подписи. Плашка тира окрашена
    по переделу: холодные оттенки у сырья и P1, теплее к P3 и P4. Роль колонии
    тоже плашкой — бирюзовая добыча, оранжевая переработка.</p>
@@ -4062,7 +4076,7 @@ const DOC={
    красное — предел. Лучшая строка в таблице выгоды отмечена янтарной полосой
    слева, как и самая напряжённая колония в плане.</p>
 
-   <h3>Сохранённые планы</h3>
+   <h3 id="h-saved">Сохранённые планы</h3>
    <p>План можно сохранить под именем и вернуться к нему позже: планы лежат на сервере,
    поэтому переживают перезагрузку и открываются с другого устройства.</p>
    <p>Сохранение и список планов привязаны к вашему входу через EVE SSO — без входа
@@ -4071,33 +4085,29 @@ const DOC={
    показывает не только числа, но и какие именно колонии появились или исчезли —
    «на три планеты меньше» не отвечает на вопрос, каких именно.</p>
 
-   <h3>Что выгоднее производить</h3>
+   <h3 id="h-profit-ranking">Что выгоднее производить</h3>
    <p>Таблица на вкладке «Настройки» ранжирует цепочки по ISK на колонию в час,
    а не по цене за единицу: ограниченный ресурс здесь планеты и персонажи, а не время.
    Линия, приносящая больше всех в час, но занимающая вдвое больше планет, хуже.</p>
    <p>Налог POCO, доставка и биржевые сборы не учтены, поэтому числа — верхняя оценка.</p>
 
-   <h3>Прогноз прибыльности плана</h3>
-   <p>Отдельная панель на дашборде, сразу над построенным планом (перенесена
-   туда с «Настроек» 16.09.2026 — прогноз относится к самому плану, а не к
-   вводу параметров) — не обобщённая экономика шаблона выше, а
-   прибыльность УЖЕ ПОСТРОЕННОГО плана: настоящее число колоний и фабрик из
-   расчёта, помесячно, при полной загруженности цепочки без простоев. В
-   отличие от таблицы «Что выгоднее производить», здесь учтён налог POCO — и
-   на вывоз, и на ввоз на каждом перемещении между планетами по цепочке, не
-   только на финальной продаже.</p>
+   <h3 id="h-profitability">Прогноз прибыльности плана</h3>
+   <p>Панель на дашборде, сразу над построенным планом — не обобщённая
+   экономика шаблона выше, а прибыльность УЖЕ ПОСТРОЕННОГО плана:
+   настоящее число колоний и фабрик из расчёта, помесячно, при полной
+   загруженности цепочки без простоев. В отличие от таблицы «Что
+   выгоднее производить», здесь учтён налог POCO — и на вывоз, и на
+   ввоз на каждом перемещении между планетами по цепочке, не только на
+   финальной продаже.</p>
    <p>Ставка POCO берётся автоматически — точное значение КОНКРЕТНОЙ
    планеты из выгрузки данных региона, той же, на которой считается весь
-   остальной план (17.09.2026; ручной ввод по типу планеты убран тем же
-   днём при переходе к мультирегиональности — с несколькими регионами
-   такое переопределение перестаёт быть однозначным). Если ставка
-   планеты неизвестна (планета за пределами загруженного региона),
-   расчёт честно исключает такую планету, а не считает её беспошлинной.
-   Чистая прибыль показывается только когда собраны все нужные цены и
-   известны все нужные ставки — частичная сумма выглядела бы точнее, чем
-   есть на самом деле.</p>
+   остальной план. Если ставка планеты неизвестна (планета за пределами
+   загруженного региона), расчёт честно исключает такую планету, а не
+   считает её беспошлинной. Чистая прибыль показывается только когда
+   собраны все нужные цены и известны все нужные ставки — частичная
+   сумма выглядела бы точнее, чем есть на самом деле.</p>
 
-   <h3>Список закупки сырья (P1)</h3>
+   <h3 id="h-purchase-list">Список закупки сырья (P1)</h3>
    <p>Панель под прогнозом прибыльности — показывается только в режиме
    «покупать P1 на бирже»: по каждому виду сырья P1 — сколько единиц
    нужно закупать в месяц и цена на момент построения плана (тот же
@@ -4107,7 +4117,7 @@ const DOC={
    список попадает в экспорт в Excel отдельным листом «Закупка P1» с
    теми же ценами, что были на экране при построении плана.</p>
 
-   <h3>Индикаторы вверху</h3>
+   <h3 id="h-indicators">Индикаторы вверху</h3>
    <p>Плашка «ESI» — число игроков онлайн из снимка сервера; жёлтая точка значит,
    что снимок давно не обновлялся (сборщик мог не запуститься), при наведении
    видно, сколько минут назад он был собран.</p>
@@ -4120,12 +4130,12 @@ const DOC={
    пропадает на узких окнах вместе с плашкой «данные» — это диагностика для
    владельца, а не то, что нужно каждому посетителю.</p>
 
-   <h3>Тема и язык</h3>
+   <h3 id="h-theme-lang">Тема и язык</h3>
    <p>В верхней панели переключаются светлая и тёмная тема, а также русский
    и английский язык. Выбор запоминается в браузере: это предпочтения отображения,
    им место на вашем устройстве, в отличие от планов и персонажей.</p>
 
-   <h3>Вход через EVE Online</h3>
+   <h3 id="h-eve-sso">Вход через EVE Online</h3>
    <p>Кнопка «Войти через EVE SSO» подключает ваших персонажей по официальному
    протоколу CCP. Сразу после входа планировщик подтягивает настоящие уровни
    скиллов (Command Center Upgrades и Interplanetary Consolidation) и реальные
@@ -4156,74 +4166,34 @@ const DOC={
    автоматика выбрала не того основным — у любого альта в карточке
    персонажей есть кнопка «Сделать основным».</p>
 
-   <h3>Мои колонии в игре</h3>
+   <h3 id="h-ingame">Мои колонии в игре</h3>
    <p>Отдельный блок на дашборде: что у персонажей реально построено — снимок
    из игры, а не расчётный план. Сводная строка над блоком считает четыре
    категории: сколько колоний простаивает (у добычи — программа экстрактора
-   уже закончилась; у переработки — закончилось сырьё в причале), сколько
-   требуют внимания (только у добычи — причал забит под завязку, у
-   переработки полный причал не тревога, а запас на будущее), сколько в
+   закончилась; у переработки — закончилось сырьё в причале), сколько
+   требуют внимания (у добычи — причал забит под завязку), сколько в
    дефиците добычи, и общее число планет. Простаивает и требует внимания —
-   независимые категории: колония, где программа кончилась И причал полон
-   одновременно, попадает в обе сразу, не в одну на выбор.</p>
-   <p>Карточка колонии выглядит как у расчётного плана — та же полоса иконок
-   структур, только состав берётся из настоящих пинов на планете, а не из
-   шаблона застройки. Кнопка «Детали» открывает полную панель: причал, склад
-   и хранилище командного центра показывают, что реально лежит внутри и
+   независимые категории, колония может попасть в обе сразу.</p>
+   <p>Карточка колонии выглядит как у расчётного плана, только состав
+   берётся из настоящих пинов на планете. Кнопка «Детали» открывает полную
+   панель: причал, склад и хранилище командного центра — что внутри и
    сколько это в процентах от вместимости; загрузка CPU/Power — в процентах
    и в абсолютных числах, как в игре; экстрактор — сколько голов, что
-   добывает и с какой скоростью («сейчас» — по текущим данным ESI с поправкой
-   на естественное затухание программы добычи, «в среднем» — по накопленной
-   истории синхронизаций).</p>
-   <p>Состояние фабрики ESI обновляет только при заходе в колонию в игровом
-   клиенте, а не в реальном времени — поэтому программа честно проецирует
-   его вперёд по маршрутам между пинами и объёму сырья, накопленному у
-   каждой фабрики: «в производстве» или «простаивает» с настоящей
-   длительностью. Без
-   маршрутов, или для колонии сразу после пересинхронизации — честное
+   добывает и с какой скоростью («сейчас» и «в среднем» по истории).</p>
+   <p>ESI обновляет состояние фабрики только при заходе в колонию в игровом
+   клиенте, поэтому программа честно проецирует его вперёд по маршрутам и
+   накопленному сырью: «в производстве» или «простаивает» с настоящей
+   длительностью, а для переработки — ещё и время, когда закончится сырьё в
+   причале. Без маршрутов или сразу после пересинхронизации — честное
    «неизвестно», а не выдуманное состояние.</p>
-   <p>Для перерабатывающих колоний та же проекция считает, через сколько
-   закончится сырьё в причале: в отличие от добычи, где его пополняет
-   экстрактор, сюда сырьё привозит только игрок, и запас конечный.
-   Плашка показывает время, когда встанет ПОСЛЕДНЯЯ из работавших фабрик
-   на этом причале — если сырья временно хватает не на все фабрики сразу,
-   часть из них всё равно продолжает работать ещё цикл-другой, и колония
-   не считается вставшей, пока не остановится последняя (17.09.2026,
-   уточнено по разбору настоящей колонии с 12 фабриками на одном
-   причале). Момент считается по тому же точному циклу фабрик, что и их
-   «в производстве»/«простаивает» — не по среднему расходу в час: фабрика
-   забирает сырьё целиком в момент старта цикла, поэтому последний цикл,
-   на старт которого сырья ещё хватило, всё равно докручивается до конца.
-   Список содержимого причала/склада в панели «Детали», как и заполненность
-   в м³ (в том числе кольцо на самом круге колонии), — тоже не застывший
-   снимок с последней синхронизации: расход сырья и накопление ещё не
-   вывезенной готовой продукции пересчитываются вперёд той же проекцией, а
-   объём в м³ — по объёму одной единицы каждого товара, который теперь тоже
-   знает фронтенд (тот же кэш, которым сервер считает объём из настоящего
-   снимка), поэтому и заполненность честно меняется по мере того, как более
-   «тяжёлое» сырьё расходуется, а более «лёгкая» продукция копится.</p>
    <p>Колония, добывающая меньше 48 000 ед./ч, помечена как дефицитная —
-   фиксированный порог: на такой скорости ресурса не хватит на всю цепочку,
-   и его придётся дублировать дополнительной добычей. Дефицит — отдельная
-   категория: колония продолжает работать, просто ниже порога, в отличие от
-   «требует внимания», где колония уже не работает как надо прямо сейчас.
-   Если у персонажа истёк или отозван доступ ESI (сменили пароль, отозвали
-   приложение), рядом с ним появляется красная кнопка «Перезайти» — колонии
-   и скиллы перестают обновляться до повторного входа тем же персонажем.</p>
-   <p><b>Прогноз прибыльности по факту</b> — строка над списком колоний,
-   учитывает налог POCO так же, как и в расчётном плане, но по-другому:
-   скорость каждой колонии — настоящая текущая (с той же поправкой на
-   затухание добычи и то же честное «простаивает»/«в производстве» для
-   фабрик, что и выше), не теоретический максимум. Налог считается по
-   каждой колонии отдельно — с того, что физически покидает именно эту
-   планету, по её точной ставке (та же автоматика из файла, что и у
-   прогноза для плана): связи «какая колония кормит какую» ESI не
-   отдаёт, поэтому налог на ввоз между разными колониями не считается
-   (в отличие от прогноза для плана). Колония с неизвестной текущей
-   скоростью выхода честно перечисляется отдельно, а не считается
-   нулевой или полной.</p>
+   на такой скорости ресурса не хватит на всю цепочку. <b>Прогноз прибыльности по факту</b>
+   над списком колоний считает налог POCO так же,
+   как и в расчётном плане, но по настоящей текущей скорости каждой колонии,
+   не по теоретическому максимуму; налог на ввоз между разными колониями не
+   считается — ESI не отдаёт, какая колония кормит какую.</p>
 
-   <h3>Чего программа пока не знает</h3>
+   <h3 id="h-honest-gaps">Чего программа пока не знает</h3>
    <p><b>Регион.</b> Данные о планетах есть только для Fountain — ни ESI,
    ни статический дамп CCP плотность сырья по планетам не отдают вообще
    (сервер считает её процедурно и не публикует), единственный способ
@@ -4238,7 +4208,7 @@ const DOC={
    месторождения истощаются, но живых данных об этом нет ни у кого, кроме самой игры.</p>`},
 
   en:{title:'Help',html:`
-   <h3>What the planner computes</h3>
+   <h3 id="h-overview">What the planner computes</h3>
    <p>PI Director answers one question: how many colonies of which kind you need to
    produce the selected products continuously, and whether your characters suffice.</p>
    <p>It works top-down: the target product is expanded to raw materials through the
@@ -4249,7 +4219,7 @@ const DOC={
    it — the plan cannot be calculated for any other New Eden region until the
    same kind of data file exists for it.</p>
 
-   <h3>How to use it</h3>
+   <h3 id="h-howto">How to use it</h3>
    <ol>
     <li>On the Settings tab tick your target products. Several products at once is fine —
     the list has search and icons, and your picks are shown below it. The P2/P3/P4 buttons
@@ -4284,7 +4254,7 @@ const DOC={
    template per planet. The latter works, but needs twice as many planets and
    characters, so the decision is yours.</p>
 
-   <h3>What the dashboard shows</h3>
+   <h3 id="h-dashboard">What the dashboard shows</h3>
    <div class="rows">
     <div>Three view modes</div><div>Detailed with every structure, a per-character list
     and a dense grid. Switch with the buttons at the top left, sorting is there too.</div>
@@ -4308,7 +4278,7 @@ const DOC={
     workbook has both sets of sheets.</div>
    </div>
 
-   <h3>If you have too few or too many characters</h3>
+   <h3 id="h-staffing">If you have too few or too many characters</h3>
    <p>As soon as you tick the target products, the app checks whether a full cycle
    fits your pool. It counts not only planet slots but skills: the extraction
    template needs Command Center Upgrades IV, so “enough slots” does not yet
@@ -4324,15 +4294,7 @@ const DOC={
    are marked “Extraction (surplus)” — they are not part of the computed demand but
    a way to keep idle characters busy.</p>
 
-   <h3>P2 right on the extraction planet (paused for now)</h3>
-   <p>The idea: if a planet holds both raw materials a P2 chain needs, the whole thing
-   fits on it — two extractors, basic factories for both P1s, advanced factories for
-   the P2 itself, no hauling P1 between planets. Temporarily removed from the interface
-   (2026-09-15): the source has no ready template for this layout, the composition was
-   computed from individual structure costs, and the layout itself was never checked
-   in game. It will come back once that's verified.</p>
-
-   <h3>Logistics: why colonies cluster</h3>
+   <h3 id="h-logistics">Logistics: why colonies cluster</h3>
    <p>The planner tries to keep one character's extraction colonies in the same
    system. The difference is practical: six colonies in one system are collected in
    a single trip, six in different systems take six trips of travel.</p>
@@ -4342,7 +4304,7 @@ const DOC={
    <p>The “Systems per character” card shows the average. A value near one means the
    harvest is compact; noticeably above two is a hint to revisit your constellations.</p>
 
-   <h3>How to read the colours</h3>
+   <h3 id="h-colors">How to read the colours</h3>
    <p>Colour here is not decoration but a way to avoid reading labels. The tier badge
    is coloured by processing stage: cool shades for raw materials and P1, warmer
    towards P3 and P4. The colony role is a badge too — teal for extraction,
@@ -4351,7 +4313,7 @@ const DOC={
    is running out, red means the limit. The best row in the profitability table is
    marked with an amber bar on the left, as is the most strained colony in the plan.</p>
 
-   <h3>Saved plans</h3>
+   <h3 id="h-saved">Saved plans</h3>
    <p>A plan can be saved under a name and reopened later: saved plans live on the server,
    so they survive a reload and open from another device.</p>
    <p>Saving and the plan list are tied to your EVE SSO login — you need to be logged in
@@ -4359,30 +4321,29 @@ const DOC={
    <p>Tick two of them to compare plans. The difference shows not only numbers but which
    colonies appeared or disappeared — “three planets fewer” does not say which ones.</p>
 
-   <h3>What is most profitable to produce</h3>
+   <h3 id="h-profit-ranking">What is most profitable to produce</h3>
    <p>The table on the Settings tab ranks chains by ISK per colony-hour rather than by
    unit price: the limited resource here is planets and characters, not time. A line that
    earns most per hour but occupies twice the planets is worse.</p>
    <p>POCO tax, hauling and broker fees are not included, so the figures are an upper bound.</p>
 
-   <h3>Plan profitability forecast</h3>
-   <p>A separate panel on the dashboard, right above the built plan (moved there from Settings
-   on 2026-09-16 — the forecast belongs with the plan itself, not with the input controls) —
-   not the generic template economics above, but the
-   profitability of the ALREADY BUILT plan: the real number of colonies and factories from
-   the calculation, monthly, at full chain throughput with no downtime. Unlike the "most
-   profitable to produce" table, this one accounts for POCO tax — on both export and import
-   at every move between planets in the chain, not only on the final sale.</p>
-   <p>The POCO rate is filled in automatically — the exact value for that SPECIFIC
-   planet, from the same regional data export the rest of the plan is built on (2026-09-17;
-   manual entry by planet type was removed the same day when moving toward multi-region
-   support — with more than one region such an override stops being unambiguous). If a
-   planet's rate is unknown (a planet outside the loaded region), the calculation honestly
-   excludes that planet rather than treating it as tax-free. Net profit is only shown once
-   every needed price is available and every needed rate is known — a partial sum would look
-   more accurate than it really is.</p>
+   <h3 id="h-profitability">Plan profitability forecast</h3>
+   <p>A panel on the dashboard, right above the built plan — not the generic
+   template economics above, but the profitability of the ALREADY BUILT
+   plan: the real number of colonies and factories from the calculation,
+   monthly, at full chain throughput with no downtime. Unlike the "most
+   profitable to produce" table, this one accounts for POCO tax — on both
+   export and import at every move between planets in the chain, not only
+   on the final sale.</p>
+   <p>The POCO rate is filled in automatically — the exact value for that
+   SPECIFIC planet, from the same regional data export the rest of the plan
+   is built on. If a planet's rate is unknown (a planet outside the loaded
+   region), the calculation honestly excludes that planet rather than
+   treating it as tax-free. Net profit is only shown once every needed
+   price is available and every needed rate is known — a partial sum would
+   look more accurate than it really is.</p>
 
-   <h3>Raw material purchase list (P1)</h3>
+   <h3 id="h-purchase-list">Raw material purchase list (P1)</h3>
    <p>A panel below the profitability forecast — shown only in "buy all P1 on the
    market" mode: for each P1 raw material, how many units to buy per month, with
    prices as of plan build (the same market price snapshot as the profitability
@@ -4391,7 +4352,7 @@ const DOC={
    list is included in the Excel export as its own "P1 purchase" sheet, with the same
    prices that were on screen when the plan was built.</p>
 
-   <h3>Top bar indicators</h3>
+   <h3 id="h-indicators">Top bar indicators</h3>
    <p>The "ESI" chip shows online players from a server snapshot; an amber dot means the
    snapshot hasn't updated in a while (the collector may not be running) — hover to see
    how many minutes old it is.</p>
@@ -4403,12 +4364,12 @@ const DOC={
    many times in a row. The chip disappears on narrow windows along with the "data" chip
    — this is diagnostics for the app's owner, not something every visitor needs.</p>
 
-   <h3>Theme and language</h3>
+   <h3 id="h-theme-lang">Theme and language</h3>
    <p>The top bar switches between light and dark theme and between Russian and English
    language. The choice is remembered in your browser: these are display preferences and
    belong on your device, unlike plans and characters.</p>
 
-   <h3>Log in with EVE Online</h3>
+   <h3 id="h-eve-sso">Log in with EVE Online</h3>
    <p>The “Log in with EVE SSO” button connects your characters through CCP's official
    protocol. Right after you log in the planner pulls your real skill levels (Command
    Center Upgrades and Interplanetary Consolidation) and your real colonies — no need
@@ -4434,65 +4395,31 @@ const DOC={
    If the automatic pick got it wrong, any alt in the character card has a "Make primary"
    button.</p>
 
-   <h3>My in-game colonies</h3>
+   <h3 id="h-ingame">My in-game colonies</h3>
    <p>A separate dashboard panel: what your characters have actually built — a live
    snapshot from the game, not the computed plan. The summary line above it counts four
-   things: how many colonies are idle (extraction — the extractor program has already
-   ended; processing — the launchpad has run out of raw material), how many need
-   attention (extraction only — the launchpad is packed full; for processing a full
-   launchpad isn't a warning, it's a buffer for later), how many are in extraction
-   deficit, and the total planet count. Idle and needs-attention are independent: a
-   colony whose program ended AND whose launchpad is full counts in both, not one or
-   the other.</p>
-   <p>A colony card looks like a plan card — the same strip of structure icons — except
-   the composition comes from the real pins on the planet, not a building template. The
-   Details button opens the full panel: launchpad, storage and the command centre's own
-   hold show what's actually stored and how full that is as a percentage of capacity;
-   CPU/Power load is shown both as a percentage and as absolute numbers, same as in the
-   game; the extractor shows head count, what it's pulling and at what rate ("now" from
-   ESI's current data corrected for the program's natural decay, "average" from synced
-   history).</p>
-   <p>ESI only updates a factory's state when the colony is opened in the game client, not
-   in real time, so the app honestly projects it forward using the routes between pins and
-   how much material has piled up at each factory — "in production" or "idle" with a real
-   duration. Without routes, or right
-   after a fresh resync, it says an honest "unknown" instead of guessing.</p>
-   <p>For processing colonies the same projection also works out how long until the
-   launchpad runs out of raw material: unlike extraction, where the extractor keeps
-   refilling it, here only the player brings material in, so the stock is finite. The badge
-   shows time until the LAST of that launchpad's factories stops — if the remaining stock
-   temporarily covers most but not all of them, some keep running for another cycle or two,
-   and the colony isn't considered stopped until the last one is (refined 2026-09-17, after
-   working through a real 12-factory colony sharing one launchpad). The moment is worked out
-   from the same exact factory-cycle timing as "in production"/"idle", not an average hourly
-   rate: a factory takes its input all at once when a cycle starts, so the last cycle that
-   still had enough stock to start still runs to completion. The launchpad/storage contents
-   list in the Details panel, and the m³ fill level (including the ring on the colony's own
-   circle), aren't a frozen snapshot from the last sync either: material use and unshipped
-   finished product are projected forward by the same simulation, and the m³ figure is
-   recomputed from each item's per-unit volume, which the frontend now also knows (the same
-   cache the server uses to compute the figure from a real snapshot) — so the fill level
-   honestly shifts as "heavier" raw material is used up and "lighter" finished product piles
-   up.</p>
-   <p>A colony extracting under 48,000 units/hour is flagged as in deficit — a fixed
-   threshold: at that rate the resource won't cover the whole chain, so it needs
-   duplicating with extra extraction. Deficit is its own category — the colony keeps
-   working, just below the threshold — unlike "need attention", reserved for a colony
-   that genuinely isn't working right now. If a character's ESI access has expired or
-   been revoked (password changed, app access revoked), a red "Reconnect" button appears
-   next to them: colonies and skills stop updating until you log in again with that same
-   character.</p>
-   <p><b>Actual profitability forecast</b> — a line above the colony list, accounting for
-   POCO tax the same way the plan version does, but differently: each colony's rate is its
-   real current one (the same decay correction and the same honest "idle"/"producing"
-   factory state as above), not the theoretical maximum. Tax is calculated per colony on
-   its own — on whatever physically leaves that specific planet, at its exact rate (the same
-   automatic per-planet value from the file as the plan forecast): ESI doesn't report which
-   colony feeds which, so import tax between different colonies isn't counted (unlike the
-   plan forecast). A colony whose current output rate is unknown is listed honestly on its
-   own, not treated as zero or full.</p>
+   things: how many colonies are idle (extraction — the extractor program has ended;
+   processing — the launchpad has run out of raw material), how many need attention
+   (extraction — the launchpad is packed full), how many are in extraction deficit, and
+   the total planet count. Idle and needs-attention are independent — a colony can land
+   in both at once.</p>
+   <p>A colony card looks like a plan card, except the composition comes from the real
+   pins on the planet. The Details button opens the full panel: launchpad, storage and
+   the command centre's own hold — what's inside and how full as a percentage; CPU/Power
+   load as a percentage and as absolute numbers, same as in the game; the extractor's
+   head count, output and rate ("now" and "average" from history).</p>
+   <p>ESI only updates a factory's state when the colony is opened in the game client, so
+   the app honestly projects it forward from the routes and accumulated material — "in
+   production" or "idle" with a real duration, and for processing, also when the
+   launchpad will run out of material. Without routes or right after a resync, it says an
+   honest "unknown" instead of guessing.</p>
+   <p>A colony extracting under 48,000 units/hour is flagged as in deficit — at that rate
+   the resource won't cover the whole chain. <b>Actual profitability forecast</b> above
+   the colony list accounts for POCO tax the same way the plan version does, but by each
+   colony's real current rate, not the theoretical maximum; import tax between different
+   colonies isn't counted — ESI doesn't report which colony feeds which.</p>
 
-   <h3>What the program does not know yet</h3>
+   <h3 id="h-honest-gaps">What the program does not know yet</h3>
    <p><b>Region.</b> Planet data only exists for Fountain — neither ESI nor CCP's static
    dump exposes resource density for planets at all (the server computes it procedurally
    and never publishes it), so the only way to get such data for another region is
@@ -4588,16 +4515,47 @@ const DOC={
    Fenris Creations™ does not support or endorse it.</p>`}}
 };
 
-function openModal(name){
+/* anchor — необязательный id раздела (h-...) внутри doc.html: контекстные
+   иконки-якорики в интерфейсе (helpTag()) открывают справку сразу на
+   нужном разделе, а не с самого начала простыни. Без anchor поведение
+   не меняется — открывается с начала, как раньше. */
+function openModal(name, anchor){
   currentModal=name;
   const doc=DOC[name][lang]||DOC[name].ru;
   document.getElementById('modalTitle').textContent=doc.title;
-  document.getElementById('modalBody').innerHTML=doc.html;
+  const body=document.getElementById('modalBody');
+  body.innerHTML=doc.html;
+  // Оглавление — не хардкод в DOC.help.ru/en (два языка расходились бы
+  // при любой правке разделов), а список ссылок, собранный из уже
+  // отрисованных <h3 id="h-...">: закрывает «справка — простыня» даже
+  // для разделов без своей иконки в интерфейсе (helpTag()) — там
+  // единственный вход в конкретный раздел.
+  const headings=[...body.querySelectorAll('h3[id]')];
+  if(headings.length){
+    const toc=document.createElement('nav');
+    toc.className='modal-toc';
+    toc.innerHTML=headings.map(h=>`<a href="#${h.id}">${h.textContent}</a>`).join('');
+    body.prepend(toc);
+  }
   const v=document.getElementById('aboutVersion');
   if(v) v.textContent=meta.version||'—';
   document.getElementById('modal').classList.add('on');
+  if(anchor){
+    const target=document.getElementById(anchor);
+    if(target) target.scrollIntoView({block:'start'});
+  } else {
+    body.scrollTop=0;
+  }
 }
 function closeModal(){ document.getElementById('modal').classList.remove('on'); currentModal=null; }
+
+/* Маленькая иконка-якорь у панели/поля интерфейса — один клик открывает
+   справку сразу на разделе, который её объясняет (anchor — id вида
+   "h-..." внутри DOC.help.ru/en, см. openModal()). Один и тот же id в
+   обоих языках справки — при переключении языка ссылка остаётся верной. */
+function helpTag(anchor){
+  return `<button type="button" class="help-tag" onclick="openModal('help','${anchor}')" title="${t('help')}">?</button>`;
+}
 
 /* ── Состояние сервера и персонажи ────────────────────────────── */
 async function loadMeta(){
