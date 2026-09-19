@@ -558,7 +558,13 @@ td.r { text-align:right; }
 .msg { padding:5px 10px; margin-bottom:3px; font-size:12px; border-left:2px solid var(--amber);
        background:rgba(212,160,74,.06); }
 .msg.bad { border-left-color:var(--alarm); background:rgba(207,96,88,.06); }
-details.msgs > summary { cursor:pointer; font-size:12px; color:var(--dim); padding:4px 0; list-style:none; }
+/* Заголовок сворачиваемого списка замечаний терялся — тусклый цвет,
+   мелкий шрифт, без рамки/фона, ничем не отличался от обычного текста
+   (18.09.2026, найдено пользователем по скриншоту). Тот же акцентный
+   стиль, что и у самих .msg-строк — заметно даже свёрнутым. */
+details.msgs > summary { cursor:pointer; font-size:13px; font-weight:600; color:var(--read);
+                          padding:7px 10px; margin-bottom:3px; list-style:none;
+                          border-left:2px solid var(--amber); background:rgba(212,160,74,.1); }
 details.msgs > summary::before { content:'▸ '; color:var(--amber); }
 details.msgs[open] > summary::before { content:'▾ '; }
 .empty { padding:56px 14px; color:var(--dim); text-align:center; }
@@ -4809,9 +4815,15 @@ async function calculate(allowSingle, surplusMining){
 
 function renderMessages(){
   const box=document.getElementById('messages');
-  const crit=(lastPlanResp&&lastPlanResp.critical_warnings)||[];
+  const crit=[...new Set((lastPlanResp&&lastPlanResp.critical_warnings)||[])];
   const critSet=new Set(crit);
-  const rest=(lastWarnings||[]).filter(w=>!critSet.has(w)).concat(lastAssumptions||[]);
+  // Одно и то же предупреждение (например «Переработка P4: не хватило
+  // свободных персонажей») сервер шлёт по разу на КАЖДУЮ непристроенную
+  // колонию — «5 замечаний» превращалось в 2-3 разных текста, повторённых
+  // подряд (18.09.2026, найдено пользователем по скриншоту). Список —
+  // ради разнообразия проблем, не счётчика колоний; дедуп по тексту,
+  // счётчик в заголовке — тоже по дедупнутому списку, не по сырому.
+  const rest=[...new Set((lastWarnings||[]).filter(w=>!critSet.has(w)).concat(lastAssumptions||[]))];
   box.innerHTML=crit.map(w=>`<div class="msg bad">${w}</div>`).join('');
   if(rest.length) box.insertAdjacentHTML('beforeend',
     `<details class="msgs"><summary>${pl(rest.length,'pNote')} ${t('onPlan')}</summary>
