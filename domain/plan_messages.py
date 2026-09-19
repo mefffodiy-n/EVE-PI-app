@@ -176,6 +176,18 @@ _CATALOG: dict[str, dict[str, str]] = {
               "would raise the limit from about 9,600 to 61,700 km), so the "
               "threshold stays conservative.",
     },
+    "site_ccu5_slots_exhausted": {
+        "ru": "В системе {system} часть переработки {tier} поставлена одиночным "
+              "шаблоном вместо двойного: свободных персонажей с Command Center "
+              "Upgrades 5 не хватило на все колонии этого тира, хотя двойной шаблон "
+              "физически помещается. Не отказ — просто больше планет и персонажей "
+              "вместо меньшего числа более прокачанных.",
+        "en": "In system {system}, some {tier} processing used a single template "
+              "instead of double: not enough free characters with Command Center "
+              "Upgrades 5 for every colony of this tier, even though the double "
+              "template physically fits. Not a failure — just more planets and "
+              "characters instead of fewer, more upgraded ones.",
+    },
     "site_fallback_size_used": {
         "ru": "В системе {system} часть переработки {tier} поставлена на другие типы "
               "планет ({types}): подходящие по размеру Barren/Temperate под этот "

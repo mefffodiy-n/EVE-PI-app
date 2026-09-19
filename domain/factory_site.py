@@ -227,6 +227,7 @@ def select_factory_sites(
     ccu_level: int,
     templates_needed: int,
     allow_single_fallback: bool = False,
+    max_double_templates: int | None = None,
 ) -> SiteSelection:
     """
     Подобрать планеты под переработку в домашней системе.
@@ -236,6 +237,20 @@ def select_factory_sites(
     allow_single_fallback: если двойной вариант не помещается ни на одну
         планету — ставить ли одиночные. По умолчанию False: сначала
         пользователь должен увидеть предупреждение и решить сам.
+
+    max_double_templates (18.09.2026, найдено пользователем: план
+    планировал двойные шаблоны на КАЖДУЮ колонию тира, если хоть один
+    персонаж во всём пуле имел CCU V, а не по числу СВОБОДНЫХ CCU5-
+    слотов — реальные CCU5-персонажи заканчивались, и все следующие
+    колонии проваливались с «не хватило персонажей», хотя обычных
+    IC-слотов хватало) — сколько двойных шаблонов реально можно
+    укомплектовать (`_CharacterPool.free_slots(require_ccu5=True)`,
+    вызывающий код). `None` — прежнее поведение без ограничения (не
+    используется build_plan(), оставлено для прямых вызовов/тестов).
+    Остаток сверх этого предела ставится одиночными шаблонами так же,
+    как и нечётный хвост — без предупреждения и без allow_single_fallback:
+    это не отказ разместить двойной (тот уже помещается физически),
+    а честный учёт того, кому реально есть чем его укомплектовать.
 
     Возвращает SiteSelection с назначениями и предупреждениями.
     Пустые assignments при непустых warnings — это не ошибка, а
@@ -326,8 +341,25 @@ def select_factory_sites(
                 return selection
             selection.downgraded_to_single = True
         else:
-            for candidate, colony_index in _cycle(_pool(double_key), remaining // 2):
-                if remaining < 2:
+            wanted_doubles = remaining // 2
+            double_budget = wanted_doubles
+            if max_double_templates is not None:
+                # Каждое двойное назначение — это ДВА разных персонажа
+                # на одной планете (build_plan() зовёт pool.take() дважды
+                # с одним и тем же (system, planet); второй раз тот же
+                # персонаж уже исключён — второй колонии там нужен
+                # кто-то ещё), не один персонаж на 24 фабрики. Поэтому
+                # предел в НАЗНАЧЕНИЯХ — это предел в СЛОТАХ, делённый
+                # на 2, а не сам предел в слотах (18.09.2026, найдено
+                # тут же: без деления пополам план обещал вдвое больше
+                # двойных назначений, чем реально хватало персонажей —
+                # к «не хватило персонажей» приводила уже НЕ вся добыча
+                # CCU5 разом, а ровно половина списка, что было не сразу
+                # заметно и подтвердилось только прямым прогоном).
+                double_budget = min(double_budget, max(max_double_templates, 0) // 2)
+            placed_doubles = 0
+            for candidate, colony_index in _cycle(_pool(double_key), double_budget):
+                if placed_doubles >= double_budget:
                     break
                 load = _fits(double_key, ccu_level, candidate)
                 if load is None:
@@ -344,6 +376,15 @@ def select_factory_sites(
                 )
                 used[candidate.planet] = colony_index
                 remaining -= 2
+                placed_doubles += 1
+
+            # Ограничение по CCU5-слотам, не по физическому размеру
+            # планеты (та проверка — double_fits_somewhere выше) — не
+            # блокирует план и не требует allow_single_fallback: сверх
+            # этого предела просто ставятся одиночные шаблоны, как и
+            # нечётный хвост ниже.
+            if double_budget < wanted_doubles:
+                selection.warn("site_ccu5_slots_exhausted", system=system, tier=tier)
 
     # Одиночные шаблоны. Три случая:
     #   - CCU < 5: двойной недоступен в принципе;

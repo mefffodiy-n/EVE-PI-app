@@ -255,6 +255,80 @@ class TestAllocation:
             assert row.pg_percent <= 100.0
 
 
+class TestCcu5Scarcity:
+    """
+    18.09.2026, найдено пользователем на реальном плане (закупка P1,
+    8 разных P2/P3/P4-продуктов, план использовал только 24 колонии из
+    84 возможных с десятками предупреждений «не хватило персонажей»,
+    хотя пользователь честно следовал подсказке о свободных слотах).
+
+    Причина: `build_plan()` планировал двойные шаблоны на КАЖДУЮ
+    колонию тира, если хоть один персонаж во всём пуле имел CCU V, не
+    считаясь с тем, сколько именно CCU5-персонажей реально свободно —
+    и тем более с тем, что одно двойное назначение занимает ДВУХ разных
+    персонажей на одной планете (build_plan() зовёт pool.take() дважды
+    с одной и той же планетой; второй раз тот же персонаж уже исключён),
+    а не одного.
+    """
+
+    @pytest.fixture
+    def rich_planets(self) -> PlanetBook:
+        """
+        Много Barren в HOME — двойное назначение занимает ДВУХ разных
+        персонажей на ОДНОЙ планете (правило «один персонаж — одна
+        колония на планете»), поэтому переиспользование одной и той же
+        планеты под несколько двойных назначений само по себе требует
+        ДОПОЛНИТЕЛЬНЫХ CCU5-персонажей — отдельное, не касающееся этого
+        теста ограничение (правило 4 модуля domain/factory_site.py:
+        реальные системы Fountain не настолько бедны планетами). Тест
+        проверяет именно предел по СЛОТАМ, поэтому планет здесь с
+        запасом.
+        """
+        rows = [
+            {"Constellation": "ALPHA", "System": "HOME", "Planet": str(n), "Type": "Barren",
+             RADIUS_COLUMN: 4000 + n * 100, "Carbon Compounds": 0, "Noble Metals": 0}
+            for n in range(1, 10)
+        ] + [row for row in PLANETS if row["System"] != "HOME"]
+        return PlanetBook(pd.DataFrame(rows))
+
+    SCARCE_CCU5_CREW = (
+        # 2 персонажа с CCU V, но по 3 слота каждый (IC II) — 6 CCU5-слотов
+        # всего, ровно на 3 полных двойных назначения (6 // 2). Остаток
+        # 8-мишаблонной потребности обязан уйти одиночными.
+        [CharacterSlot(1, "CCU5 A", 5, 2), CharacterSlot(2, "CCU5 B", 5, 2)]
+        + [CharacterSlot(i, f"CCU4 {i}", 4, 5) for i in range(10, 20)]
+    )
+
+    def test_full_demand_satisfied_with_scarce_ccu5(self, rich_planets):
+        """
+        8 шаблонов нужно (lines_per_target=8), но CCU5-слотов хватает
+        только на 3 полных двойных назначения — раньше это приводило к
+        массовому «не хватило персонажей»; план обязан закрыть всю
+        потребность, доставив остаток одиночными шаблонами.
+        """
+        result = _plan(rich_planets, self.SCARCE_CCU5_CREW, lines_per_target=8)
+        rows = [r for r in result.rows if "Добыча" not in r.role]
+        assert sum(r.template_count for r in rows) >= 8
+        # Только про переработку — добыче в этом крохотном пуле
+        # характеров закономерно не хватает персонажей отдельно, это не
+        # то, что проверяет этот тест (см. TestAllocation про добычу).
+        assert not any(g.role_key == "proc" for g in result.staffing_gaps)
+        assert not any("Переработка" in w and "не хватило" in w for w in result.warnings)
+
+    def test_ccu5_downgrade_is_informational_not_blocking(self, rich_planets):
+        """
+        Откат части колоний на одиночный шаблон из-за нехватки CCU5 —
+        не отказ (в отличие от «двойной физически не помещается» выше):
+        план строится без `allow_single_template_fallback`.
+        """
+        result = _plan(rich_planets, self.SCARCE_CCU5_CREW, lines_per_target=8)
+        assert any("одиночным шаблоном" in w for w in result.warnings)
+        rows = [r for r in result.rows if "Добыча" not in r.role]
+        singles = [r for r in rows if r.template_count == 1]
+        doubles = [r for r in rows if r.template_count == 2]
+        assert singles and doubles
+
+
 class TestHonesty:
     def test_extractor_timer_is_never_invented(self, planets, characters):
         """
