@@ -154,6 +154,55 @@ class TestSurplus:
         assert result.status == "fits"
 
 
+class TestExtraLines:
+    """
+    18.09.2026, по прямому запросу пользователя: «продублировать
+    выбранную цепочку столько раз, сколько позволят персонажи и навыки,
+    а не выбирать второй и следующие продукты» — extra_lines_available
+    отвечает на этот вопрос напрямую, не заставляя перебирать additions.
+    """
+
+    def test_extra_lines_available_when_surplus(self, schematics, recipes):
+        result = advise(["Biocells"], crew(20), PRICES, schematics, recipes)
+        assert result.status == "surplus"
+        assert result.extra_lines_available >= 1
+
+    def test_zero_when_not_surplus(self, schematics, recipes):
+        """Остаток меньше самой компактной цепочки — «fits», дублировать нечего."""
+        result = advise(["Biocells"], crew(1), PRICES, schematics, recipes)
+        assert result.status == "fits"
+        assert result.extra_lines_available == 0
+
+    def test_extra_lines_shrinks_as_lines_per_target_grows(self, schematics, recipes):
+        """
+        Уже выбранные линии учитываются в needed_colonies — чем больше
+        уже взято, тем меньше остаётся места ещё для стольких же.
+        """
+        one_line = advise(["Biocells"], crew(20), PRICES, schematics, recipes, lines_per_target=1)
+        many_lines = advise(["Biocells"], crew(20), PRICES, schematics, recipes, lines_per_target=5)
+        assert many_lines.needed_colonies > one_line.needed_colonies
+        assert many_lines.extra_lines_available <= one_line.extra_lines_available
+
+    def test_too_many_lines_flip_surplus_to_deficit(self, schematics, recipes):
+        """Достаточно большое lines_per_target исчерпывает пул — как и должно быть честно."""
+        result = advise(["Biocells"], crew(20), PRICES, schematics, recipes, lines_per_target=50)
+        assert result.status == "deficit"
+        assert result.extra_lines_available == 0
+
+    def test_extra_lines_respects_mining_capable_slots(self, schematics, recipes):
+        """
+        Та же нижняя граница, что уже есть в _fits(): огромный запас
+        по IC-слотам не помогает, если добывать этим составом некому.
+        """
+        mixed = crew(20, ccu=3) + crew(2, ccu=5)
+        result = advise(["Biocells"], mixed, PRICES, schematics, recipes)
+        # Свободных CCU5-слотов мало (только 2 персонажа) — предел по
+        # добыче не должен позволить дублировать цепочку так же щедро,
+        # как если бы весь пул был способен добывать.
+        generous = advise(["Biocells"], crew(22, ccu=5), PRICES, schematics, recipes)
+        assert result.extra_lines_available < generous.extra_lines_available
+
+
 class TestPurchaseP1:
     """
     18.09.2026, найдено пользователем: план на закупаемом P1 (planner.py::

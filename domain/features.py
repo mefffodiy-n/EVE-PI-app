@@ -277,5 +277,15 @@ FEATURES = FEATURES + (
 )
 
 
+FEATURES = FEATURES + (
+    Feature(
+        "duplicate_chain_lines", "Продублировать выбранную цепочку на несколько линий сразу",
+        ("линий на цепочку", "продублировать"),
+        ("lines per chain", "repeat the whole chain"),
+        "0.10.29", "help",
+    ),
+)
+
+
 def by_section(section: str) -> tuple[Feature, ...]:
     return tuple(f for f in FEATURES if f.where == section)
