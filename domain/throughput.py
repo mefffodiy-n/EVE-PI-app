@@ -70,6 +70,11 @@ class Demand:
     assumptions_used: list[dict] = field(default_factory=list)  # {code, ...} — см. plan_messages
     missing: list[str] = field(default_factory=list)
 
+    # P1, единиц в час — заполняется только в режиме expand_demand(purchase_p1=True)
+    # (18.09.2026, по прямому запросу пользователя): эти продукты считаются
+    # закупленными на бирже, не входят в factories/raw_materials этой ветки.
+    purchased_p1: dict[str, float] = field(default_factory=dict)
+
     def add(self, product: str, rate: float) -> None:
         self.units_per_hour[product] = self.units_per_hour.get(product, 0.0) + rate
 
@@ -129,6 +134,7 @@ def expand_demand(
     targets: dict[str, float],
     schematics: dict[str, Schematic] | None = None,
     recipes: RecipeBook | None = None,
+    purchase_p1: bool = False,
 ) -> Demand:
     """
     Развернуть потребность в целевых продуктах до сырья P0.
@@ -137,6 +143,14 @@ def expand_demand(
 
     Возвращает Demand с потребностью по всем промежуточным продуктам,
     числом фабрик на каждом уровне и расходом сырья P0.
+
+    purchase_p1 (18.09.2026, по прямому запросу пользователя: «план и
+    выгода только по переработке из закупаемого P1») — P1 становится
+    листом дерева вместо разворота в P0: не строится (не попадает в
+    demand.factories), не считается сырьём собственной добычи, а
+    накапливается в demand.purchased_p1 по имени продукта. Дерево выше
+    P1 (P2→P3→P4) разворачивается одинаково в обоих режимах — эта
+    функция не дублируется.
     """
     schematics = load_schematics() if schematics is None else schematics
     recipes = load_recipes() if recipes is None else recipes
@@ -158,6 +172,13 @@ def expand_demand(
         if recipe is None:
             # Не продукт PI — значит сырьё P0.
             demand.raw_materials[product] = demand.raw_materials.get(product, 0.0) + rate
+            continue
+
+        if purchase_p1 and recipe.tier == "P1":
+            # Лист дерева: не строится (не в demand.factories/missing),
+            # закупается на бирже — до подсчёта фабрик и до обращения к
+            # schematics, которых для закупаемого P1 не нужно вовсе.
+            demand.purchased_p1[product] = demand.purchased_p1.get(product, 0.0) + rate
             continue
 
         demand.add(product, rate)

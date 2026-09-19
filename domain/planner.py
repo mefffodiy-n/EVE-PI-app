@@ -176,6 +176,11 @@ class PlanRequest:
     # пусть лучше копится нужное сырьё, чем персонажи простаивают.
     surplus_mining: bool = False
 
+    # Не строить добывающие колонии вовсе: весь P1 считается закупленным
+    # на бирже (18.09.2026, по прямому запросу пользователя) — строятся
+    # только перерабатывающие колонии P2->P4. См. expand_demand(purchase_p1).
+    purchase_p1: bool = False
+
 
 @dataclass
 class PlanRow:
@@ -432,6 +437,10 @@ class PlanResult:
             "needs_user_decision": self.needs_user_decision,
             "site_warnings": texts(site_entries),
             "staffing": self.characters_required(),
+            # P1, единиц в час, закупаемый на бирже (purchase_p1=True) —
+            # {} в обычном режиме. Фронтенд пересылает как есть в
+            # /api/plan-profitability, сам план его не считает.
+            "purchased_p1": self.demand.purchased_p1 if self.demand else {},
         }
 
 
@@ -670,12 +679,17 @@ def build_plan(
         for entry in direct_plans:
             targets.pop(entry["product"], None)
 
-    demand = expand_demand(targets, schematics=schematics, recipes=recipes) if targets else Demand()
+    demand = (
+        expand_demand(targets, schematics=schematics, recipes=recipes, purchase_p1=request.purchase_p1)
+        if targets else Demand()
+    )
     result.demand = demand
     for entry in demand.assumptions_used:
         result.assume(entry["code"], **{k: v for k, v in entry.items() if k != "code"})
     for missing in demand.missing:
         result.warn("chain_broken_no_schematic", product=missing)
+    if request.purchase_p1:
+        result.assume("p1_purchased_on_market")
 
     pool = _CharacterPool(characters)
     row_counter = 0
@@ -787,6 +801,10 @@ def build_plan(
                 )
 
     # 4. Добыча: шаблоны miner_00 на планетах с нужным сырьём.
+    # request.purchase_p1 явного if здесь не требует: в этом режиме
+    # expand_demand() вообще не кладёт P1 в demand.factories (весь P1 —
+    # в demand.purchased_p1), значит цикл ниже просто не находит, что
+    # размещать — тот же эффект, что и явное отключение блока.
     per_miner = FACTORIES_PER_TEMPLATE["miner_00"]
     for product, factory_count in sorted(demand.factories.items()):
         if _tier_of(product, recipes) != "P1":
@@ -905,7 +923,9 @@ def build_plan(
                 reason="skill" if skill_shortfall else "fit",
             )
 
-    if request.surplus_mining and pool.free_slots:
+    # not request.purchase_p1: излишек добычи бессмысленен, когда добычи
+    # нет вовсе — весь P1 в этом режиме закупается, не добывается.
+    if request.surplus_mining and not request.purchase_p1 and pool.free_slots:
         _add_surplus_mining(request, result, pool, recipes, schematics, planets,
                             row_counter, system_priority)
 

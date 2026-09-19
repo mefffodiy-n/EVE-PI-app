@@ -68,6 +68,12 @@ _CATALOG: dict[str, dict[str, str]] = {
         "ru": "Все слоты планет заняты — резерва под расширение нет.",
         "en": "Every planet slot is taken — no headroom to expand.",
     },
+    "p1_purchased_on_market": {
+        "ru": "Весь P1 в этом плане считается закупленным на бирже (Jita, buy-ордер), "
+              "а не добытым — добывающие колонии не строятся.",
+        "en": "All P1 in this plan is assumed bought on the market (Jita buy order), "
+              "not mined — no extraction colonies are built.",
+    },
     "direct_p2_used": {
         "ru": "{product} делается прямо на добывающих планетах: {placed} колоний "
               "вместо {split} при раздельном пути. По числу колоний прямой путь "

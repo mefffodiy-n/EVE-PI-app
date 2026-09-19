@@ -91,6 +91,52 @@ class TestDemand:
         assert factories["Precious Metals"] == pytest.approx(12.0)
 
 
+class TestPurchaseP1:
+    """
+    18.09.2026, по прямому запросу пользователя: «план и выгода только
+    по переработке из закупаемого P1» — не строить добывающие колонии
+    вовсе, P1 считается закупленным на бирже.
+    """
+
+    def test_no_mining_rows_when_purchasing_p1(self, planets, characters):
+        result = _plan(planets, characters, purchase_p1=True)
+        assert all("Добыча" not in r.role for r in result.rows)
+
+    def test_processing_rows_still_placed(self, planets, characters):
+        result = _plan(planets, characters, purchase_p1=True)
+        assert any("Добыча" not in r.role for r in result.rows)
+
+    def test_p1_recorded_as_purchased_not_built(self, planets, characters):
+        result = _plan(planets, characters, purchase_p1=True)
+        assert result.demand.purchased_p1["Biofuels"] == pytest.approx(480.0)
+        assert result.demand.purchased_p1["Precious Metals"] == pytest.approx(480.0)
+        assert "Biofuels" not in result.demand.factories
+        assert "Precious Metals" not in result.demand.factories
+        assert not result.demand.raw_materials
+
+    def test_assumption_recorded(self, planets, characters):
+        result = _plan(planets, characters, purchase_p1=True)
+        codes = {e["code"] for e in result.assumption_data}
+        assert "p1_purchased_on_market" in codes
+
+    def test_purchased_p1_exposed_in_to_dict(self, planets, characters):
+        result = _plan(planets, characters, purchase_p1=True)
+        assert result.to_dict()["purchased_p1"] == result.demand.purchased_p1
+
+    def test_normal_plan_has_empty_purchased_p1(self, planets, characters):
+        result = _plan(planets, characters)
+        assert result.to_dict()["purchased_p1"] == {}
+
+    def test_surplus_mining_ignored_when_purchasing_p1(self, planets, characters):
+        """
+        Излишек добычи бессмысленен без добычи вовсе — покупка P1
+        отключает его молча, а не требует от вызывающего кода помнить
+        о несовместимости этих двух флагов.
+        """
+        result = _plan(planets, characters, purchase_p1=True, surplus_mining=True)
+        assert all("Добыча" not in r.role for r in result.rows)
+
+
 class TestAllocation:
     def test_processing_is_placed(self, planets, characters):
         """
@@ -300,6 +346,25 @@ class TestSharedInputs:
         # Оба входа Biocells разворачиваются до своего сырья независимо.
         assert set(demand.raw_materials) == {"Carbon Compounds", "Noble Metals"}
         assert all(v > 0 for v in demand.raw_materials.values())
+
+    def test_purchase_p1_stops_expansion_at_p1(self, planets, characters):
+        """
+        18.09.2026, по прямому запросу пользователя: с purchase_p1=True
+        P1 — лист дерева (закупается), а не разворачивается в P0.
+        """
+        from domain.throughput import expand_demand
+
+        recipes = load_recipes()
+        demand = expand_demand(
+            {"Biocells": 60.0}, schematics=SCHEMATICS, recipes=recipes, purchase_p1=True
+        )
+        assert demand.purchased_p1["Biofuels"] == pytest.approx(480.0)
+        assert demand.purchased_p1["Precious Metals"] == pytest.approx(480.0)
+        assert "Biofuels" not in demand.factories
+        assert "Precious Metals" not in demand.factories
+        assert not demand.raw_materials
+        # P2 разворачивается как обычно — граница только у P1.
+        assert demand.factories["Biocells"] == pytest.approx(12.0)
 
 
 class TestFrontendContract:

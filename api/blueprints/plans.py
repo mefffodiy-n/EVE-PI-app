@@ -45,6 +45,7 @@ def calculate():
     targets = [str(t) for t in payload["target_products"]]
     allow_single = bool(payload.get("allow_single_template_fallback", False))
     surplus_mining = bool(payload.get("surplus_mining", False))
+    purchase_p1 = bool(payload.get("purchase_p1", False))
     # Прямое P2 приостановлено (15.09.2026, решение пользователя): состав
     # застройки (domain/direct_p2.py) — расчёт из стоимостей отдельных
     # структур, а не выписка из проверенного игрового шаблона (готового
@@ -79,7 +80,7 @@ def calculate():
     # (разные персонажи!) вернул бы план ОДНОГО из них другому из кэша
     # (найдено 11.09.2026, тот же класс ошибки, что и в load_characters()).
     key = cache_key(account_id, sorted(constellations), factory_sys, sorted(targets),
-                    allow_single, surplus_mining, direct_p2)
+                    allow_single, surplus_mining, direct_p2, purchase_p1)
 
     def compute() -> PlanResult:
         # Персонажи — только этого визита (api/session.py). На Фазе 1
@@ -99,6 +100,7 @@ def calculate():
             allow_single_template_fallback=allow_single,
             surplus_mining=surplus_mining,
             direct_p2=direct_p2,
+            purchase_p1=purchase_p1,
         )
         return build_plan(
             request_obj,
@@ -216,8 +218,14 @@ def plan_profitability():
         return json_error("Каждая строка плана должна быть объектом")
 
     targets = [str(t) for t in payload["target_products"]]
+    # Необязательное поле (режим purchase_p1, 18.09.2026) — {} в обычном
+    # плане, не добавлено в схему parse_json_body() выше специально: она
+    # проверяет только обязательные поля, остальное читается из того же payload.
+    purchased_p1 = payload.get("purchased_p1") or {}
 
-    result = evaluate_plan_profitability(rows, targets, _load_prices(), planets=_load_planets_book())
+    result = evaluate_plan_profitability(
+        rows, targets, _load_prices(), planets=_load_planets_book(), purchased_p1=purchased_p1
+    )
     return json_ok(**result.to_dict())
 
 

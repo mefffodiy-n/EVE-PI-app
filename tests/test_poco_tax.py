@@ -103,6 +103,61 @@ class TestBasicChain:
         assert HOURS_PER_MONTH == 720.0
 
 
+class TestPurchaseP1:
+    """
+    18.09.2026, по прямому запросу пользователя: план на закупаемом P1
+    (planner.py::PlanRequest.purchase_p1) — стоимость закупки вычитается
+    из чистой прибыли ОТДЕЛЬНО от налога POCO на ввоз этого же P1 на
+    планету переработки (тот считается как обычно, ему всё равно,
+    откуда физически взялся материал).
+    """
+
+    def test_purchase_cost_reduces_net_profit(self):
+        planets = _FakePlanetBook({("HOME", 2.0): 0.05})
+        result = evaluate_plan_profitability(
+            rows=[_processing_row()],
+            target_products=["Coolant"],
+            prices={"Water": 10.0, "Coolant": 100.0},
+            schematics=_schematics(),
+            planets=planets,
+            purchased_p1={"Water": 600.0},
+        )
+        # Revenue/export_tax — те же 8 640 000/432 000, что и в
+        # test_export_and_import_both_taxed_on_every_hop (одна и та же
+        # строка переработки); import_tax — те же 216 000 (Water на
+        # переработку, ставка 0.05). Новое здесь — стоимость покупки:
+        # 600 ед/ч * 720 ч * 10 ISK = 4 320 000, вычитается из чистой
+        # прибыли ОТДЕЛЬНО от import_tax.
+        assert result.monthly_purchase_cost == 4_320_000.0
+        assert result.monthly_net_profit == 8_640_000.0 - 432_000.0 - 216_000.0 - 4_320_000.0
+
+    def test_missing_purchase_price_is_a_gap_not_zero(self):
+        planets = _FakePlanetBook({("HOME", 2.0): 0.05})
+        result = evaluate_plan_profitability(
+            rows=[_processing_row()],
+            target_products=["Coolant"],
+            prices={"Coolant": 100.0},  # цены Water нет вовсе
+            schematics=_schematics(),
+            planets=planets,
+            purchased_p1={"Water": 600.0},
+        )
+        assert "Water" in result.missing_prices
+        assert result.monthly_purchase_cost is None
+        assert result.monthly_net_profit is None  # картина неполная — не выдумываем частичную прибыль
+
+    def test_no_purchased_p1_leaves_field_none_not_zero(self):
+        """Обычный план (свой P1) не должен внезапно показывать «закупка: 0»."""
+        planets = _FakePlanetBook({("HOME", 2.0): 0.05})
+        result = evaluate_plan_profitability(
+            rows=[_processing_row()],
+            target_products=["Coolant"],
+            prices={"Water": 10.0, "Coolant": 100.0},
+            schematics=_schematics(),
+            planets=planets,
+        )
+        assert result.monthly_purchase_cost is None
+
+
 class TestHonestGaps:
     def test_missing_price_excluded_not_zeroed(self):
         planets = _FakePlanetBook({("MINE", 1.0): 0.10, ("HOME", 2.0): 0.05})
@@ -346,3 +401,16 @@ class TestToDict:
         assert body["hours_per_month"] == 720.0
         assert body["missing_prices"] == []
         assert body["missing_rates"] == []
+        assert body["monthly_purchase_cost"] is None  # обычный план — закупки нет
+
+    def test_to_dict_includes_purchase_cost_when_purchasing_p1(self):
+        planets = _FakePlanetBook({("HOME", 2.0): 0.05})
+        result = evaluate_plan_profitability(
+            rows=[_processing_row()],
+            target_products=["Coolant"],
+            prices={"Water": 10.0, "Coolant": 100.0},
+            schematics=_schematics(),
+            planets=planets,
+            purchased_p1={"Water": 600.0},
+        )
+        assert result.to_dict()["monthly_purchase_cost"] == 4_320_000.0
