@@ -4160,17 +4160,21 @@ const DOC={
    работать быстрее, чем оно поступает. Когда это заметно ограничивает
    цепочку, в панели появляется строка с реальной долей рабочего
    времени по тирам.</p>
-   <p>Под чистой прибылью — разбивка выручки по конечным продуктам:
-   сколько единиц и на сколько ISK по снимку рыночных цен получится к
-   концу месяца по каждому виду. Если один из выбранных целевых
-   продуктов одновременно нужен ДРУГОМУ выбранному целевому продукту
-   как сырьё (например, выбраны и промежуточный, и конечный продукт
-   одной цепочки, каждый своей отдельной линией), в выручке учитывается
-   только его СОБСТВЕННАЯ прямая целевая доля — часть построенных
-   колоний, а не всё их количество: остальное физически уходит на
-   переработку в следующий продукт. Панель показывает эту долю
-   отдельным примечанием, чтобы один и тот же материал не считался
-   продан дважды и не терялся полностью.</p>
+   <p>Под верхней строкой чисел — три карточки в ряд: разбивка выручки
+   по конечным продуктам (сколько единиц и на сколько ISK по снимку
+   рыночных цен получится к концу месяца по каждому виду), список
+   закупки сырья P1 (только в режиме «покупать P1 на бирже» — см. ниже)
+   и допущения/предупреждения плана.</p>
+   <p>Если один из выбранных целевых продуктов одновременно нужен
+   ДРУГОМУ выбранному целевому продукту как сырьё (например, выбраны и
+   промежуточный, и конечный продукт одной цепочки, каждый своей
+   отдельной линией), в выручке учитывается только его СОБСТВЕННАЯ
+   прямая целевая доля — часть построенных колоний, а не всё их
+   количество: остальное физически уходит на переработку в следующий
+   продукт. Один и тот же материал не считается продан дважды и не
+   теряется полностью — само распределение видно по числам в карточке
+   «Выручка по продуктам», отдельного примечания под ней для этого
+   нет.</p>
 
    <h3 id="h-purchase-list">Список закупки сырья (P1)</h3>
    <p>Панель под прогнозом прибыльности — показывается только в режиме
@@ -4409,16 +4413,20 @@ const DOC={
    unevenly (say, purchased P1), the following tiers can't run any faster
    than it actually arrives. When this noticeably limits the chain, the
    panel shows a line with the real share of working time per tier.</p>
-   <p>Below net profit is a breakdown of revenue by final product: how many
-   units and how much ISK, by the market price snapshot, each one is
-   expected to bring in by month's end. If one of the selected target
-   products is also needed by ANOTHER selected target product as a raw
-   material (say you picked both an intermediate and a final product from
-   the same chain, each its own line), only its OWN direct target share
-   counts as revenue — the rest of the colonies built for it physically
-   go into processing the next product. The panel calls out that share
-   as a note, so the same material is neither counted twice nor dropped
-   entirely.</p>
+   <p>Below the top row of numbers are three cards side by side: a
+   breakdown of revenue by final product (how many units and how much
+   ISK, by the market price snapshot, each one is expected to bring in
+   by month's end), the P1 raw material purchase list (only in "buy all
+   P1 on the market" mode — see below), and the plan's assumptions and
+   warnings.</p>
+   <p>If one of the selected target products is also needed by ANOTHER
+   selected target product as a raw material (say you picked both an
+   intermediate and a final product from the same chain, each its own
+   line), only its OWN direct target share counts as revenue — the rest
+   of the colonies built for it physically go into processing the next
+   product. The same material is neither counted twice nor dropped
+   entirely — the split itself shows up in the numbers in the "Revenue
+   by product" card, there is no separate note about it underneath.</p>
 
    <h3 id="h-purchase-list">Raw material purchase list (P1)</h3>
    <p>A panel below the profitability forecast — shown only in "buy all P1 on the
