@@ -297,6 +297,36 @@ class TestPlans:
         loaded = client.get(f"/api/plans/{plan_id}").get_json()["plan"]
         assert loaded["purchased_p1"] == {}
 
+    def test_saved_plan_round_trips_profitability_inputs(self, client):
+        """
+        21.09.2026, по прямому запросу пользователя: при повторном
+        открытии плана прогноз прибыльности "тупел" до полной загрузки
+        без поправок причала — duty_cycles/missing_volumes/revenue_share
+        не сохранялись вместе с планом (только purchased_p1). Тот же
+        путь, что purchased_p1 (test_saved_plan_round_trips_purchased_p1).
+        """
+        saved = client.post("/api/plans", json={
+            "name": "С поправками", "rows": [SAMPLE_PLAN_ROW],
+            "duty_cycles": {"Coolant": 0.42},
+            "missing_volumes": ["Water"],
+            "revenue_share": {"Coolant": 0.5},
+        })
+        assert saved.status_code == 200
+        plan_id = saved.get_json()["plan"]["id"]
+
+        loaded = client.get(f"/api/plans/{plan_id}").get_json()["plan"]
+        assert loaded["duty_cycles"] == {"Coolant": 0.42}
+        assert loaded["missing_volumes"] == ["Water"]
+        assert loaded["revenue_share"] == {"Coolant": 0.5}
+
+    def test_saved_plan_without_profitability_inputs_reports_empty(self, client):
+        saved = client.post("/api/plans", json={"name": "Обычный", "rows": [SAMPLE_PLAN_ROW]})
+        plan_id = saved.get_json()["plan"]["id"]
+        loaded = client.get(f"/api/plans/{plan_id}").get_json()["plan"]
+        assert loaded["duty_cycles"] == {}
+        assert loaded["missing_volumes"] == []
+        assert loaded["revenue_share"] == {}
+
     def test_advice_purchase_p1_excludes_mining_from_needed_colonies(self, client, seeded_characters):
         """
         18.09.2026, найдено пользователем: /api/advice считал добывающие

@@ -55,6 +55,15 @@ class StoredPlan:
     # планах, сохранённых до этой колонки — не None: и там, и там
     # закупки не показать, разница не имеет значения потребителю.
     purchased_p1: dict[str, float] = field(default_factory=dict)
+    # Партии-эстафетой + доля продукта при пересечении целевых цепочек
+    # (21.09.2026, см. infra/models.py::Plan.profitability_inputs) — без
+    # них /api/plan-profitability при повторном открытии плана считает
+    # прибыльность заново с нуля (duty_cycle=1.0 везде, revenue_share
+    # пустой), теряя все поправки прогноза. {} /[] в обычном плане и в
+    # планах, сохранённых до этой колонки — им нечего восстанавливать.
+    duty_cycles: dict[str, float] = field(default_factory=dict)
+    missing_volumes: list[str] = field(default_factory=list)
+    revenue_share: dict[str, float] = field(default_factory=dict)
 
     def summary(self) -> dict:
         """Краткая карточка для списка — без строк плана, они тяжёлые."""
@@ -87,10 +96,14 @@ class StoredPlan:
             "warnings": self.warnings,
             "assumptions": self.assumptions,
             "purchased_p1": self.purchased_p1,
+            "duty_cycles": self.duty_cycles,
+            "missing_volumes": self.missing_volumes,
+            "revenue_share": self.revenue_share,
         }
 
     @classmethod
     def _from_row(cls, row) -> "StoredPlan":
+        extras = row.profitability_inputs or {}
         return cls(
             id=row.id,
             name=row.name,
@@ -101,6 +114,9 @@ class StoredPlan:
             assumptions=row.assumptions or [],
             account_id=row.account_id,
             purchased_p1=row.purchased_p1 or {},
+            duty_cycles=extras.get("duty_cycles") or {},
+            missing_volumes=extras.get("missing_volumes") or [],
+            revenue_share=extras.get("revenue_share") or {},
         )
 
 
@@ -114,7 +130,10 @@ def save(name: str, request: dict, rows: list[dict],
          warnings: list[str] | None = None,
          assumptions: list[str] | None = None,
          account_id: str | None = None,
-         purchased_p1: dict[str, float] | None = None) -> StoredPlan:
+         purchased_p1: dict[str, float] | None = None,
+         duty_cycles: dict[str, float] | None = None,
+         missing_volumes: list[str] | None = None,
+         revenue_share: dict[str, float] | None = None) -> StoredPlan:
     """
     Сохранить план под заданным именем.
 
@@ -150,6 +169,9 @@ def save(name: str, request: dict, rows: list[dict],
         assumptions=list(assumptions or []),
         account_id=account_id,
         purchased_p1=dict(purchased_p1 or {}),
+        duty_cycles=dict(duty_cycles or {}),
+        missing_volumes=list(missing_volumes or []),
+        revenue_share=dict(revenue_share or {}),
     )
 
     with session_scope() as session:
@@ -166,6 +188,11 @@ def save(name: str, request: dict, rows: list[dict],
             request=plan.request, rows=plan.rows,
             warnings=plan.warnings, assumptions=plan.assumptions,
             account_id=plan.account_id, purchased_p1=plan.purchased_p1,
+            profitability_inputs={
+                "duty_cycles": plan.duty_cycles,
+                "missing_volumes": plan.missing_volumes,
+                "revenue_share": plan.revenue_share,
+            },
         ))
 
     return plan
