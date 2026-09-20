@@ -4110,14 +4110,18 @@ const DOC={
    им место на вашем устройстве, в отличие от планов и персонажей.</p>
 
    <h3 id="h-eve-sso">Вход через EVE Online</h3>
-   <p>Кнопка «Войти через EVE SSO» подключает ваших персонажей по официальному
-   протоколу CCP. Сразу после входа планировщик подтягивает настоящие уровни
-   скиллов (Command Center Upgrades и Interplanetary Consolidation) и реальные
-   колонии — не нужно ждать ближайшего планового обновления, обычно это
-   занимает несколько секунд. Токены хранятся на сервере в зашифрованном виде;
-   приложение не видит ваш пароль. Персонажи, колонии и планы привязаны к
-   вашему входу — другие пользователи приложения их не видят. Пока владелец
-   не зарегистрировал приложение у CCP, кнопка отвечает, что вход не настроен.</p>
+   <p>Кнопка «Войти через EVE SSO» в шапке подключает по официальному
+   протоколу CCP только первого персонажа — как только связан хотя бы
+   один, кнопка пропадает из шапки. Добавить ещё персонажей после
+   этого можно только на вкладке «Настройки», в карточке «Где
+   перерабатываем» → «Персонажи», кнопкой «Добавить персонажа». Сразу
+   после входа планировщик подтягивает настоящие уровни скиллов
+   (Command Center Upgrades и Interplanetary Consolidation) и реальные
+   колонии — не нужно ждать ближайшего планового обновления, обычно
+   это занимает несколько секунд. Токены хранятся на сервере в
+   зашифрованном виде; приложение не видит ваш пароль. Персонажи,
+   колонии и планы привязаны к вашему входу — другие пользователи
+   приложения их не видят.</p>
    <p>Кнопка «Отвязать» рядом с персонажем в списке слева стирает его токен
    на нашей стороне — планировщик перестаёт видеть персонажа, пока вы не
    войдёте им заново. Это гарантировано всегда. Настоящий отзыв на стороне
@@ -4340,13 +4344,16 @@ const DOC={
    belong on your device, unlike plans and characters.</p>
 
    <h3 id="h-eve-sso">Log in with EVE Online</h3>
-   <p>The “Log in with EVE SSO” button connects your characters through CCP's official
-   protocol. Right after you log in the planner pulls your real skill levels (Command
-   Center Upgrades and Interplanetary Consolidation) and your real colonies — no need
-   to wait for the next scheduled refresh, it usually takes a few seconds. Tokens are
-   stored encrypted on the server; the app never sees your password. Characters, colonies
-   and plans are tied to your login — other users of the app cannot see them. Until the owner
-   registers the app with CCP, the button replies that login is not configured.</p>
+   <p>The "Log in with EVE SSO" button in the top bar connects only your first
+   character through CCP's official protocol — once at least one is linked, the
+   button disappears from the top bar. To add more characters after that, go to
+   the Settings tab, in the "Where to process" card → "Characters", and use the
+   "Add character" button there. Right after you log in the planner pulls your
+   real skill levels (Command Center Upgrades and Interplanetary Consolidation)
+   and your real colonies — no need to wait for the next scheduled refresh, it
+   usually takes a few seconds. Tokens are stored encrypted on the server; the
+   app never sees your password. Characters, colonies and plans are tied to your
+   login — other users of the app cannot see them.</p>
    <p>The "Unlink" button next to a character in the list on the left erases that
    character's token on our side — the planner stops seeing them until you log in again.
    That much is guaranteed. Real revocation on CCP's side only happens if the app's owner
