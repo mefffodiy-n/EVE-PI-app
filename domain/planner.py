@@ -41,7 +41,12 @@ from domain.capacity import (
     load_templates,
     min_ccu_level_that_fits,
 )
-from domain.factory_site import TEMPLATE_BY_TIER, SiteSelection, select_factory_sites
+from domain.factory_site import (
+    FACTORIES_PER_TEMPLATE,
+    TEMPLATE_BY_TIER,
+    SiteSelection,
+    select_factory_sites,
+)
 from domain.plan_messages import CRITICAL as _CRITICAL_CODES
 from domain.plan_messages import render as render_message
 
@@ -97,18 +102,9 @@ def _type_ids() -> dict[str, int]:
     raw = json.loads(TYPE_IDS_PATH.read_text(encoding="utf-8"))
     return {k: int(v) for k, v in raw.items() if not k.startswith("_")}
 
-# Сколько фабрик содержит один шаблон каждого вида.
 # Расчётный минимум для добывающего шаблона: при CCU III он перегружает
 # PG на планете любого размера (см. _derived_min_ccu в pi_reference.json).
 MINER_MIN_CCU = 4
-
-FACTORIES_PER_TEMPLATE = {
-    "miner_00": 8,            # basic-фабрики
-    "p2p3_1factory": 12,      # advanced
-    "p2p3_2factory": 24,
-    "p4_1factory": 8,         # high-tech
-    "p4_2factory": 16,
-}
 
 
 @dataclass(frozen=True)

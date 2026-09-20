@@ -66,6 +66,19 @@ TEMPLATE_BY_TIER = {
     "P4": {1: "p4_1factory", 2: "p4_2factory"},
 }
 
+# Сколько фабрик содержит один шаблон каждого вида (structure_counts()
+# реальных игровых шаблонов, domain/templates.py). Лежит здесь, а не в
+# planner.py, чтобы domain/logistics.py тоже мог использовать эти числа
+# для расчёта пропускной способности причала без циклического импорта
+# (planner.py -> throughput.py -> logistics.py -> обратно на planner.py).
+FACTORIES_PER_TEMPLATE = {
+    "miner_00": 8,            # basic-фабрики
+    "p2p3_1factory": 12,      # advanced
+    "p2p3_2factory": 24,
+    "p4_1factory": 8,         # high-tech
+    "p4_2factory": 16,
+}
+
 
 @dataclass(frozen=True)
 class PlanetCandidate:

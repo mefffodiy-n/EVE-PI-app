@@ -38,6 +38,25 @@
 Каскадный расчёт по всей цепочке (P1→P2→P3→P4) — в
 domain/throughput.py::expand_demand(), которому здесь нужна только
 функция для ОДНОЙ схемы.
+
+ПОЧЕМУ УЧИТЫВАЕТСЯ ЧИСЛО ФАБРИК, А НЕ ОДНА. Причал общий на весь
+шаблон колонии, а не на одну фабрику: одну и ту же ёмкость опустошают
+ВСЕ фабрики шаблона одновременно (12 advanced-фабрик на шаблон P2/P3,
+8 high-tech на P4 — `domain/factory_site.py::FACTORIES_PER_TEMPLATE`,
+из реальных игровых шаблонов). Без этого множителя расход в час
+занижался в 8-12 раз, причал якобы опустошался за недели вместо
+реальных ~2 суток (P1→P2) — найдено 20.09.2026 пользователем: план
+показал ту же прибыль, что и до появления модели. Взят
+однопричальный (не удвоенный) вариант шаблона — выбор одинарный/
+двойной решается позже, на этапе подбора площадок под конкретную
+планету, и здесь неизвестен; однопричальный — консервативная нижняя
+оценка простоя, не завышающая проблему.
+
+P1 (добывающий шаблон, `basic_industry_facility`) в эту модель
+намеренно НЕ входит: его сырьё — то, что continuously добывает
+собственный экстрактор ТОЙ ЖЕ колонии по внутренним маршрутам, а не
+партия, которую физически привозит игрок с другой колонии. Простой
+на логистику относится только к тирам, которые ждут груз ИЗВНЕ.
 """
 
 from __future__ import annotations
@@ -47,6 +66,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from domain.factory_site import FACTORIES_PER_TEMPLATE, TEMPLATE_BY_TIER
+
 if TYPE_CHECKING:
     from domain.throughput import Schematic
 
@@ -54,6 +75,16 @@ ROOT = Path(__file__).resolve().parent.parent
 REFERENCE_PATH = ROOT / "data" / "pi_reference.json"
 TYPE_IDS_PATH = ROOT / "data" / "type_ids.json"
 TYPE_VOLUMES_PATH = ROOT / "data" / "cache" / "type_volumes.json"
+
+# Сколько фабрик ОДНОГО шаблона колонии делят между собой один причал —
+# по категории структуры (Schematic.facility), не по тиру напрямую,
+# потому что и P2, и P3 сидят на одном и том же advanced-шаблоне.
+# basic_industry_facility (P1) сюда намеренно не входит — см. докстринг
+# модуля: его причал не участвует в модели межколонийной логистики.
+FACILITY_FACTORIES_PER_COLONY = {
+    "advanced_industry_facility": FACTORIES_PER_TEMPLATE[TEMPLATE_BY_TIER["P2_P3"][1]],
+    "high_tech_industry_facility": FACTORIES_PER_TEMPLATE[TEMPLATE_BY_TIER["P4"][1]],
+}
 
 
 @lru_cache(maxsize=1)
@@ -111,7 +142,13 @@ def own_duty_cycle(schematic: "Schematic") -> tuple[float, list[str]]:
     Возвращает (duty_cycle, недостающие_объёмы_по_именам). Если для
     хотя бы одного входа схемы нет объёма — duty_cycle честно 1.0
     (без выдуманного штрафа), недостающие имена перечислены отдельно.
+    P1 (basic_industry_facility) в модель не входит — его причал не
+    ждёт довозку с другой колонии, всегда 1.0 без проверки объёмов.
     """
+    factories_per_colony = FACILITY_FACTORIES_PER_COLONY.get(schematic.facility)
+    if factories_per_colony is None:
+        return 1.0, []
+
     missing: list[str] = []
     total_m3_per_hour = 0.0
     for name in schematic.inputs:
@@ -119,7 +156,7 @@ def own_duty_cycle(schematic: "Schematic") -> tuple[float, list[str]]:
         if volume is None:
             missing.append(name)
             continue
-        total_m3_per_hour += schematic.input_per_hour(name) * volume
+        total_m3_per_hour += schematic.input_per_hour(name) * factories_per_colony * volume
 
     if missing or total_m3_per_hour <= 0:
         return 1.0, missing
