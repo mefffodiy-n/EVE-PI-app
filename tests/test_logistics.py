@@ -136,3 +136,56 @@ class TestOwnDutyCycle:
         duty_more_downtime, _ = logistics.own_duty_cycle(schematic)
 
         assert duty_more_downtime < duty_normal
+
+    def test_drain_scales_with_factories_sharing_the_causeway_not_a_single_one(
+        self, monkeypatch, tmp_path,
+    ):
+        """
+        Найденный пользователем баг (20.09.2026): причал общий на ВЕСЬ
+        шаблон колонии (12 advanced-фабрик на P2/P3), а расход считался
+        так, будто причал обслуживает одну фабрику. С реальным числом
+        фабрик расход в час должен быть ровно в
+        FACILITY_FACTORIES_PER_COLONY раз больше, и duty cycle —
+        заметно ниже, а не тонуть в округлении до 0.999.
+        """
+        type_ids = {"Water": 1}
+        volumes = {1: 0.19}
+        schematic = Schematic(
+            product="Coolant", facility="advanced_industry_facility",
+            inputs={"Water": 40.0}, output_qty=10.0, cycle_minutes=60.0,
+        )
+        _setup(monkeypatch, tmp_path, type_ids, volumes, capacity_m3=10_000, downtime_hours=0.5)
+
+        duty, missing = logistics.own_duty_cycle(schematic)
+
+        factories = logistics.FACILITY_FACTORIES_PER_COLONY["advanced_industry_facility"]
+        total_m3_per_hour = schematic.input_per_hour("Water") * factories * 0.19
+        expected_drain_hours = 10_000 / total_m3_per_hour
+        expected_duty = expected_drain_hours / (expected_drain_hours + 0.5)
+
+        assert missing == []
+        assert duty == pytest.approx(expected_duty)
+        # На одну фабрику (без множителя) причал держится месяцами -
+        # duty cycle был бы неотличим от 1.0. С реальным числом фабрик
+        # эффект обязан быть заметным.
+        assert duty < 0.999
+
+    def test_basic_industry_facility_never_enters_the_causeway_model(self, monkeypatch, tmp_path):
+        """
+        P1 добывается и подаётся на фабрику той же колонии непрерывно -
+        это не партия, которую физически возит игрок с другой колонии,
+        поэтому простой на логистику к нему не относится вовсе (не
+        просто "нет данных об объёме" - структурно исключён).
+        """
+        type_ids = {"Aqueous Liquids": 1}
+        volumes = {1: 0.38}
+        schematic = Schematic(
+            product="Water", facility="basic_industry_facility",
+            inputs={"Aqueous Liquids": 3000.0}, output_qty=100.0, cycle_minutes=30.0,
+        )
+        _setup(monkeypatch, tmp_path, type_ids, volumes, capacity_m3=10_000, downtime_hours=0.5)
+
+        duty, missing = logistics.own_duty_cycle(schematic)
+
+        assert duty == 1.0
+        assert missing == []
