@@ -16,6 +16,14 @@
     разы почти бесплатно. Восстановление —
     `pg_restore --no-owner --clean --if-exists -d имя_базы файл`,
     не `psql имя_базы < файл`, как было для текстового дампа;
+  - MySQL/MariaDB (20.09.2026, по прямому запросу пользователя —
+    прежде эти движки не бэкапились вовсе, только предупреждение в
+    лог) — `mysqldump --single-transaction` (снимок InnoDB без
+    блокировки таблиц, тот же принцип, что и у Postgres/SQLite выше),
+    сжатый через `gzip` на стороне Python (у `mysqldump`, в отличие от
+    `pg_dump`, нет своего сжатого формата), файл `pidirector.sql.gz`.
+    Восстановление — `gunzip -c pidirector.sql.gz | mysql -h хост -u
+    пользователь -p имя_базы`;
   - снимки `data/cache/*.json` (кроме служебного etags.json) — их легко
     пересобрать, но с копией дашборд не «мигнёт» пустотой после отката.
 
@@ -35,6 +43,7 @@
 
 from __future__ import annotations
 
+import gzip
 import os
 import shutil
 import sqlite3
@@ -75,6 +84,15 @@ def _postgres_url() -> str | None:
     return f"postgresql://{rest}"
 
 
+def _mariadb_url() -> str | None:
+    from infra import config
+
+    url = config.DATABASE_URL
+    if not url.startswith(("mysql://", "mysql+", "mariadb://", "mariadb+")):
+        return None
+    return url
+
+
 def _backup_postgres(url: str, dst: Path) -> None:
     """
     `pg_dump` в СЖАТОМ custom-формате (`-Fc`, 18.09.2026 — по прямому
@@ -88,6 +106,44 @@ def _backup_postgres(url: str, dst: Path) -> None:
             ["pg_dump", "--no-owner", "--no-privileges", "-Fc", url],
             stdout=out, check=True, timeout=300,
         )
+
+
+def _backup_mariadb(url: str, dst: Path) -> None:
+    """
+    `mysqldump --single-transaction` (20.09.2026, по прямому запросу
+    пользователя — до этого MySQL/MariaDB не бэкапились вовсе, см.
+    docstring модуля) — снимок InnoDB без блокировки таблиц, тот же
+    принцип согласованности без остановки сервиса, что и у Postgres/
+    SQLite выше. У `mysqldump`, в отличие от `pg_dump`, нет собственного
+    сжатого бинарного формата — сжимаем сами через `gzip`, тем же
+    мотивом, что и `-Fc` для Postgres (без сжатия копия растёт линейно
+    с базой). Восстановление:
+        gunzip -c pidirector.sql.gz | mysql -h хост -u пользователь -p имя_базы
+
+    Пароль передаётся подпроцессу через переменную окружения `MYSQL_PWD`
+    (то, что рекомендует сама документация MySQL), а не аргументом
+    командной строки `-pПАРОЛЬ` — иначе он был бы виден в выводе `ps`
+    любому пользователю системы, не только в истории шелла запустившего.
+    """
+    from sqlalchemy.engine import make_url
+
+    parsed = make_url(url)
+    cmd = ["mysqldump", "--single-transaction", "--routines", "--triggers"]
+    if parsed.host:
+        cmd += ["-h", parsed.host]
+    if parsed.port:
+        cmd += ["-P", str(parsed.port)]
+    if parsed.username:
+        cmd += ["-u", parsed.username]
+    cmd.append(parsed.database)
+
+    env = dict(os.environ)
+    if parsed.password:
+        env["MYSQL_PWD"] = parsed.password
+
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, env=env, check=True, timeout=300)
+    with gzip.open(dst, "wb") as out:
+        out.write(result.stdout)
 
 
 def _backup_sqlite(src: Path, dst: Path) -> None:
@@ -118,6 +174,7 @@ def main() -> int:
 
     db = _sqlite_path()
     pg_url = _postgres_url()
+    maria_url = _mariadb_url()
     if db is not None:
         if not db.is_file():
             log.warning("Базы %s ещё нет — бэкапить нечего", db)
@@ -136,8 +193,17 @@ def main() -> int:
             shutil.rmtree(target, ignore_errors=True)
             return 1
         copied = 1
+    elif maria_url is not None:
+        target.mkdir(parents=True, exist_ok=True)
+        try:
+            _backup_mariadb(maria_url, target / "pidirector.sql.gz")
+        except (subprocess.CalledProcessError, FileNotFoundError, subprocess.TimeoutExpired) as exc:
+            log.error("mysqldump не выполнился: %s — копии БД в этом запуске нет", exc)
+            shutil.rmtree(target, ignore_errors=True)
+            return 1
+        copied = 1
     else:
-        log.warning("Неизвестный PI_DATABASE_URL — не SQLite и не Postgres, БД не копирую")
+        log.warning("Неизвестный PI_DATABASE_URL — не SQLite, не Postgres и не MySQL/MariaDB, БД не копирую")
         target.mkdir(parents=True, exist_ok=True)
         copied = 0
     if CACHE_DIR.is_dir():

@@ -33,7 +33,7 @@ python -m venv .venv
 
 ```
 PI_ENV=prod
-PI_DATABASE_URL=postgresql+psycopg://user:pass@localhost/pidirector   # или оставить SQLite
+PI_DATABASE_URL=postgresql+psycopg://user:pass@localhost/pidirector   # см. раздел 3 — или оставить SQLite
 PI_LOG_DIR=C:\ProgramData\PI-Director\logs
 PI_BACKUP_DIR=C:\ProgramData\PI-Director\backups
 ```
@@ -49,13 +49,30 @@ PI_ESI_CALLBACK_URL=https://ваш-домен/api/auth/callback
 `PI_ENV=prod` отключает dev-заглушки персонажей: планировщику нужны
 настоящие персонажи из SSO.
 
-## 3. Postgres
+## 3. Выбор СУБД
 
-SQLite тянет один процесс без проблем, но веб и сборщики пишут в базу
-одновременно, а с ростом числа пользователей — конкурентная запись и
-JSON-колонки (`pins`/`routes`/`structures`) начинают тянуть к Postgres
-(см. docs/ROADMAP.md, Фаза 9). На бою (с 15.09.2026) стоит Postgres,
-установленный так (Ubuntu):
+Движок — только смена `PI_DATABASE_URL` + `alembic upgrade head`,
+ORM-модели одни и те же для любого движка (`infra/db.py::_build_engine()`
+выбирает драйвер по схеме URL, ничего специфичного для Postgres в
+domain/api-слое нет). Но не все три движка одинаково готовы к проду —
+ниже честно, что проверено, а что нет.
+
+### 3.1. SQLite (по умолчанию)
+
+Ничего не устанавливать — `PI_DATABASE_URL` не задан, приложение само
+создаст `data/pi_director.db`. Годится для разработки и для маленького
+однопользовательского прода без домена: тянет один процесс без проблем.
+Ограничение — веб и сборщики пишут в базу одновременно, а с ростом
+числа пользователей конкурентная запись становится узким местом (см.
+docs/ROADMAP.md, Фаза 9); JSON-колонки (`pins`/`routes`/`structures`) на
+SQLite — обычный `TEXT`, не индексируемый бинарный тип. Бэкап —
+`scripts/backup.py` копирует файл через `sqlite3.Connection.backup()`
+(согласованный снимок даже при работающем приложении), без установки
+дополнительных пакетов.
+
+### 3.2. Postgres (рекомендуется, единственная проверенная в бою)
+
+На бою (с 15.09.2026) стоит Postgres, установленный так (Ubuntu):
 
 ```bash
 sudo apt-get install -y postgresql
@@ -76,7 +93,39 @@ ORM-модели те же — миграции применятся как ес
 сохранённые планы, историю добычи) — `python -m scripts.
 migrate_sqlite_to_postgres --sqlite ... --postgres ...` ПОСЛЕ
 `alembic upgrade head` на пустой Postgres (создаёт только схему, не
-данные), см. докстринг скрипта.
+данные), см. докстринг скрипта. Бэкап — `pg_dump -Fc` (сжатый
+custom-формат), см. раздел 5.
+
+### 3.3. MySQL/MariaDB — поддержаны, но не проверены в бою
+
+SQLAlchemy и Alembic одинаково генерируют DDL для MySQL/MariaDB —
+`PI_DATABASE_URL=mysql+pymysql://user:pass@localhost/pidirector`
+работает (нужен драйвер: `pip install pymysql`). Оговорка та же, что и
+раньше: JSON-колонки в MariaDB — это `LONGTEXT` с CHECK, не настоящий
+тип (одна из причин, по которой прод выбрал Postgres, не MariaDB) — не
+мешает работе, но менее эффективно для будущих JSONB-запросов, если
+они когда-нибудь понадобятся.
+
+**Бэкап (20.09.2026, по прямому запросу пользователя — реализован):**
+`mysqldump --single-transaction` (снимок InnoDB без блокировки таблиц)
++ сжатие `gzip` на стороне Python (у `mysqldump`, в отличие от
+`pg_dump`, нет своего сжатого формата), файл `pidirector.sql.gz` в той
+же папке `pi-backup-<ts>/`, что и у остальных движков. Восстановление:
+
+```
+gunzip -c pi-backup-*/pidirector.sql.gz | mysql -h хост -u пользователь -p имя_базы
+```
+
+Пароль читается из `PI_DATABASE_URL` и передаётся `mysqldump` через
+переменную окружения `MYSQL_PWD`, не аргументом командной строки — не
+виден в выводе `ps`.
+
+Дальнейшая оптимизация при росте базы (не раньше, чем это реально
+понадобится, — см. `docs/ROADMAP.md`, Фаза 10) — то же семейство
+приёмов, что и для Postgres, только на стороне MySQL/MariaDB:
+непрерывная архивация бинарного журнала (`log_bin`) между полными
+дампами, либо Percona XtraBackup для физического инкрементального
+бэкапа без остановки сервера.
 
 ## 4. Службы Windows (NSSM)
 
@@ -101,10 +150,12 @@ Linux: два unit-файла systemd с `ExecStart=/path/.venv/bin/python -m sc
 
 ## 5. Бэкап
 
-`scripts.scheduler` делает копию раз в сутки сам — для обоих движков:
-SQLite через API `.backup()`, Postgres через `pg_dump` (нужен в PATH,
-на Ubuntu ставится вместе с пакетом `postgresql`). Если сборщики не
-крутятся постоянно, заведите отдельное задание — образец
+`scripts.scheduler` делает копию раз в сутки сам — для всех трёх
+поддерживаемых движков (раздел 3): SQLite через API `.backup()`,
+Postgres через `pg_dump` (нужен в PATH, на Ubuntu ставится вместе с
+пакетом `postgresql`), MySQL/MariaDB через `mysqldump` (нужен в PATH,
+ставится вместе с пакетом `mysql-client`/`mariadb-client`). Если
+сборщики не крутятся постоянно, заведите отдельное задание — образец
 `deploy/backup-task.xml` (Task Scheduler → *Import Task*), путь к
 python и рабочему каталогу поправьте под себя.
 
