@@ -3954,6 +3954,23 @@ PNG-логотип + скрипт компонента); статическая 
       `mysql://` (теперь распознаваемая схема) на `oracle://` —
       по-прежнему проверяет честно неизвестную СУБД. `python -m pytest
       tests/ -q` — 537 прошли (было 534, +3 новых).
+- [x] **`credentials.access_token`/`refresh_token` — `Text`, не голый
+      `String` (20.09.2026), найдено при попытке миграции прода на
+      MariaDB.** `alembic upgrade head` на пустой MariaDB 10.11 падал
+      уже на создании таблицы `credentials`: `VARCHAR requires a length
+      on dialect mysql` — Postgres и SQLite разрешают `VARCHAR` без
+      длины (де-факто неограниченный), MySQL/MariaDB — нет. Это
+      единственная пара unbounded-`String` колонок во всей схеме
+      (`infra/models.py`, проверено `grep`). Исправлено: модель — на
+      `Text` (та же семантика для зашифрованных Fernet-токенов
+      произвольной длины), новая миграция `cf63cab41bfc` (`ALTER
+      COLUMN ... TYPE TEXT` через `batch_alter_table`, применяется и на
+      уже существующих Postgres/SQLite базах без потери данных).
+
+      **Тесты:** `python -m pytest tests/ -q` — 537 прошли (схема
+      меняется, данные и поведение — нет). Проверено вручную —
+      `alembic upgrade head` на реальной пустой MariaDB 10.11 на проде
+      прошёл до конца после этой правки.
 
 После сверки с четырьмя источниками оба спорных числа закрыты — ничего
 не возвращается в ответе `/api/calculate` в поле `assumptions` (кроме

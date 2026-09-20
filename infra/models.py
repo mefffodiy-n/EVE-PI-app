@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, BigInteger, Integer, String
+from sqlalchemy import JSON, BigInteger, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from infra.db import Base, UtcDateTime
@@ -123,8 +123,12 @@ class Credential(Base):
     character_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
 
     # Зашифрованы infra.crypto (Fernet). В открытом виде в БД не лежат.
-    access_token: Mapped[str] = mapped_column(String)
-    refresh_token: Mapped[str] = mapped_column(String)
+    # Text, не голый String без длины (20.09.2026, найдено при проверке
+    # схемы на MariaDB): Postgres и SQLite разрешают VARCHAR без длины,
+    # MySQL/MariaDB — нет, `alembic upgrade head` падал с "VARCHAR
+    # requires a length on dialect mysql" уже на создании таблицы.
+    access_token: Mapped[str] = mapped_column(Text)
+    refresh_token: Mapped[str] = mapped_column(Text)
 
     access_expires_at: Mapped[datetime] = mapped_column(UtcDateTime)
     scopes: Mapped[list] = mapped_column(JSON, default=list)

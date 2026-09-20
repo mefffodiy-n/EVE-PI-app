@@ -24,8 +24,8 @@ def upgrade() -> None:
     op.create_table(
         "credentials",
         sa.Column("character_id", sa.Integer(), autoincrement=False, nullable=False),
-        sa.Column("access_token", sa.String(), nullable=False),
-        sa.Column("refresh_token", sa.String(), nullable=False),
+        sa.Column("access_token", sa.Text(), nullable=False),
+        sa.Column("refresh_token", sa.Text(), nullable=False),
         sa.Column("access_expires_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("scopes", sa.JSON(), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
