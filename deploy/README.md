@@ -96,21 +96,36 @@ migrate_sqlite_to_postgres --sqlite ... --postgres ...` ПОСЛЕ
 данные), см. докстринг скрипта. Бэкап — `pg_dump -Fc` (сжатый
 custom-формат), см. раздел 5.
 
-### 3.3. MySQL/MariaDB — теоретически поддержаны, на практике не готовы
+### 3.3. MySQL/MariaDB — поддержаны, но не проверены в бою
 
-SQLAlchemy и Alembic одинаково генерируют DDL для MySQL/MariaDB, и
-`PI_DATABASE_URL=mysql+pymysql://...` формально заработает — но:
-JSON-колонки в MariaDB это `LONGTEXT` с CHECK, не настоящий тип (одна
-из причин, по которой прод выбрал Postgres, не MariaDB); а
-**`scripts/backup.py` вообще не умеет их бэкапить** — незнакомый
-`PI_DATABASE_URL` попадает в ветку «неизвестная СУБД», пишет
-предупреждение в лог и копирует только снимки `data/cache/*.json`, БД
-не копируется совсем (`tests/test_backup.py::
-test_unknown_database_url_still_backs_up_cache`). До появления
-`_backup_mysql()` — свой `mysqldump` по расписанию отдельно от
-`scripts.scheduler`, иначе суточный бэкап будет честно предупреждать
-в журнале и молча оставлять вас без копии самой базы. Не рекомендуется
-для прода, пока это не исправлено.
+SQLAlchemy и Alembic одинаково генерируют DDL для MySQL/MariaDB —
+`PI_DATABASE_URL=mysql+pymysql://user:pass@localhost/pidirector`
+работает (нужен драйвер: `pip install pymysql`). Оговорка та же, что и
+раньше: JSON-колонки в MariaDB — это `LONGTEXT` с CHECK, не настоящий
+тип (одна из причин, по которой прод выбрал Postgres, не MariaDB) — не
+мешает работе, но менее эффективно для будущих JSONB-запросов, если
+они когда-нибудь понадобятся.
+
+**Бэкап (20.09.2026, по прямому запросу пользователя — реализован):**
+`mysqldump --single-transaction` (снимок InnoDB без блокировки таблиц)
++ сжатие `gzip` на стороне Python (у `mysqldump`, в отличие от
+`pg_dump`, нет своего сжатого формата), файл `pidirector.sql.gz` в той
+же папке `pi-backup-<ts>/`, что и у остальных движков. Восстановление:
+
+```
+gunzip -c pi-backup-*/pidirector.sql.gz | mysql -h хост -u пользователь -p имя_базы
+```
+
+Пароль читается из `PI_DATABASE_URL` и передаётся `mysqldump` через
+переменную окружения `MYSQL_PWD`, не аргументом командной строки — не
+виден в выводе `ps`.
+
+Дальнейшая оптимизация при росте базы (не раньше, чем это реально
+понадобится, — см. `docs/ROADMAP.md`, Фаза 10) — то же семейство
+приёмов, что и для Postgres, только на стороне MySQL/MariaDB:
+непрерывная архивация бинарного журнала (`log_bin`) между полными
+дампами, либо Percona XtraBackup для физического инкрементального
+бэкапа без остановки сервера.
 
 ## 4. Службы Windows (NSSM)
 
@@ -135,14 +150,14 @@ Linux: два unit-файла systemd с `ExecStart=/path/.venv/bin/python -m sc
 
 ## 5. Бэкап
 
-`scripts.scheduler` делает копию раз в сутки сам — но только для SQLite
-и Postgres (раздел 3.1/3.2): SQLite через API `.backup()`, Postgres
-через `pg_dump` (нужен в PATH, на Ubuntu ставится вместе с пакетом
-`postgresql`). Для MySQL/MariaDB (раздел 3.3) `scripts/backup.py` БД не
-копирует вовсе — см. предупреждение там же. Если сборщики не крутятся
-постоянно, заведите отдельное задание — образец `deploy/backup-task.xml`
-(Task Scheduler → *Import Task*), путь к python и рабочему каталогу
-поправьте под себя.
+`scripts.scheduler` делает копию раз в сутки сам — для всех трёх
+поддерживаемых движков (раздел 3): SQLite через API `.backup()`,
+Postgres через `pg_dump` (нужен в PATH, на Ubuntu ставится вместе с
+пакетом `postgresql`), MySQL/MariaDB через `mysqldump` (нужен в PATH,
+ставится вместе с пакетом `mysql-client`/`mariadb-client`). Если
+сборщики не крутятся постоянно, заведите отдельное задание — образец
+`deploy/backup-task.xml` (Task Scheduler → *Import Task*), путь к
+python и рабочему каталогу поправьте под себя.
 
 Восстановление dump-файла Postgres (сжатый custom-формат, `-Fc`, с
 18.09.2026 — раньше был обычный текстовый SQL):

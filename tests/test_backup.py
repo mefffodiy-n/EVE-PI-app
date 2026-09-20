@@ -129,8 +129,74 @@ def test_postgres_backup_uses_compressed_custom_format(_paths, monkeypatch, tmp_
 
 
 def test_unknown_database_url_still_backs_up_cache(_paths, monkeypatch):
-    """Не SQLite и не Postgres — БД не копируем, но снимки кэша всё равно сохраняем."""
-    monkeypatch.setattr("infra.config.DATABASE_URL", "mysql://u:p@localhost/x")
+    """Не SQLite, не Postgres и не MySQL/MariaDB — БД не копируем, но снимки кэша всё равно сохраняем."""
+    monkeypatch.setattr("infra.config.DATABASE_URL", "oracle://u:p@localhost/x")
     assert backup.main() == 0
     made = next((_paths / "backups").glob("pi-backup-*"))
     assert "market_prices.json" in {p.name for p in made.iterdir()}
+
+
+class TestMariaDB:
+    """
+    20.09.2026, по прямому запросу пользователя: до этого MySQL/MariaDB
+    попадали в ветку «неизвестная СУБД» и не бэкапились вовсе (см. тест
+    выше, раньше проверявшийся именно на mysql:// — теперь генуинно
+    неизвестная схема). Те же приёмы тестирования, что и у Postgres:
+    подменяется сама функция запуска, а не subprocess.run целиком.
+    """
+
+    def test_backs_up_mariadb_via_mysqldump(self, _paths, monkeypatch):
+        monkeypatch.setattr("infra.config.DATABASE_URL", "mysql+pymysql://u:p@localhost/pidirector")
+        calls = []
+
+        def fake_backup_mariadb(url, dst):
+            calls.append(url)
+            dst.write_bytes(b"-- dump")
+
+        monkeypatch.setattr(backup, "_backup_mariadb", fake_backup_mariadb)
+        assert backup.main() == 0
+        assert calls == ["mysql+pymysql://u:p@localhost/pidirector"]
+        made = next((_paths / "backups").glob("pi-backup-*"))
+        assert (made / "pidirector.sql.gz").read_bytes() == b"-- dump"
+        assert "market_prices.json" in {p.name for p in made.iterdir()}
+
+    def test_mysqldump_failure_is_logged_not_silenced(self, _paths, monkeypatch):
+        monkeypatch.setattr("infra.config.DATABASE_URL", "mysql+pymysql://u:p@localhost/pidirector")
+
+        def fake_backup_mariadb(url, dst):
+            raise FileNotFoundError("mysqldump: команда не найдена")
+
+        monkeypatch.setattr(backup, "_backup_mariadb", fake_backup_mariadb)
+        assert backup.main() == 1
+        assert _backups(_paths) == []
+
+    def test_dump_is_gzip_compressed_and_password_not_on_command_line(self, tmp_path, monkeypatch):
+        """
+        Пароль — через переменную окружения MYSQL_PWD подпроцессу, не
+        аргументом `-pПАРОЛЬ`: иначе он был бы виден в `ps` любому
+        пользователю системы. Сжатие — gzip, у mysqldump нет своего
+        сжатого формата (в отличие от `pg_dump -Fc`).
+        """
+        captured = {}
+
+        class FakeResult:
+            stdout = b"-- sql dump content"
+
+        def fake_run(cmd, **kwargs):
+            captured["cmd"] = cmd
+            captured["env"] = kwargs.get("env")
+            return FakeResult()
+
+        monkeypatch.setattr(backup.subprocess, "run", fake_run)
+        dst = tmp_path / "out.sql.gz"
+        backup._backup_mariadb("mysql+pymysql://scott:tiger@dbhost:3307/pidirector", dst)
+
+        assert captured["cmd"][0] == "mysqldump"
+        assert "--single-transaction" in captured["cmd"]
+        assert not any("tiger" in str(part) for part in captured["cmd"])
+        assert captured["env"]["MYSQL_PWD"] == "tiger"
+        assert "-h" in captured["cmd"] and "dbhost" in captured["cmd"]
+        assert "-P" in captured["cmd"] and "3307" in captured["cmd"]
+
+        import gzip
+        assert gzip.decompress(dst.read_bytes()) == b"-- sql dump content"
