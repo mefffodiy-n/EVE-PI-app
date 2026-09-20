@@ -71,104 +71,42 @@ class TestVolumeOf:
         assert logistics.volume_of("Water") == 0.38
 
 
-class TestOwnDutyCycle:
-    def test_more_and_heavier_inputs_drain_the_causeway_faster(self, monkeypatch, tmp_path):
+class TestOwnConsumptionProfile:
+    def test_returns_m3_per_hour_for_every_input(self, monkeypatch, tmp_path):
         """
-        Ровно то наблюдение пользователя, из-за которого появилась
-        фича: при ОДНОМ И ТОМ ЖЕ расходе каждого вида сырья в час и
-        одинаковом объёме единицы, рецепт с 3 видами входов держит
-        причал меньше, чем рецепт с 2 — сумма расхода в м³/ч больше.
-        Ёмкость причала намеренно маленькая (не настоящие 10 000 м³),
-        чтобы время опустошения было сопоставимо с простоем на
-        довозку и эффект был виден, а не тонул в округлении.
+        Расход м³/час на ВЕСЬ шаблон колонии (не одну фабрику) — найденный
+        пользователем баг 20.09.2026: причал общий на 12 advanced-фабрик
+        (P2/P3), а расход считался так, будто причал обслуживает одну.
         """
-        type_ids = {"P1_A": 1, "P1_B": 2, "P2_A": 3, "P2_B": 4, "P2_C": 5}
-        volumes = {1: 1.0, 2: 1.0, 3: 1.0, 4: 1.0, 5: 1.0}
-        _setup(monkeypatch, tmp_path, type_ids, volumes, capacity_m3=1_000, downtime_hours=0.5)
-
-        p2_schematic = Schematic(
-            product="P2X", facility="advanced_industry_facility",
-            inputs={"P1_A": 100.0, "P1_B": 100.0}, output_qty=10.0, cycle_minutes=60.0,
-        )
-        p3_schematic = Schematic(
-            product="P3X", facility="advanced_industry_facility",
-            inputs={"P2_A": 100.0, "P2_B": 100.0, "P2_C": 100.0}, output_qty=6.0, cycle_minutes=60.0,
-        )
-
-        p2_duty, p2_missing = logistics.own_duty_cycle(p2_schematic)
-        p3_duty, p3_missing = logistics.own_duty_cycle(p3_schematic)
-
-        assert p2_missing == p3_missing == []
-        assert 0 < p3_duty < p2_duty < 1
-
-    def test_missing_volume_defaults_to_full_duty_cycle_not_a_guess(self, monkeypatch, tmp_path):
-        """Честный пробел (правило 1) — не штраф, не выдуманное число."""
-        _setup(monkeypatch, tmp_path, type_ids={"Water": 1}, volumes={})  # объёма нет
+        type_ids = {"Water": 1, "Electrolytes": 2}
+        volumes = {1: 0.19, 2: 0.19}
+        _setup(monkeypatch, tmp_path, type_ids, volumes, capacity_m3=10_000, downtime_hours=0.5)
         schematic = Schematic(
             product="Coolant", facility="advanced_industry_facility",
-            inputs={"Water": 50.0}, output_qty=10.0, cycle_minutes=60.0,
+            inputs={"Water": 40.0, "Electrolytes": 40.0}, output_qty=10.0, cycle_minutes=60.0,
         )
-        duty, missing = logistics.own_duty_cycle(schematic)
-        assert duty == 1.0
-        assert missing == ["Water"]
 
-    def test_no_inputs_is_full_duty_cycle(self, monkeypatch, tmp_path):
-        _setup(monkeypatch, tmp_path, type_ids={}, volumes={})
-        schematic = Schematic(product="Water", facility="basic_industry_facility",
-                               inputs={}, output_qty=100.0, cycle_minutes=30.0)
-        duty, missing = logistics.own_duty_cycle(schematic)
-        assert duty == 1.0
-        assert missing == []
-
-    def test_smaller_causeway_or_longer_downtime_lowers_duty_cycle(self, monkeypatch, tmp_path):
-        type_ids = {"Water": 1}
-        volumes = {1: 0.38}
-        schematic = Schematic(product="Coolant", facility="advanced_industry_facility",
-                               inputs={"Water": 50.0}, output_qty=10.0, cycle_minutes=60.0)
-
-        _setup(monkeypatch, tmp_path, type_ids, volumes, capacity_m3=10_000, downtime_hours=0.5)
-        duty_normal, _ = logistics.own_duty_cycle(schematic)
-
-        logistics._reference.cache_clear()
-        logistics.launchpad_capacity_m3.cache_clear()
-        logistics.logistics_downtime_hours.cache_clear()
-        _setup(monkeypatch, tmp_path, type_ids, volumes, capacity_m3=10_000, downtime_hours=5.0)
-        duty_more_downtime, _ = logistics.own_duty_cycle(schematic)
-
-        assert duty_more_downtime < duty_normal
-
-    def test_drain_scales_with_factories_sharing_the_causeway_not_a_single_one(
-        self, monkeypatch, tmp_path,
-    ):
-        """
-        Найденный пользователем баг (20.09.2026): причал общий на ВЕСЬ
-        шаблон колонии (12 advanced-фабрик на P2/P3), а расход считался
-        так, будто причал обслуживает одну фабрику. С реальным числом
-        фабрик расход в час должен быть ровно в
-        FACILITY_FACTORIES_PER_COLONY раз больше, и duty cycle —
-        заметно ниже, а не тонуть в округлении до 0.999.
-        """
-        type_ids = {"Water": 1}
-        volumes = {1: 0.19}
-        schematic = Schematic(
-            product="Coolant", facility="advanced_industry_facility",
-            inputs={"Water": 40.0}, output_qty=10.0, cycle_minutes=60.0,
-        )
-        _setup(monkeypatch, tmp_path, type_ids, volumes, capacity_m3=10_000, downtime_hours=0.5)
-
-        duty, missing = logistics.own_duty_cycle(schematic)
+        profile, missing = logistics.own_consumption_profile(schematic)
 
         factories = logistics.FACILITY_FACTORIES_PER_COLONY["advanced_industry_facility"]
-        total_m3_per_hour = schematic.input_per_hour("Water") * factories * 0.19
-        expected_drain_hours = 10_000 / total_m3_per_hour
-        expected_duty = expected_drain_hours / (expected_drain_hours + 0.5)
-
         assert missing == []
-        assert duty == pytest.approx(expected_duty)
-        # На одну фабрику (без множителя) причал держится месяцами -
-        # duty cycle был бы неотличим от 1.0. С реальным числом фабрик
-        # эффект обязан быть заметным.
-        assert duty < 0.999
+        assert profile["Water"] == pytest.approx(40.0 * factories * 0.19)
+        assert profile["Electrolytes"] == pytest.approx(40.0 * factories * 0.19)
+
+    def test_missing_volume_excludes_the_whole_schematic_not_a_guess(self, monkeypatch, tmp_path):
+        """Честный пробел (правило 1) — вся схема выходит из модели, не штраф на один вход."""
+        type_ids = {"Water": 1, "Electrolytes": 2}
+        volumes = {1: 0.19}  # у Electrolytes объёма нет
+        _setup(monkeypatch, tmp_path, type_ids, volumes)
+        schematic = Schematic(
+            product="Coolant", facility="advanced_industry_facility",
+            inputs={"Water": 40.0, "Electrolytes": 40.0}, output_qty=10.0, cycle_minutes=60.0,
+        )
+
+        profile, missing = logistics.own_consumption_profile(schematic)
+
+        assert profile == {}
+        assert missing == ["Electrolytes"]
 
     def test_basic_industry_facility_never_enters_the_causeway_model(self, monkeypatch, tmp_path):
         """
@@ -183,9 +121,17 @@ class TestOwnDutyCycle:
             product="Water", facility="basic_industry_facility",
             inputs={"Aqueous Liquids": 3000.0}, output_qty=100.0, cycle_minutes=30.0,
         )
-        _setup(monkeypatch, tmp_path, type_ids, volumes, capacity_m3=10_000, downtime_hours=0.5)
+        _setup(monkeypatch, tmp_path, type_ids, volumes)
 
-        duty, missing = logistics.own_duty_cycle(schematic)
+        profile, missing = logistics.own_consumption_profile(schematic)
 
-        assert duty == 1.0
+        assert profile == {}
+        assert missing == []
+
+    def test_no_inputs_gives_empty_profile(self, monkeypatch, tmp_path):
+        _setup(monkeypatch, tmp_path, type_ids={}, volumes={})
+        schematic = Schematic(product="X", facility="advanced_industry_facility",
+                               inputs={}, output_qty=100.0, cycle_minutes=30.0)
+        profile, missing = logistics.own_consumption_profile(schematic)
+        assert profile == {}
         assert missing == []

@@ -25,7 +25,13 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 
-from domain.logistics import own_duty_cycle
+from domain.logistics import (
+    FACILITY_FACTORIES_PER_COLONY,
+    launchpad_capacity_m3,
+    logistics_downtime_hours,
+    own_consumption_profile,
+    volume_of,
+)
 from domain.recipes import RecipeBook, load_recipes
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -222,48 +228,122 @@ def expand_demand(
     return demand
 
 
+class _Relay:
+    """Один узел цепочки партий-эстафеты — см. _compute_duty_cycles()."""
+
+    __slots__ = ("drain_hours", "cycle_hours", "batch_units")
+
+    def __init__(self, drain_hours: float, cycle_hours: float, batch_units: float):
+        self.drain_hours = drain_hours
+        self.cycle_hours = cycle_hours
+        self.batch_units = batch_units
+
+
+# Сентинел для входов, которые НЕ ограничивают потребителя: сырьё P0,
+# закупленный P1, P1 из basic_industry_facility (исключён из модели) и
+# защита от цикла в дереве рецептов. Ведёт себя как непрерывный,
+# неограниченный источник — не участвует ни в min(drain), ни в
+# max(cycle) у потребителя.
+_UNLIMITED = _Relay(drain_hours=float("inf"), cycle_hours=float("inf"), batch_units=float("inf"))
+
+
 def _compute_duty_cycles(demand: Demand, schematics: dict[str, Schematic]) -> None:
     """
-    Каскадная пропускная способность причала по уже развёрнутому дереву
-    (см. Demand.duty_cycles) — заполняет demand.duty_cycles/missing_volumes.
+    Партиями-эстафетой: игрок забирает готовую продукцию ОДНИМ рейсом
+    только когда причал вышестоящего тира ПОЛНОСТЬЮ переработан, везёт
+    всю партию сразу на причал следующего тира — пока новая партия не
+    привезена, нижестоящий тир простаивает, даже если сам уже свободен
+    (согласовано с пользователем 20.09.2026, взамен более ранней модели
+    "непрерывного ручейка" — см. докстринг domain/logistics.py).
 
-    Работает поверх готового demand.factories (продукты, для которых
-    нашлась схема), не переобходит дерево заново: для каждого продукта
-    его собственный duty cycle (own_duty_cycle()) домножается на
-    МИНИМУМ duty cycle его собственных входов, если те тоже сделаны в
-    этом плане (есть в demand.factories). Сырьё P0 и закупленный P1 —
-    граница дерева, их непрерывность уже выражена тем, что они не
-    участвуют в min() вовсе (эквивалент "их duty cycle = 1.0").
+    Для продукта X с профилем расхода (own_consumption_profile):
+      - drain_full = ёмкость причала / суммарный расход — сколько часов
+        X перерабатывает ПОЛНЫЙ причал, если бы его всегда держали
+        полным (потолок, ограниченный физическим размером причала X).
+      - для каждого произведённого в этом плане входа I (не границы):
+        сколько часов X проработает НА ОДНОЙ партии от I (её объём,
+        делённый на расход X этого входа в час) — берём МИНИМУМ по
+        всем таким входам вместе с drain_full: X не может работать
+        дольше, чем позволяет самый скудный вход или собственный
+        причал.
+      - cycle_X = X не может начать новый цикл раньше, чем закончился
+        ЕГО СОБСТВЕННЫЙ простой на довозку (drain_X + downtime), И
+        раньше, чем самый медленный поставщик произвёл новую партию
+        (МАКСИМУМ циклов входов) — оба условия одновременно.
+      - duty_cycle_X = drain_X / cycle_X — та же семантика поля, что и
+        раньше (дробь 0..1, дальше по стеку без изменений).
+
+    Сырьё P0, закупленный P1 и P1 из basic_industry_facility (исключён
+    из модели, см. own_consumption_profile) — границы: не ограничивают
+    ни объёмом партии, ни темпом (_UNLIMITED).
     """
     missing_volumes: set[str] = set()
+    resolved: dict[str, _Relay] = {}
+    downtime = logistics_downtime_hours()
+    capacity = launchpad_capacity_m3()
 
-    def cumulative(product: str, visiting: set[str]) -> float:
-        if product in demand.duty_cycles:
-            return demand.duty_cycles[product]
+    def resolve(product: str, visiting: set[str]) -> _Relay:
+        if product in resolved:
+            return resolved[product]
         if product in visiting:
-            # Цикл в дереве рецептов не должен возникать (тот же инвариант,
-            # что и seen_depth выше) — честно не даём зависнуть, если всё
-            # же случится, вместо бесконечной рекурсии.
-            return 1.0
+            # Цикл в дереве рецептов не должен возникать — честно не
+            # даём зависнуть, если всё же случится, вместо бесконечной
+            # рекурсии (тот же инвариант, что и seen_depth выше).
+            return _UNLIMITED
         visiting.add(product)
 
         schematic = schematics[product]
-        own, missing = own_duty_cycle(schematic)
+        profile, missing = own_consumption_profile(schematic)
         missing_volumes.update(missing)
 
-        result = own
-        for input_name in schematic.inputs:
-            if input_name in demand.factories:
-                result = min(result, cumulative(input_name, visiting))
+        total_rate = sum(profile.values()) if profile else 0.0
+        if total_rate <= 0:
+            # P1 (исключён), нет данных об объёме входов схемы целиком,
+            # или нулевой расход (не должно случаться на реальных
+            # рецептах, но не делить на ноль) — не участвует в модели.
+            visiting.discard(product)
+            resolved[product] = _UNLIMITED
+            return _UNLIMITED
+
+        drain_full = capacity / total_rate
+
+        upstream_drains: list[float] = [drain_full]
+        upstream_cycles: list[float] = []
+        for input_name, rate in profile.items():
+            if input_name not in demand.factories:
+                continue  # граница: не ограничивает объёмом партии
+            upstream = resolve(input_name, visiting)
+            if upstream.batch_units == float("inf"):
+                continue  # исключённый узел (P1) — тоже не ограничивает
+            volume = volume_of(input_name)
+            if volume is None:
+                continue  # честный пробел уже учтён в missing_volumes у upstream
+            delivered_m3 = upstream.batch_units * volume
+            upstream_drains.append(delivered_m3 / rate)
+            upstream_cycles.append(upstream.cycle_hours)
+
+        drain = min(upstream_drains)
+        cycle = max([drain + downtime] + upstream_cycles)
+        batch_units = _batch_units(schematic, drain)
 
         visiting.discard(product)
-        demand.duty_cycles[product] = result
-        return result
+        node = _Relay(drain_hours=drain, cycle_hours=cycle, batch_units=batch_units)
+        resolved[product] = node
+        return node
 
     for product in list(demand.factories):
-        cumulative(product, set())
+        resolve(product, set())
+
+    for product, node in resolved.items():
+        demand.duty_cycles[product] = 1.0 if node.cycle_hours == float("inf") else node.drain_hours / node.cycle_hours
 
     demand.missing_volumes = sorted(missing_volumes)
+
+
+def _batch_units(schematic: Schematic, drain_hours: float) -> float:
+    """Сколько единиц продукта X производит за один цикл drain_hours."""
+    factories = FACILITY_FACTORIES_PER_COLONY[schematic.facility]
+    return schematic.output_per_hour * factories * drain_hours
 
 
 def templates_for_factories(product_tier: str, factory_count: float, factories_per_template: int) -> int:
