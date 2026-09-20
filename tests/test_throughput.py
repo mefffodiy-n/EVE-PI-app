@@ -83,12 +83,13 @@ class TestDutyCycleCascade:
         )
         assert "Aqueous Liquids" in demand.raw_materials
         assert "Aqueous Liquids" not in demand.duty_cycles
-        # Coolant (P2) каскадно ограничен и своим причалом (0.8), и тем,
-        # что Water (P1) само по себе тоже не идеально (0.9) — но 0.8
-        # уже меньше 0.9, так что здесь виден именно min(), а не сумма.
+        # Coolant (P2) каскадно ограничен И своим причалом (0.8), И тем,
+        # что Water (P1) само по себе тоже не идеально (0.9) — простои
+        # НАКАПЛИВАЮТСЯ (умножение), 0.8 не "побеждает" как минимум:
+        # 0.8 own × 0.9 upstream = 0.72, а не голое 0.8.
         assert demand.duty_cycles["Water"] == 0.9
-        assert demand.duty_cycles["Coolant"] == 0.8
-        assert demand.duty_cycles["Fuel Block"] == 0.8
+        assert demand.duty_cycles["Coolant"] == 0.8 * 0.9
+        assert demand.duty_cycles["Fuel Block"] == 1.0 * (0.8 * 0.9)
 
     def test_purchased_p1_is_a_continuous_boundary_like_raw_material(self, monkeypatch):
         """

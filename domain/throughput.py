@@ -229,11 +229,13 @@ def _compute_duty_cycles(demand: Demand, schematics: dict[str, Schematic]) -> No
 
     Работает поверх готового demand.factories (продукты, для которых
     нашлась схема), не переобходит дерево заново: для каждого продукта
-    его собственный duty cycle (own_duty_cycle()) домножается на
+    его собственный duty cycle (own_duty_cycle()) УМНОЖАЕТСЯ на
     МИНИМУМ duty cycle его собственных входов, если те тоже сделаны в
-    этом плане (есть в demand.factories). Сырьё P0 и закупленный P1 —
-    граница дерева, их непрерывность уже выражена тем, что они не
-    участвуют в min() вовсе (эквивалент "их duty cycle = 1.0").
+    этом плане (есть в demand.factories) — не заменяется минимумом,
+    простой апстрима и простой этого тира накапливаются оба сразу.
+    Сырьё P0 и закупленный P1 — граница дерева, их непрерывность уже
+    выражена тем, что они не участвуют в min() вовсе (эквивалент "их
+    duty cycle = 1.0", множитель остаётся 1.0).
     """
     missing_volumes: set[str] = set()
 
@@ -251,10 +253,18 @@ def _compute_duty_cycles(demand: Demand, schematics: dict[str, Schematic]) -> No
         own, missing = own_duty_cycle(schematic)
         missing_volumes.update(missing)
 
-        result = own
+        # Простой апстрима УМНОЖАЕТ собственный duty cycle, а не
+        # заменяет его минимумом — 20.09.2026, найдено пользователем
+        # при ручной сверке цепочки Broadcast Node: `min(own, upstream)`
+        # давал ровно `own`, когда узкое место было на ЭТОМ тире (обычно
+        # так и есть, у P4 own обычно ниже, чем у более лёгких входов),
+        # и простой апстрима из расчёта пропадал целиком, хотя формула
+        # (согласована с пользователем) — произведение, не минимум.
+        upstream = 1.0
         for input_name in schematic.inputs:
             if input_name in demand.factories:
-                result = min(result, cumulative(input_name, visiting))
+                upstream = min(upstream, cumulative(input_name, visiting))
+        result = own * upstream
 
         visiting.discard(product)
         demand.duty_cycles[product] = result
