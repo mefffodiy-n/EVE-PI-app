@@ -68,7 +68,7 @@ silence.
 |---|---|
 | Python | 3.12+ (tested: 3.12 in production, 3.14 in development; not tested below that) |
 | DB in development | nothing to install — a SQLite file is created automatically |
-| DB in production | PostgreSQL (the only one tested in production; other SQLAlchemy-supported engines are untested) |
+| DB in production | MariaDB (since 2026-09-20); Postgres was proven in production earlier and is fully supported — switching is a `PI_DATABASE_URL` change, see `deploy/README.md` |
 | Dependencies | installed via `pip install -r requirements.lock.txt` |
 
 Docker, Node.js, npm, frontend build tools — not needed and never will
