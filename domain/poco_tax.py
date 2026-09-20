@@ -50,19 +50,33 @@ routes) — плану взять их неоткуда, цепочка ещё �
 следующей стадии цепочки, не продаются сами по себе.
 
 ПЕРЕСЕЧЕНИЕ ЦЕЛЕВЫХ ПРОДУКТОВ (20.09.2026, по прямому запросу
-пользователя при добавлении разбивки выручки по продуктам ниже).
-Мультивыбор целевых продуктов — обычная функция интерфейса
-(`multi_targets`), и ничто не мешает выбрать одновременно, например,
-"Coolant" и "Fuel Block" (Fuel Block ест Coolant). Без поправки
-`target_set` считал бы такой Coolant дважды: один раз как «продано
-напрямую» (весь Coolant-выход плана целиком, так как он в целевых), и
-второй раз — уже переработанным в проданный Fuel Block. Реального
-Coolant, который можно было бы продать НАПРЯМУЮ, при этом не остаётся:
-весь построенный объём физически уходит на переработку в Fuel Block.
-`_effective_targets()` исключает из выручки любой целевой продукт,
-который является (прямо или транзитивно, через `Recipe.inputs`)
-сырьём для ДРУГОГО выбранного целевого продукта — не пересекать
-цепочки при подсчёте.
+пользователя при добавлении разбивки выручки по продуктам ниже, ИСПРАВЛЕНО
+в тот же день — см. ниже). Мультивыбор целевых продуктов — обычная
+функция интерфейса (`multi_targets`), и ничто не мешает выбрать
+одновременно, например, и "Data Chips" (P3), и "Broadcast Node" (P4,
+который её ест) — каждый СВОЕЙ отдельной целевой линией
+(`lines_per_target`). Первая версия этой поправки просто ИСКЛЮЧАЛА из
+выручки любой целевой продукт, который где-либо в дереве является
+сырьём для другого выбранного целевого продукта — но это неверно:
+пользователь прямо указал, что если он выбрал Data Chips ОТДЕЛЬНОЙ
+целью (не только как часть цепочки Broadcast Node), у него есть
+РЕАЛЬНАЯ, отдельно построенная колония-линия для прямой продажи, и её
+выручку нельзя просто убирать целиком только потому, что тот же
+продукт ГДЕ-ТО ЕЩЁ в плане используется как сырьё.
+
+Правильное решение — не «включён/исключён», а ДОЛЯ: колонии Data
+Chips физически одинаковы независимо от того, для какой цели их
+считал планировщик (правило "shared_components" — общие компоненты
+считаются суммарной потребностью, одним пулом, не по цепочке
+отдельно), поэтому у ОБЩЕГО количества построенных колоний продукта
+есть ДОЛЯ, соответствующая ЕГО СОБСТВЕННОМУ прямому целевому спросу
+(строке "Data Chips" в target_products с её lines_per_target), и
+остаток — уходящий на переработку в Broadcast Node. `Demand.
+revenue_share[product]` (`domain/throughput.py`) — эта доля, посчитана
+там же, где и весь спрос (прямой целевой расход / суммарный расход
+продукта в дереве). Выручка и разбивка по продукту домножаются на эту
+долю — не исключаются полностью и не считаются полностью, честная
+пропорция.
 
 ДОПУЩЕНИЯ (честно, не выдаются за факт — правило 1):
   - «Полная загруженность» — как и весь остальной план: без простоев,
@@ -76,45 +90,12 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from domain.recipes import RecipeBook, load_recipes
 from domain.throughput import Schematic, load_schematics
 
 if TYPE_CHECKING:
     from domain.planets import PlanetBook
 
 HOURS_PER_MONTH = 720.0
-
-
-def _is_ingredient_of(candidate: str, product: str, recipes: RecipeBook, seen: set[str]) -> bool:
-    """candidate — сырьё product'а, прямо или транзитивно (через Recipe.inputs)."""
-    if product in seen:
-        return False  # защита от цикла в дереве рецептов
-    seen.add(product)
-    recipe = recipes.get(product)
-    if recipe is None:
-        return False
-    if candidate in recipe.inputs:
-        return True
-    return any(_is_ingredient_of(candidate, name, recipes, seen) for name in recipe.inputs)
-
-
-def _effective_targets(
-    target_products: list[str], recipes: RecipeBook,
-) -> tuple[set[str], dict[str, str]]:
-    """
-    Целевые продукты минус те, что сами являются сырьём для ДРУГОГО
-    выбранного целевого продукта — см. докстринг модуля,
-    "ПЕРЕСЕЧЕНИЕ ЦЕЛЕВЫХ ПРОДУКТОВ". Второй элемент — {исключённый
-    продукт: кого именно из целевых он кормит} для предупреждения.
-    """
-    targets = set(target_products)
-    crossed: dict[str, str] = {}
-    for t in targets:
-        for other in targets:
-            if other != t and _is_ingredient_of(t, other, recipes, set()):
-                crossed[t] = other
-                break
-    return targets - set(crossed), crossed
 
 
 def _factory_count(structures_detail: list[dict]) -> int:
@@ -254,15 +235,16 @@ class PlanProfitability:
     # (без штрафа), а не выдуман; проброс из Demand.missing_volumes,
     # этот модуль их не считает сам.
     missing_volumes: list[str] = field(default_factory=list)
-    # Разбивка выручки по конечным продуктам (20.09.2026) — только по
-    # "эффективным" целям (см. _effective_targets, докстринг модуля,
+    # Разбивка выручки по конечным продуктам (20.09.2026) — уже с
+    # поправкой на revenue_share (см. докстринг модуля,
     # "ПЕРЕСЕЧЕНИЕ ЦЕЛЕВЫХ ПРОДУКТОВ"), сумма monthly_revenue по этому
     # списку равна self.monthly_revenue.
     revenue_by_product: list[ProductRevenue] = field(default_factory=list)
-    # Целевые продукты, исключённые из выручки, потому что весь их
-    # объём уходит на переработку в ДРУГОЙ выбранный целевой продукт
-    # этого же плана — {product: кого именно кормит}.
-    crossed_targets: dict[str, str] = field(default_factory=dict)
+    # Целевые продукты, часть спроса которых уходит на переработку в
+    # ДРУГОЙ выбранный целевой продукт этого же плана (revenue_share <
+    # 1.0) — {product: доля, посчитанная как выручка} для примечания в
+    # панели, не для исключения.
+    shared_targets: dict[str, float] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return {
@@ -283,9 +265,9 @@ class PlanProfitability:
             "revenue_by_product": [
                 item.to_dict() for item in sorted(self.revenue_by_product, key=lambda i: i.product)
             ],
-            "crossed_targets": [
-                {"product": product, "consumed_by": other}
-                for product, other in sorted(self.crossed_targets.items())
+            "shared_targets": [
+                {"product": product, "share": share}
+                for product, share in sorted(self.shared_targets.items())
             ],
         }
 
@@ -405,7 +387,7 @@ def evaluate_plan_profitability(
     purchased_p1: dict[str, float] | None = None,
     duty_cycles: dict[str, float] | None = None,
     missing_volumes: list[str] | None = None,
-    recipes: RecipeBook | None = None,
+    revenue_share: dict[str, float] | None = None,
 ) -> PlanProfitability:
     """
     rows — строки построенного плана (формат PlanRow.to_dict()): нужны
@@ -445,14 +427,21 @@ def evaluate_plan_profitability(
     поправки (обратная совместимость для мест, которые ещё не считают
     duty cycle, например настоящие колонии).
 
-    recipes — для _effective_targets() (см. докстринг модуля,
-    "ПЕРЕСЕЧЕНИЕ ЦЕЛЕВЫХ ПРОДУКТОВ"); не передан — загружается сам
-    (`load_recipes()`, тот же принцип, что у schematics).
+    revenue_share — {продукт: доля собственного спроса, идущая на
+    прямую продажу, а не на переработку в ДРУГОЙ выбранный целевой
+    продукт этого же плана} из PlanResult.to_dict()["revenue_share"]
+    (20.09.2026, см. domain/throughput.py::Demand.revenue_share и
+    докстринг модуля, "ПЕРЕСЕЧЕНИЕ ЦЕЛЕВЫХ ПРОДУКТОВ") — домножает
+    выручку и разбивку по продукту (НЕ налоги — они взимаются со ВСЕГО
+    физического перемещения независимо от того, продан ли материал
+    напрямую или ушёл дальше по цепочке). Пусто/не передан — 1.0 для
+    всех продуктов (обратная совместимость, как и с duty_cycles).
     """
     schematics = load_schematics() if schematics is None else schematics
-    recipes = load_recipes() if recipes is None else recipes
-    target_set, crossed_targets = _effective_targets(target_products, recipes)
+    target_set = set(target_products)
     duty_cycles = duty_cycles or {}
+    revenue_share = revenue_share or {}
+    shared_targets = {p: s for p, s in revenue_share.items() if p in target_set and s < 1.0}
     revenue_by_product: dict[str, ProductRevenue] = {}
 
     revenue = 0.0
@@ -476,11 +465,13 @@ def evaluate_plan_profitability(
         if rate is None:
             missing_rates.add(flow.planet_type)
 
+        share = revenue_share.get(flow.output_product, 1.0)
+
         price = prices.get(flow.output_product)
         if price is None:
             missing_prices.add(flow.output_product)
             if flow.output_product in target_set:
-                monthly_units = flow.output_per_hour * HOURS_PER_MONTH
+                monthly_units = flow.output_per_hour * HOURS_PER_MONTH * share
                 entry = revenue_by_product.setdefault(
                     flow.output_product,
                     ProductRevenue(product=flow.output_product, monthly_units=0.0, price=None, monthly_revenue=None),
@@ -489,15 +480,19 @@ def evaluate_plan_profitability(
         else:
             monthly_output = flow.output_per_hour * HOURS_PER_MONTH
             if flow.output_product in target_set:
-                revenue += monthly_output * price
+                sellable = monthly_output * share
+                revenue += sellable * price
                 any_revenue = True
                 entry = revenue_by_product.setdefault(
                     flow.output_product,
                     ProductRevenue(product=flow.output_product, monthly_units=0.0, price=price, monthly_revenue=0.0),
                 )
-                entry.monthly_units += monthly_output
-                entry.monthly_revenue = (entry.monthly_revenue or 0.0) + monthly_output * price
+                entry.monthly_units += sellable
+                entry.monthly_revenue = (entry.monthly_revenue or 0.0) + sellable * price
             if rate is not None:
+                # Налог — со ВСЕГО физического вывоза, независимо от
+                # revenue_share: материал покидает планету целиком, а
+                # не только его "продаваемая" доля (см. докстринг модуля).
                 export_tax += monthly_output * price * rate
                 any_export = True
 
@@ -547,5 +542,5 @@ def evaluate_plan_profitability(
         purchase_items=sorted(purchase_items, key=lambda item: item.product),
         missing_volumes=list(missing_volumes or []),
         revenue_by_product=list(revenue_by_product.values()),
-        crossed_targets=crossed_targets,
+        shared_targets=shared_targets,
     )

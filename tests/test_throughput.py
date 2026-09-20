@@ -198,3 +198,46 @@ class TestRelayCascade:
 
         assert demand.missing_volumes == ["Water"]
         assert demand.duty_cycles["Coolant"] == 1.0
+
+
+class TestRevenueShare:
+    """
+    Demand.revenue_share — доля СОБСТВЕННОГО спроса каждого целевого
+    продукта, идущая на прямую продажу, а не на переработку в ДРУГОЙ
+    выбранный целевой продукт этого же плана (20.09.2026, второй
+    пересмотр этой же фичи за день — пользователь указал, что первая
+    версия, полностью исключавшая такой продукт из выручки, была
+    неверной: он мог выбрать его ОТДЕЛЬНОЙ целевой линией и хочет
+    продавать её напрямую, а не терять целиком).
+    """
+
+    def test_target_not_consumed_elsewhere_has_full_share(self, monkeypatch, tmp_path):
+        _setup(monkeypatch, tmp_path, type_ids={}, volumes={})
+        demand = expand_demand({"Fuel Block": 10.0}, schematics=_schematics(), recipes=_recipes())
+        assert demand.revenue_share["Fuel Block"] == 1.0
+        # Coolant не был передан отдельным таргетом — у него вообще нет
+        # записи (не "0.0", а её просто нет, см. docstring поля).
+        assert "Coolant" not in demand.revenue_share
+
+    def test_shared_target_gets_proportional_share_not_full_exclusion(self, monkeypatch, tmp_path):
+        """
+        Coolant выбран целевым НАПРЯМУЮ (10.0 ед/ч) И одновременно
+        нужен Fuel Block (2.0 ед/ч * 5.0 Coolant/цикл = 10.0 ед/ч) —
+        суммарный спрос на Coolant 20.0 ед/ч, из которых половина его
+        СОБСТВЕННАЯ прямая цель: revenue_share == 0.5, не 0 (исключение)
+        и не 1.0 (весь спрос как будто прямой).
+        """
+        _setup(monkeypatch, tmp_path, type_ids={}, volumes={})
+        demand = expand_demand(
+            {"Coolant": 10.0, "Fuel Block": 2.0}, schematics=_schematics(), recipes=_recipes(),
+        )
+        assert demand.revenue_share["Coolant"] == pytest.approx(0.5)
+        assert demand.revenue_share["Fuel Block"] == 1.0
+
+    def test_purchased_p1_target_defaults_to_full_share(self, monkeypatch, tmp_path):
+        """Закупленный P1, выбранный целевым напрямую (редкий случай) — не падает, доля 1.0."""
+        _setup(monkeypatch, tmp_path, type_ids={}, volumes={})
+        demand = expand_demand(
+            {"Water": 5.0}, schematics=_schematics(), recipes=_recipes(), purchase_p1=True,
+        )
+        assert demand.revenue_share["Water"] == 1.0

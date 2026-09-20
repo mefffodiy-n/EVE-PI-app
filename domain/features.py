@@ -310,8 +310,8 @@ FEATURES = FEATURES + (
 FEATURES = FEATURES + (
     Feature(
         "revenue_by_product", "Разбивка выручки по конечным продуктам, без пересечения целевых цепочек",
-        ("разбивка выручки", "не считается выручкой отдельно"),
-        ("breakdown of revenue", "not counted as separate revenue"),
+        ("разбивка выручки", "прямая целевая доля"),
+        ("breakdown of revenue", "direct target share"),
         "0.10.47", "help",
     ),
 )

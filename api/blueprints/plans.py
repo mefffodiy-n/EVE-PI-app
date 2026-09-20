@@ -271,10 +271,12 @@ def plan_profitability():
     purchased_p1 = payload.get("purchased_p1") or {}
     duty_cycles = payload.get("duty_cycles") or {}
     missing_volumes = payload.get("missing_volumes") or []
+    revenue_share = payload.get("revenue_share") or {}
 
     result = evaluate_plan_profitability(
         rows, targets, _load_prices(), planets=_load_planets_book(),
         purchased_p1=purchased_p1, duty_cycles=duty_cycles, missing_volumes=missing_volumes,
+        revenue_share=revenue_share,
     )
     return json_ok(**result.to_dict(), prices_collected_at=_prices_collected_at())
 

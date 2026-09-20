@@ -94,6 +94,24 @@ class Demand:
     duty_cycles: dict[str, float] = field(default_factory=dict)
     missing_volumes: list[str] = field(default_factory=list)
 
+    # Доля СОБСТВЕННОГО спроса каждого целевого продукта, которая идёт
+    # на прямую продажу, а не на переработку в ДРУГОЙ выбранный целевой
+    # продукт этого же плана (20.09.2026, по прямому запросу
+    # пользователя: «нельзя просто убирать продукт, если он участвует
+    # в цепочке выше тиром — нужно разделять по виду: целевой для своей
+    # цепочки, или проходной для цепочки более высокого тира»).
+    # Пользователь может выбрать целями одновременно, например, Data
+    # Chips (P3) И Broadcast Node (P4, который её ест) — тогда часть
+    # построенных колоний Data Chips обслуживает СВОЙ прямой таргет
+    # (продаётся), а часть — питает Broadcast Node (не продаётся сама
+    # по себе). Единственное различие между этими колониями — для чего
+    # они посчитаны, физически они одинаковые и делят один пул фабрик
+    # (правило "shared_components" — общие компоненты считаются
+    # суммарной потребностью, не строятся отдельно на каждую цепочку).
+    # revenue_share[product] = прямой_целевой_расход / суммарный_расход
+    # — 1.0, если продукт нигде больше не потребляется в этом плане.
+    revenue_share: dict[str, float] = field(default_factory=dict)
+
     def add(self, product: str, rate: float) -> None:
         self.units_per_hour[product] = self.units_per_hour.get(product, 0.0) + rate
 
@@ -223,6 +241,10 @@ def expand_demand(
 
         for input_name, qty_per_cycle in schematic.inputs.items():
             queue.append((input_name, factories * qty_per_cycle * 60.0 / schematic.cycle_minutes))
+
+    for product, direct_rate in targets.items():
+        total_rate = demand.units_per_hour.get(product)
+        demand.revenue_share[product] = 1.0 if not total_rate else min(1.0, direct_rate / total_rate)
 
     _compute_duty_cycles(demand, schematics)
     return demand
