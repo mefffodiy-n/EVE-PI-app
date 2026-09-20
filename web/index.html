@@ -1296,7 +1296,7 @@ const T={
   pocoAssumption:'Оценка на {hours} часов в месяце, без истощения месторождений. Простой из-за пропускной способности причала уже учтён (см. выше), прочие простои — нет. Налог — и на вывоз, и на ввоз на каждом перемещении между планетами по цепочке.',
   pocoRevenueByProductTitle:'Выручка по продуктам',
   pocoRevenueByProductQty:'Ед. / мес',pocoRevenueByProductPrice:'Цена, ISK',pocoRevenueByProductRevenue:'Выручка / мес',
-  pocoCrossedTarget:'«{product}» не считается выручкой отдельно — весь объём уходит на переработку в «{other}» в этом же плане',
+  pocoSharedTarget:'«{product}» частично уходит на переработку в другую выбранную цель этого же плана — в выручке учтена только прямая целевая доля ({pct}%)',
   purchaseListTitle:'Список закупки сырья (P1)',
   purchaseListProduct:'Продукт',purchaseListQty:'Кол-во / мес',purchaseListPrice:'Цена, ISK',
   purchaseListCost:'Стоимость / мес',purchaseListTotal:'Итого',purchaseListNoPrice:'нет цены',
@@ -1381,7 +1381,7 @@ const T={
   pocoAssumption:'Estimate over {hours} hours per month, no deposit depletion. Downtime from causeway throughput is already accounted for (see above); other downtime is not. Tax applies on both export and import at every hop between planets in the chain.',
   pocoRevenueByProductTitle:'Revenue by product',
   pocoRevenueByProductQty:'Units / mo',pocoRevenueByProductPrice:'Price, ISK',pocoRevenueByProductRevenue:'Revenue / mo',
-  pocoCrossedTarget:'"{product}" is not counted as separate revenue — the whole output goes into "{other}" in this same plan',
+  pocoSharedTarget:'"{product}" is partly going into another selected target in this same plan — revenue only counts its direct target share ({pct}%)',
   purchaseListTitle:'Raw material purchase list (P1)',
   purchaseListProduct:'Product',purchaseListQty:'Qty / mo',purchaseListPrice:'Price, ISK',
   purchaseListCost:'Cost / mo',purchaseListTotal:'Total',purchaseListNoPrice:'no price',
@@ -3349,6 +3349,7 @@ async function renderPocoProfit(){
         purchased_p1:(lastPlanResp&&lastPlanResp.purchased_p1)||{},
         duty_cycles:(lastPlanResp&&lastPlanResp.duty_cycles)||{},
         missing_volumes:(lastPlanResp&&lastPlanResp.missing_volumes)||[],
+        revenue_share:(lastPlanResp&&lastPlanResp.revenue_share)||{},
       }),
     });
     d=await r.json();
@@ -3364,11 +3365,13 @@ async function renderPocoProfit(){
   if(d.missing_volumes && d.missing_volumes.length)
     gaps.push(fmtPlain(t('pocoMissingVolumes'),{list:d.missing_volumes.join(', ')}));
   // Пересечение целевых цепочек (20.09.2026, по прямому запросу
-  // пользователя) — продукт выбран целевым, но весь его выход в этом
-  // плане уходит на переработку в ДРУГОЙ выбранный целевой продукт:
-  // не считается выручкой отдельно, domain/poco_tax.py::_effective_targets.
-  (d.crossed_targets||[]).forEach(c=>
-    gaps.push(fmtPlain(t('pocoCrossedTarget'),{product:c.product,other:c.consumed_by})));
+  // пользователя, пересмотрено в тот же день) — продукт выбран целевым
+  // И одновременно частично уходит на переработку в ДРУГОЙ выбранный
+  // целевой продукт: в выручке учтена только его прямая целевая доля,
+  // не всё построенное количество (domain/poco_tax.py — revenue_share,
+  // не полное исключение).
+  (d.shared_targets||[]).forEach(s=>
+    gaps.push(fmtPlain(t('pocoSharedTarget'),{product:s.product,pct:Math.round(s.share*100)})));
 
   // Пропускная способность причала (20.09.2026, по прямому запросу
   // пользователя) — причал фиксированной ёмкости опустошается тем
@@ -4137,12 +4140,14 @@ const DOC={
    <p>Под чистой прибылью — разбивка выручки по конечным продуктам:
    сколько единиц и на сколько ISK по снимку рыночных цен получится к
    концу месяца по каждому виду. Если один из выбранных целевых
-   продуктов при этом сам является сырьём для ДРУГОГО выбранного
-   целевого продукта (например, выбраны и промежуточный, и конечный
-   продукт одной цепочки), он не считается выручкой отдельно — весь
-   его объём физически уходит на переработку дальше, панель честно
-   об этом предупреждает, вместо того чтобы посчитать один и тот же
-   материал дважды.</p>
+   продуктов одновременно нужен ДРУГОМУ выбранному целевому продукту
+   как сырьё (например, выбраны и промежуточный, и конечный продукт
+   одной цепочки, каждый своей отдельной линией), в выручке учитывается
+   только его СОБСТВЕННАЯ прямая целевая доля — часть построенных
+   колоний, а не всё их количество: остальное физически уходит на
+   переработку в следующий продукт. Панель показывает эту долю
+   отдельным примечанием, чтобы один и тот же материал не считался
+   продан дважды и не терялся полностью.</p>
 
    <h3 id="h-purchase-list">Список закупки сырья (P1)</h3>
    <p>Панель под прогнозом прибыльности — показывается только в режиме
@@ -4384,11 +4389,13 @@ const DOC={
    <p>Below net profit is a breakdown of revenue by final product: how many
    units and how much ISK, by the market price snapshot, each one is
    expected to bring in by month's end. If one of the selected target
-   products is itself a raw material for ANOTHER selected target product
-   (say you picked both an intermediate and a final product from the same
-   chain), it is not counted as separate revenue — its entire output
-   physically goes into further processing, and the panel warns about
-   this instead of counting the same material twice.</p>
+   products is also needed by ANOTHER selected target product as a raw
+   material (say you picked both an intermediate and a final product from
+   the same chain, each its own line), only its OWN direct target share
+   counts as revenue — the rest of the colonies built for it physically
+   go into processing the next product. The panel calls out that share
+   as a note, so the same material is neither counted twice nor dropped
+   entirely.</p>
 
    <h3 id="h-purchase-list">Raw material purchase list (P1)</h3>
    <p>A panel below the profitability forecast — shown only in "buy all P1 on the

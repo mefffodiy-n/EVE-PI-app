@@ -450,6 +450,11 @@ class PlanResult:
             # /api/plan-profitability без пересчёта на сервере заново.
             "duty_cycles": self.demand.duty_cycles if self.demand else {},
             "missing_volumes": sorted(self.demand.missing_volumes) if self.demand else [],
+            # Доля прямого целевого спроса каждого целевого продукта,
+            # 20.09.2026 (см. domain/throughput.py::Demand.revenue_share)
+            # — тем же путём, что duty_cycles, пересылается фронтендом в
+            # /api/plan-profitability без пересчёта на сервере заново.
+            "revenue_share": self.demand.revenue_share if self.demand else {},
         }
 
 

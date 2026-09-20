@@ -556,25 +556,19 @@ def _schematics_with_fuel_block():
     return schematics
 
 
-def _recipes_with_fuel_block():
-    from domain.recipes import Recipe, RecipeBook
-    return RecipeBook({
-        "Water": Recipe(name="Water", tier="P1", source="Aqueous Liquids"),
-        "Coolant": Recipe(name="Coolant", tier="P2", inputs={"Water": 1}),
-        "Fuel Block": Recipe(name="Fuel Block", tier="P3", inputs={"Coolant": 1}),
-    })
-
-
 class TestRevenueByProduct:
     """
     20.09.2026, по прямому запросу пользователя: разбивка выручки по
-    конечным продуктам, без двойного учёта при пересечении целевых
-    цепочек (мультивыбор target_products — Coolant И Fuel Block, где
-    Fuel Block ест Coolant, — весь Coolant физически уходит на
-    переработку, продавать напрямую нечего).
+    конечным продуктам. Пересмотрено В ТОТ ЖЕ ДЕНЬ после того, как
+    пользователь указал на реальный сценарий: он выбрал Coolant И Fuel
+    Block ОБА целевыми, каждый своей ОТДЕЛЬНОЙ линией — часть
+    построенных колоний Coolant обслуживает его СОБСТВЕННЫЙ прямой
+    таргет (продаётся), часть — питает Fuel Block. Полное исключение
+    Coolant из выручки (первая версия поправки) было неверным — нужна
+    ДОЛЯ (`revenue_share`), не бинарное включить/исключить.
     """
 
-    def test_single_target_matches_aggregate_revenue(self):
+    def test_single_target_has_full_share_by_default(self):
         planets = _FakePlanetBook({("MINE", 1.0): 0.10, ("HOME", 2.0): 0.05})
         result = evaluate_plan_profitability(
             rows=[_mining_row(), _processing_row()],
@@ -587,15 +581,16 @@ class TestRevenueByProduct:
         entry = result.revenue_by_product[0]
         assert entry.product == "Coolant"
         assert entry.monthly_revenue == result.monthly_revenue
-        assert result.crossed_targets == {}
+        assert result.shared_targets == {}
 
-    def test_target_consumed_by_another_target_is_excluded_not_double_counted(self):
+    def test_shared_target_counts_only_its_direct_share_not_excluded_entirely(self):
         """
-        Coolant выбран целевым, НО весь его выход в этом плане уходит
-        на переработку в Fuel Block (тоже целевой) — Coolant не должен
-        попасть ни в revenue_by_product, ни в агрегат monthly_revenue,
-        иначе один и тот же материал считался бы продан дважды: и как
-        сырой Coolant, и внутри цены Fuel Block.
+        Coolant выбран целевым И одновременно частично уходит на
+        переработку в Fuel Block (тоже целевой) — revenue_share=0.5
+        означает половина построенных колоний Coolant обслуживает его
+        СОБСТВЕННЫЙ прямой таргет. Выручка Coolant должна учитывать
+        именно эту половину, не ноль (как было в первой, неверной
+        версии) и не всё целиком (тогда был бы двойной учёт).
         """
         planets = _FakePlanetBook({("MINE", 1.0): 0.10, ("HOME", 2.0): 0.05, ("HOME2", 3.0): 0.05})
         result = evaluate_plan_profitability(
@@ -603,15 +598,33 @@ class TestRevenueByProduct:
             target_products=["Coolant", "Fuel Block"],
             prices={"Water": 10.0, "Coolant": 100.0, "Fuel Block": 500.0},
             schematics=_schematics_with_fuel_block(),
-            recipes=_recipes_with_fuel_block(),
             planets=planets,
+            revenue_share={"Coolant": 0.5},
         )
 
-        products = {entry.product for entry in result.revenue_by_product}
-        assert products == {"Fuel Block"}
-        assert result.crossed_targets == {"Coolant": "Fuel Block"}
-        # Выручка — только с Fuel Block (5 ед./ч * 12 фабрик * 720ч * 500 ISK), Coolant не примешан.
-        assert result.monthly_revenue == 5.0 * 12 * 720.0 * 500.0
+        by_product = {entry.product: entry for entry in result.revenue_by_product}
+        assert set(by_product) == {"Coolant", "Fuel Block"}
+        # Coolant: 10 ед./ч * 12 фабрик * 720ч * 0.5 доли * 100 ISK.
+        assert by_product["Coolant"].monthly_revenue == 10.0 * 12 * 720.0 * 0.5 * 100.0
+        # Fuel Block: доля по умолчанию 1.0 — считается целиком.
+        assert by_product["Fuel Block"].monthly_revenue == 5.0 * 12 * 720.0 * 500.0
+        assert result.monthly_revenue == by_product["Coolant"].monthly_revenue + by_product["Fuel Block"].monthly_revenue
+        assert result.shared_targets == {"Coolant": 0.5}
+
+    def test_export_tax_ignores_revenue_share_the_whole_batch_still_leaves_the_planet(self):
+        """Налог — со всего физического вывоза, не только с "продаваемой" доли."""
+        planets = _FakePlanetBook({("HOME", 2.0): 0.05})
+        with_share = evaluate_plan_profitability(
+            rows=[_processing_row()], target_products=["Coolant"],
+            prices={"Water": 10.0, "Coolant": 100.0}, schematics=_schematics(), planets=planets,
+            revenue_share={"Coolant": 0.5},
+        )
+        without_share = evaluate_plan_profitability(
+            rows=[_processing_row()], target_products=["Coolant"],
+            prices={"Water": 10.0, "Coolant": 100.0}, schematics=_schematics(), planets=planets,
+        )
+        assert with_share.monthly_export_tax == without_share.monthly_export_tax
+        assert with_share.monthly_revenue == without_share.monthly_revenue * 0.5
 
     def test_missing_price_still_reports_units_not_a_guessed_revenue(self):
         planets = _FakePlanetBook({("MINE", 1.0): 0.10, ("HOME", 2.0): 0.05})
