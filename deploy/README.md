@@ -33,7 +33,7 @@ python -m venv .venv
 
 ```
 PI_ENV=prod
-PI_DATABASE_URL=postgresql+psycopg://user:pass@localhost/pidirector   # см. раздел 3 — или оставить SQLite
+PI_DATABASE_URL=mysql+pymysql://user:pass@localhost/pidirector   # см. раздел 3 — или оставить SQLite
 PI_LOG_DIR=C:\ProgramData\PI-Director\logs
 PI_BACKUP_DIR=C:\ProgramData\PI-Director\backups
 ```
@@ -70,9 +70,42 @@ SQLite — обычный `TEXT`, не индексируемый бинарны
 (согласованный снимок даже при работающем приложении), без установки
 дополнительных пакетов.
 
-### 3.2. Postgres (рекомендуется, единственная проверенная в бою)
+### 3.2. MariaDB (прод с 20.09.2026)
 
-На бою (с 15.09.2026) стоит Postgres, установленный так (Ubuntu):
+```bash
+sudo apt-get install -y mariadb-server
+sudo mariadb -e "CREATE DATABASE pidirector CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+sudo mariadb -e "CREATE USER 'pidirector'@'localhost' IDENTIFIED BY '...';"
+sudo mariadb -e "GRANT ALL PRIVILEGES ON pidirector.* TO 'pidirector'@'localhost';"
+```
+
+Дальше — обычное переключение приложения:
+
+```
+PI_DATABASE_URL=mysql+pymysql://user:pass@localhost/pidirector
+.venv\Scripts\pip install pymysql
+.venv\Scripts\python -m alembic upgrade head
+```
+
+Проверено на бою (миграция реального прода с Postgres, 20.09.2026):
+схема, полный перенос данных, вход через SSO, все фоновые сборщики
+(включая запись сложных JSON-колоний в `sync_colony_status`) и бэкап —
+без единой ошибки. Если переключаетесь не на пустую базу, а переносите
+уже накопленные данные — `python -m scripts.migrate_postgres_to_mysql
+--postgres ... --mysql ...` ПОСЛЕ `alembic upgrade head` на пустой
+MariaDB (создаёт только схему, не данные), см. докстринг скрипта; для
+переноса с SQLite при отсутствии Postgres на пути — тот же принцип,
+отдельного скрипта нет, годится `migrate_sqlite_to_postgres.py` как
+образец (два движка вместо трёх строк меняются в `create_engine()`).
+Бэкап — `mysqldump --single-transaction` + `gzip`, см. раздел 5.
+
+### 3.3. Postgres (прод до 20.09.2026, полностью поддерживается)
+
+Прод стоял на Postgres с 15.09.2026 по 20.09.2026 (`docs/ROADMAP.md`,
+«Переход на Postgres» / «Миграция прода на MariaDB») — переключились на
+MariaDB, не из-за проблем с Postgres, а по отдельному решению
+пользователя; сама СУБД остаётся полностью рабочим вариантом,
+установка та же:
 
 ```bash
 sudo apt-get install -y postgresql
@@ -96,17 +129,19 @@ migrate_sqlite_to_postgres --sqlite ... --postgres ...` ПОСЛЕ
 данные), см. докстринг скрипта. Бэкап — `pg_dump -Fc` (сжатый
 custom-формат), см. раздел 5.
 
-### 3.3. MySQL/MariaDB — поддержаны, но не проверены в бою
+### 3.4. MySQL — теоретически совместим, отдельно не проверялся
 
-SQLAlchemy и Alembic одинаково генерируют DDL для MySQL/MariaDB —
+SQLAlchemy и Alembic одинаково генерируют DDL для MySQL и MariaDB —
 `PI_DATABASE_URL=mysql+pymysql://user:pass@localhost/pidirector`
-работает (нужен драйвер: `pip install pymysql`). Оговорка та же, что и
-раньше: JSON-колонки в MariaDB — это `LONGTEXT` с CHECK, не настоящий
-тип (одна из причин, по которой прод выбрал Postgres, не MariaDB) — не
-мешает работе, но менее эффективно для будущих JSONB-запросов, если
-они когда-нибудь понадобятся.
+работает (нужен драйвер: `pip install pymysql`), и весь код раздела 3.2
+(включая бэкап) написан на общий диалект `mysql+`, не специфичный для
+MariaDB. Отдельно на настоящем MySQL Server не проверялось — прод
+мигрировал именно на MariaDB. JSON-колонки — `LONGTEXT` с CHECK, не
+отдельный индексируемый тип (в отличие от Postgres `json`/`jsonb`) — не
+мешает работе, но менее эффективно для будущих запросов по содержимому
+JSON, если они когда-нибудь понадобятся.
 
-**Бэкап (20.09.2026, по прямому запросу пользователя — реализован):**
+**Бэкап:**
 `mysqldump --single-transaction` (снимок InnoDB без блокировки таблиц)
 + сжатие `gzip` на стороне Python (у `mysqldump`, в отличие от
 `pg_dump`, нет своего сжатого формата), файл `pidirector.sql.gz` в той
