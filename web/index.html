@@ -475,9 +475,13 @@ button { font-family:inherit; }
 .action-bar .save-inline input { background:var(--void); border:1px solid var(--amber); color:var(--read);
                                   padding:8px 10px; font-size:13px; width:180px; font-family:inherit; }
 .action-bar .save-inline input:focus { outline:none; border-color:var(--amber-hi); }
-.action-bar .save-inline button { border-color:var(--amber); color:var(--amber);
-                                   padding:7px 16px; font-size:12px; font-weight:600; }
-.action-bar .save-inline button:hover { background:var(--accent-bg); }
+/* .mini, не голый button (20.09.2026, найдено пользователем по
+   скриншоту): бывший селектор `.save-inline button` задевал и
+   help-tag() — иконка-«?» получала тот же padding:7px 16px и
+   растягивалась в овал вместо кружка. */
+.action-bar .save-inline .mini { border-color:var(--amber); color:var(--amber);
+                                  padding:7px 16px; font-size:12px; font-weight:600; }
+.action-bar .save-inline .mini:hover { background:var(--accent-bg); }
 .action-bar #savedList { flex-basis:100%; }
 .action-bar #savedList:empty, .action-bar #cmpResult:empty { display:none; }
 .field { margin-bottom:11px; }
