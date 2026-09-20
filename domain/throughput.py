@@ -26,7 +26,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from domain.logistics import (
-    FACILITY_FACTORIES_PER_COLONY,
+    causeway_units,
     launchpad_capacity_m3,
     logistics_downtime_hours,
     own_consumption_profile,
@@ -257,9 +257,14 @@ def _compute_duty_cycles(demand: Demand, schematics: dict[str, Schematic]) -> No
     "непрерывного ручейка" — см. докстринг domain/logistics.py).
 
     Для продукта X с профилем расхода (own_consumption_profile):
-      - drain_full = ёмкость причала / суммарный расход — сколько часов
-        X перерабатывает ПОЛНЫЙ причал, если бы его всегда держали
-        полным (потолок, ограниченный физическим размером причала X).
+      - drain_full = СУММАРНАЯ ёмкость ВСЕХ реально построенных причалов
+        X (`causeway_units` × ёмкость одного) / суммарный расход —
+        сколько часов X перерабатывает их все, если бы держали полными
+        (потолок, ограниченный физическим размером причалов X). Не одна
+        представительная колония — реальное число, заданное рецептами
+        (см. docstring domain/logistics.py::causeway_units, 20.09.2026 —
+        без этого расчёт ломает баланс масс между тирами с разным
+        реальным числом колоний).
       - для каждого произведённого в этом плане входа I (не границы):
         сколько часов X проработает НА ОДНОЙ партии от I (её объём,
         делённый на расход X этого входа в час) — берём МИНИМУМ по
@@ -293,7 +298,8 @@ def _compute_duty_cycles(demand: Demand, schematics: dict[str, Schematic]) -> No
         visiting.add(product)
 
         schematic = schematics[product]
-        profile, missing = own_consumption_profile(schematic)
+        total_factories = demand.factories.get(product, 0.0)
+        profile, missing = own_consumption_profile(schematic, total_factories)
         missing_volumes.update(missing)
 
         total_rate = sum(profile.values()) if profile else 0.0
@@ -305,7 +311,12 @@ def _compute_duty_cycles(demand: Demand, schematics: dict[str, Schematic]) -> No
             resolved[product] = _UNLIMITED
             return _UNLIMITED
 
-        drain_full = capacity / total_rate
+        # Ёмкость причала — на РЕАЛЬНОЕ число построенных причалов
+        # продукта (causeway_units), не на одну представительную
+        # колонию: у соседних тиров обычно разное число колоний,
+        # заданное рецептами, и без этого расчёт ломает баланс масс
+        # между ними (см. docstring domain/logistics.py::causeway_units).
+        drain_full = capacity * causeway_units(schematic, total_factories) / total_rate
 
         upstream_drains: list[float] = [drain_full]
         upstream_cycles: list[float] = []
@@ -324,7 +335,7 @@ def _compute_duty_cycles(demand: Demand, schematics: dict[str, Schematic]) -> No
 
         drain = min(upstream_drains)
         cycle = max([drain + downtime] + upstream_cycles)
-        batch_units = _batch_units(schematic, drain)
+        batch_units = schematic.output_per_hour * total_factories * drain
 
         visiting.discard(product)
         node = _Relay(drain_hours=drain, cycle_hours=cycle, batch_units=batch_units)
@@ -338,12 +349,6 @@ def _compute_duty_cycles(demand: Demand, schematics: dict[str, Schematic]) -> No
         demand.duty_cycles[product] = 1.0 if node.cycle_hours == float("inf") else node.drain_hours / node.cycle_hours
 
     demand.missing_volumes = sorted(missing_volumes)
-
-
-def _batch_units(schematic: Schematic, drain_hours: float) -> float:
-    """Сколько единиц продукта X производит за один цикл drain_hours."""
-    factories = FACILITY_FACTORIES_PER_COLONY[schematic.facility]
-    return schematic.output_per_hour * factories * drain_hours
 
 
 def templates_for_factories(product_tier: str, factory_count: float, factories_per_template: int) -> int:

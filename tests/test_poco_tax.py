@@ -537,3 +537,94 @@ class TestToDict:
             "product": "Water", "monthly_qty": 600.0 * HOURS_PER_MONTH,
             "price": 10.0, "monthly_cost": 4_320_000.0,
         }]
+
+
+def _fuel_block_row(planet_type="Temperate", factories=12, system="HOME2", planet=3):
+    return {
+        "role_key": "proc", "res_out": "Fuel Block", "planet_type": planet_type,
+        "structures_detail": [{"kind": "advanced_industry_facility", "count": factories}],
+        "system": system, "planet": planet,
+    }
+
+
+def _schematics_with_fuel_block():
+    schematics = _schematics()
+    schematics["Fuel Block"] = Schematic(
+        product="Fuel Block", facility="advanced_industry_facility",
+        inputs={"Coolant": 5.0}, output_qty=5.0, cycle_minutes=60.0,
+    )
+    return schematics
+
+
+def _recipes_with_fuel_block():
+    from domain.recipes import Recipe, RecipeBook
+    return RecipeBook({
+        "Water": Recipe(name="Water", tier="P1", source="Aqueous Liquids"),
+        "Coolant": Recipe(name="Coolant", tier="P2", inputs={"Water": 1}),
+        "Fuel Block": Recipe(name="Fuel Block", tier="P3", inputs={"Coolant": 1}),
+    })
+
+
+class TestRevenueByProduct:
+    """
+    20.09.2026, по прямому запросу пользователя: разбивка выручки по
+    конечным продуктам, без двойного учёта при пересечении целевых
+    цепочек (мультивыбор target_products — Coolant И Fuel Block, где
+    Fuel Block ест Coolant, — весь Coolant физически уходит на
+    переработку, продавать напрямую нечего).
+    """
+
+    def test_single_target_matches_aggregate_revenue(self):
+        planets = _FakePlanetBook({("MINE", 1.0): 0.10, ("HOME", 2.0): 0.05})
+        result = evaluate_plan_profitability(
+            rows=[_mining_row(), _processing_row()],
+            target_products=["Coolant"],
+            prices={"Water": 10.0, "Coolant": 100.0},
+            schematics=_schematics(),
+            planets=planets,
+        )
+        assert len(result.revenue_by_product) == 1
+        entry = result.revenue_by_product[0]
+        assert entry.product == "Coolant"
+        assert entry.monthly_revenue == result.monthly_revenue
+        assert result.crossed_targets == {}
+
+    def test_target_consumed_by_another_target_is_excluded_not_double_counted(self):
+        """
+        Coolant выбран целевым, НО весь его выход в этом плане уходит
+        на переработку в Fuel Block (тоже целевой) — Coolant не должен
+        попасть ни в revenue_by_product, ни в агрегат monthly_revenue,
+        иначе один и тот же материал считался бы продан дважды: и как
+        сырой Coolant, и внутри цены Fuel Block.
+        """
+        planets = _FakePlanetBook({("MINE", 1.0): 0.10, ("HOME", 2.0): 0.05, ("HOME2", 3.0): 0.05})
+        result = evaluate_plan_profitability(
+            rows=[_mining_row(), _processing_row(), _fuel_block_row()],
+            target_products=["Coolant", "Fuel Block"],
+            prices={"Water": 10.0, "Coolant": 100.0, "Fuel Block": 500.0},
+            schematics=_schematics_with_fuel_block(),
+            recipes=_recipes_with_fuel_block(),
+            planets=planets,
+        )
+
+        products = {entry.product for entry in result.revenue_by_product}
+        assert products == {"Fuel Block"}
+        assert result.crossed_targets == {"Coolant": "Fuel Block"}
+        # Выручка — только с Fuel Block (5 ед./ч * 12 фабрик * 720ч * 500 ISK), Coolant не примешан.
+        assert result.monthly_revenue == 5.0 * 12 * 720.0 * 500.0
+
+    def test_missing_price_still_reports_units_not_a_guessed_revenue(self):
+        planets = _FakePlanetBook({("MINE", 1.0): 0.10, ("HOME", 2.0): 0.05})
+        result = evaluate_plan_profitability(
+            rows=[_mining_row(), _processing_row()],
+            target_products=["Coolant"],
+            prices={"Water": 10.0},  # цены Coolant нет
+            schematics=_schematics(),
+            planets=planets,
+        )
+        assert len(result.revenue_by_product) == 1
+        entry = result.revenue_by_product[0]
+        assert entry.product == "Coolant"
+        assert entry.monthly_units == 10.0 * 12 * HOURS_PER_MONTH
+        assert entry.price is None
+        assert entry.monthly_revenue is None

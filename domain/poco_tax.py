@@ -49,6 +49,21 @@ routes) — плану взять их неоткуда, цепочка ещё �
 ЦЕЛЕВЫХ продуктов запроса: промежуточные тиры производятся ради
 следующей стадии цепочки, не продаются сами по себе.
 
+ПЕРЕСЕЧЕНИЕ ЦЕЛЕВЫХ ПРОДУКТОВ (20.09.2026, по прямому запросу
+пользователя при добавлении разбивки выручки по продуктам ниже).
+Мультивыбор целевых продуктов — обычная функция интерфейса
+(`multi_targets`), и ничто не мешает выбрать одновременно, например,
+"Coolant" и "Fuel Block" (Fuel Block ест Coolant). Без поправки
+`target_set` считал бы такой Coolant дважды: один раз как «продано
+напрямую» (весь Coolant-выход плана целиком, так как он в целевых), и
+второй раз — уже переработанным в проданный Fuel Block. Реального
+Coolant, который можно было бы продать НАПРЯМУЮ, при этом не остаётся:
+весь построенный объём физически уходит на переработку в Fuel Block.
+`_effective_targets()` исключает из выручки любой целевой продукт,
+который является (прямо или транзитивно, через `Recipe.inputs`)
+сырьём для ДРУГОГО выбранного целевого продукта — не пересекать
+цепочки при подсчёте.
+
 ДОПУЩЕНИЯ (честно, не выдаются за факт — правило 1):
   - «Полная загруженность» — как и весь остальной план: без простоев,
     без дефицита сырья, без истощения месторождений.
@@ -61,12 +76,45 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from domain.recipes import RecipeBook, load_recipes
 from domain.throughput import Schematic, load_schematics
 
 if TYPE_CHECKING:
     from domain.planets import PlanetBook
 
 HOURS_PER_MONTH = 720.0
+
+
+def _is_ingredient_of(candidate: str, product: str, recipes: RecipeBook, seen: set[str]) -> bool:
+    """candidate — сырьё product'а, прямо или транзитивно (через Recipe.inputs)."""
+    if product in seen:
+        return False  # защита от цикла в дереве рецептов
+    seen.add(product)
+    recipe = recipes.get(product)
+    if recipe is None:
+        return False
+    if candidate in recipe.inputs:
+        return True
+    return any(_is_ingredient_of(candidate, name, recipes, seen) for name in recipe.inputs)
+
+
+def _effective_targets(
+    target_products: list[str], recipes: RecipeBook,
+) -> tuple[set[str], dict[str, str]]:
+    """
+    Целевые продукты минус те, что сами являются сырьём для ДРУГОГО
+    выбранного целевого продукта — см. докстринг модуля,
+    "ПЕРЕСЕЧЕНИЕ ЦЕЛЕВЫХ ПРОДУКТОВ". Второй элемент — {исключённый
+    продукт: кого именно из целевых он кормит} для предупреждения.
+    """
+    targets = set(target_products)
+    crossed: dict[str, str] = {}
+    for t in targets:
+        for other in targets:
+            if other != t and _is_ingredient_of(t, other, recipes, set()):
+                crossed[t] = other
+                break
+    return targets - set(crossed), crossed
 
 
 def _factory_count(structures_detail: list[dict]) -> int:
@@ -159,6 +207,31 @@ class PurchaseItem:
 
 
 @dataclass
+class ProductRevenue:
+    """
+    Одна строка разбивки выручки по конечным продуктам (20.09.2026, по
+    прямому запросу пользователя — увидеть, сколько единиц каждого
+    вида получится к концу месяца и сколько это стоит по Jita buy).
+    `price`/`monthly_revenue` — `None`, когда цены нет в снимке
+    (честный пробел, не 0 — правило 1); `monthly_units` известно
+    всегда, оно приходит из самого плана, не из цен.
+    """
+
+    product: str
+    monthly_units: float
+    price: float | None
+    monthly_revenue: float | None
+
+    def to_dict(self) -> dict:
+        return {
+            "product": self.product,
+            "monthly_units": self.monthly_units,
+            "price": self.price,
+            "monthly_revenue": self.monthly_revenue,
+        }
+
+
+@dataclass
 class PlanProfitability:
     monthly_revenue: float | None
     monthly_export_tax: float | None
@@ -181,6 +254,15 @@ class PlanProfitability:
     # (без штрафа), а не выдуман; проброс из Demand.missing_volumes,
     # этот модуль их не считает сам.
     missing_volumes: list[str] = field(default_factory=list)
+    # Разбивка выручки по конечным продуктам (20.09.2026) — только по
+    # "эффективным" целям (см. _effective_targets, докстринг модуля,
+    # "ПЕРЕСЕЧЕНИЕ ЦЕЛЕВЫХ ПРОДУКТОВ"), сумма monthly_revenue по этому
+    # списку равна self.monthly_revenue.
+    revenue_by_product: list[ProductRevenue] = field(default_factory=list)
+    # Целевые продукты, исключённые из выручки, потому что весь их
+    # объём уходит на переработку в ДРУГОЙ выбранный целевой продукт
+    # этого же плана — {product: кого именно кормит}.
+    crossed_targets: dict[str, str] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return {
@@ -198,6 +280,13 @@ class PlanProfitability:
             "missing_rates": sorted(self.missing_rates),
             "purchase_items": [item.to_dict() for item in self.purchase_items],
             "missing_volumes": sorted(self.missing_volumes),
+            "revenue_by_product": [
+                item.to_dict() for item in sorted(self.revenue_by_product, key=lambda i: i.product)
+            ],
+            "crossed_targets": [
+                {"product": product, "consumed_by": other}
+                for product, other in sorted(self.crossed_targets.items())
+            ],
         }
 
 
@@ -316,6 +405,7 @@ def evaluate_plan_profitability(
     purchased_p1: dict[str, float] | None = None,
     duty_cycles: dict[str, float] | None = None,
     missing_volumes: list[str] | None = None,
+    recipes: RecipeBook | None = None,
 ) -> PlanProfitability:
     """
     rows — строки построенного плана (формат PlanRow.to_dict()): нужны
@@ -354,10 +444,16 @@ def evaluate_plan_profitability(
     ввоз). Пустой/не передан — как и раньше, полная загрузка без
     поправки (обратная совместимость для мест, которые ещё не считают
     duty cycle, например настоящие колонии).
+
+    recipes — для _effective_targets() (см. докстринг модуля,
+    "ПЕРЕСЕЧЕНИЕ ЦЕЛЕВЫХ ПРОДУКТОВ"); не передан — загружается сам
+    (`load_recipes()`, тот же принцип, что у schematics).
     """
     schematics = load_schematics() if schematics is None else schematics
-    target_set = set(target_products)
+    recipes = load_recipes() if recipes is None else recipes
+    target_set, crossed_targets = _effective_targets(target_products, recipes)
     duty_cycles = duty_cycles or {}
+    revenue_by_product: dict[str, ProductRevenue] = {}
 
     revenue = 0.0
     export_tax = 0.0
@@ -383,11 +479,24 @@ def evaluate_plan_profitability(
         price = prices.get(flow.output_product)
         if price is None:
             missing_prices.add(flow.output_product)
+            if flow.output_product in target_set:
+                monthly_units = flow.output_per_hour * HOURS_PER_MONTH
+                entry = revenue_by_product.setdefault(
+                    flow.output_product,
+                    ProductRevenue(product=flow.output_product, monthly_units=0.0, price=None, monthly_revenue=None),
+                )
+                entry.monthly_units += monthly_units
         else:
             monthly_output = flow.output_per_hour * HOURS_PER_MONTH
             if flow.output_product in target_set:
                 revenue += monthly_output * price
                 any_revenue = True
+                entry = revenue_by_product.setdefault(
+                    flow.output_product,
+                    ProductRevenue(product=flow.output_product, monthly_units=0.0, price=price, monthly_revenue=0.0),
+                )
+                entry.monthly_units += monthly_output
+                entry.monthly_revenue = (entry.monthly_revenue or 0.0) + monthly_output * price
             if rate is not None:
                 export_tax += monthly_output * price * rate
                 any_export = True
@@ -437,4 +546,6 @@ def evaluate_plan_profitability(
         missing_rates=missing_rates,
         purchase_items=sorted(purchase_items, key=lambda item: item.product),
         missing_volumes=list(missing_volumes or []),
+        revenue_by_product=list(revenue_by_product.values()),
+        crossed_targets=crossed_targets,
     )

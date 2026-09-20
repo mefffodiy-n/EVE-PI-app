@@ -72,11 +72,15 @@ class TestVolumeOf:
 
 
 class TestOwnConsumptionProfile:
-    def test_returns_m3_per_hour_for_every_input(self, monkeypatch, tmp_path):
+    def test_returns_m3_per_hour_scaled_by_real_total_factories(self, monkeypatch, tmp_path):
         """
-        Расход м³/час на ВЕСЬ шаблон колонии (не одну фабрику) — найденный
-        пользователем баг 20.09.2026: причал общий на 12 advanced-фабрик
-        (P2/P3), а расход считался так, будто причал обслуживает одну.
+        Расход м³/час на РЕАЛЬНОЕ число построенных колоний продукта
+        (`total_factories`), не на фиксированную константу одной
+        колонии — найденный пользователем баг 20.09.2026 (второй раз
+        за день): при проверке экономики плана выяснилось, что счёт
+        по одной представительной колонии на каждый тир ломает баланс
+        масс между тирами, у которых реально разное число колоний
+        (заданное рецептами, не фиксированной константой).
         """
         type_ids = {"Water": 1, "Electrolytes": 2}
         volumes = {1: 0.19, 2: 0.19}
@@ -86,12 +90,11 @@ class TestOwnConsumptionProfile:
             inputs={"Water": 40.0, "Electrolytes": 40.0}, output_qty=10.0, cycle_minutes=60.0,
         )
 
-        profile, missing = logistics.own_consumption_profile(schematic)
+        profile, missing = logistics.own_consumption_profile(schematic, total_factories=400.0)
 
-        factories = logistics.FACILITY_FACTORIES_PER_COLONY["advanced_industry_facility"]
         assert missing == []
-        assert profile["Water"] == pytest.approx(40.0 * factories * 0.19)
-        assert profile["Electrolytes"] == pytest.approx(40.0 * factories * 0.19)
+        assert profile["Water"] == pytest.approx(40.0 * 400.0 * 0.19)
+        assert profile["Electrolytes"] == pytest.approx(40.0 * 400.0 * 0.19)
 
     def test_missing_volume_excludes_the_whole_schematic_not_a_guess(self, monkeypatch, tmp_path):
         """Честный пробел (правило 1) — вся схема выходит из модели, не штраф на один вход."""
@@ -103,7 +106,7 @@ class TestOwnConsumptionProfile:
             inputs={"Water": 40.0, "Electrolytes": 40.0}, output_qty=10.0, cycle_minutes=60.0,
         )
 
-        profile, missing = logistics.own_consumption_profile(schematic)
+        profile, missing = logistics.own_consumption_profile(schematic, total_factories=12.0)
 
         assert profile == {}
         assert missing == ["Electrolytes"]
@@ -123,7 +126,7 @@ class TestOwnConsumptionProfile:
         )
         _setup(monkeypatch, tmp_path, type_ids, volumes)
 
-        profile, missing = logistics.own_consumption_profile(schematic)
+        profile, missing = logistics.own_consumption_profile(schematic, total_factories=8.0)
 
         assert profile == {}
         assert missing == []
@@ -132,6 +135,33 @@ class TestOwnConsumptionProfile:
         _setup(monkeypatch, tmp_path, type_ids={}, volumes={})
         schematic = Schematic(product="X", facility="advanced_industry_facility",
                                inputs={}, output_qty=100.0, cycle_minutes=30.0)
-        profile, missing = logistics.own_consumption_profile(schematic)
+        profile, missing = logistics.own_consumption_profile(schematic, total_factories=12.0)
         assert profile == {}
         assert missing == []
+
+    def test_zero_or_negative_total_factories_gives_empty_profile(self, monkeypatch, tmp_path):
+        """Продукт вне плана (не должно случаться на реальном demand.factories) — не делить на ноль."""
+        _setup(monkeypatch, tmp_path, type_ids={"Water": 1}, volumes={1: 0.19})
+        schematic = Schematic(product="Coolant", facility="advanced_industry_facility",
+                               inputs={"Water": 40.0}, output_qty=10.0, cycle_minutes=60.0)
+        profile, missing = logistics.own_consumption_profile(schematic, total_factories=0.0)
+        assert profile == {}
+        assert missing == []
+
+
+class TestCausewayUnits:
+    def test_scales_with_real_factory_count(self):
+        schematic = Schematic(product="Coolant", facility="advanced_industry_facility",
+                               inputs={"Water": 40.0}, output_qty=10.0, cycle_minutes=60.0)
+        factories_per_colony = logistics.FACILITY_FACTORIES_PER_COLONY["advanced_industry_facility"]
+        assert logistics.causeway_units(schematic, factories_per_colony * 3) == pytest.approx(3.0)
+
+    def test_excluded_facility_has_zero_causeway_units(self):
+        schematic = Schematic(product="Water", facility="basic_industry_facility",
+                               inputs={}, output_qty=100.0, cycle_minutes=30.0)
+        assert logistics.causeway_units(schematic, 400.0) == 0.0
+
+    def test_non_positive_total_factories_is_zero_units(self):
+        schematic = Schematic(product="Coolant", facility="advanced_industry_facility",
+                               inputs={"Water": 40.0}, output_qty=10.0, cycle_minutes=60.0)
+        assert logistics.causeway_units(schematic, 0.0) == 0.0

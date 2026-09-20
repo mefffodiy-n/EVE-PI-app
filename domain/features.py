@@ -307,5 +307,15 @@ FEATURES = FEATURES + (
 )
 
 
+FEATURES = FEATURES + (
+    Feature(
+        "revenue_by_product", "Разбивка выручки по конечным продуктам, без пересечения целевых цепочек",
+        ("разбивка выручки", "не считается выручкой отдельно"),
+        ("breakdown of revenue", "not counted as separate revenue"),
+        "0.10.47", "help",
+    ),
+)
+
+
 def by_section(section: str) -> tuple[Feature, ...]:
     return tuple(f for f in FEATURES if f.where == section)
