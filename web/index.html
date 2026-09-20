@@ -72,6 +72,14 @@
   /* Цвета колец повторяют игровые: синий — инфраструктура,
      бирюзовый — экстрактор, оранжевый — производство. */
   --ring-infra:#3a9fd8; --ring-extract:#2fb89a; --ring-basic:#c8763a; --ring-adv:#d8a63c;
+  /* Тень скоса для объёма букв (.brand-title, 20.09.2026) — не просто
+     rgba(0,0,0,..): на почти чёрном фоне тёмной темы (--void) чёрная
+     тень сливается с фоном и объём не читается (найдено пользователем
+     по скриншоту — светлая тема выглядела заметно объёмнее). --seam
+     здесь заметно СВЕТЛЕЕ --void (тот же контраст, на котором уже
+     держатся все границы панелей в тёмной теме), поэтому как тень
+     смещённой грани она видна на фоне, а не тонет в нём. */
+  --bevel-shadow:var(--seam);
 }
 /* Светлая тема. Меняются только переменные — правил дублировать
    не нужно. */
@@ -95,6 +103,10 @@ body.light {
   --t-p1:#2f6a92; --t-p2:#1f7a68; --t-p3:#7048a0; --t-p4:#a06a12;
   --t-p1-bg:rgba(47,106,146,.10); --t-p2-bg:rgba(31,122,104,.10);
   --t-p3-bg:rgba(112,72,160,.10); --t-p4-bg:rgba(160,106,18,.10);
+  /* Здесь фон уже светлый — обычная полупрозрачная чёрная тень отлично
+     читается (в отличие от тёмной темы, см. :root выше), --seam
+     светлой темы (#d8cdb4) для этой роли не подошёл бы вовсе. */
+  --bevel-shadow:rgba(0,0,0,.45);
 }
 
 /* Смена темы переключает переменные на body, из-за чего браузер
@@ -132,12 +144,65 @@ button { font-family:inherit; }
 /* Шаг 4 (docs/ROADMAP.md): лого-аватар + заголовок/подпись в столбик, как в
    макете Claude Design — вместо однострочного «PI Director текст». */
 .brand { display:flex; align-items:center; gap:11px; margin-right:20px; }
+/* Аватар уже был со статичным свечением (drop-shadow, --glow) — здесь
+   оно "дышит": плавная пульсация яркости/радиуса, как индикатор
+   работающего реактора, а не мигающая лампочка (медленно, малая
+   амплитуда). Цвета берутся из --glow/--amber-hi, которые уже разные
+   для тёмной/светлой темы — отдельного правила на тему не нужно
+   (20.09.2026, по прямому запросу пользователя — эффекты для блока
+   названия приложения, проверено в обеих темах). */
 .brand-avatar { width:30px; height:30px; border-radius:50%; flex:0 0 auto;
-                filter:drop-shadow(0 0 6px var(--glow)); }
-.brand-text { display:flex; flex-direction:column; line-height:1.15; }
+                animation:brand-pulse 3.2s ease-in-out infinite; }
+@keyframes brand-pulse {
+  0%, 100% { filter:drop-shadow(0 0 5px var(--glow)); }
+  50%      { filter:drop-shadow(0 0 11px var(--amber-hi)); }
+}
+.brand-text { display:flex; flex-direction:column; line-height:1.15; gap:2px; }
+/* Смешанный регистр («PI Director», не «PI DIRECTOR») — по референсу
+   стиля «GasLens BY EVECRAFT» (20.09.2026, найдено пользователем по
+   скриншоту): капсом идёт только подзаголовок-тег бренда (.brand
+   small ниже), заголовок — как набран. Статичное (не пульсирующее)
+   тёплое свечение текста — читаемость важнее в заголовке, чем на
+   декоративном аватаре, поэтому анимация только у одного элемента
+   блока, не у обоих одновременно (иначе рябит). */
+/* Градиентный "перелив" по тексту — узкий блик, бегущий вдоль букв от
+   первой до последней и обратно за один цикл, не мягкая заливка всего
+   слова (20.09.2026, по прямому запросу пользователя — уточнение
+   после первой, слишком широкой версии). background-size значительно
+   шире контейнера (420%) — при таком отношении яркая полоса
+   пропорционально узкая и заметно ПРОХОДИТ через буквы одну за другой,
+   а не подсвечивает середину слова целиком. Keyframe 0%→50%→100%
+   двигает background-position через весь диапазон (0%..100%) и
+   обратно — ровно "от первой до последней и обратно" за 9с (замедлено
+   по прямому запросу пользователя с исходных 5.2с), не
+   рывком в одну сторону. text-shadow остаётся поверх — держит
+   свечение независимо от заливки текста (background-clip на shadow
+   не влияет). */
+/* Объём букв (20.09.2026, по прямому запросу пользователя) — скос, не
+   просто более тёмная копия текста: светлая грань сверху-слева
+   (--amber-hi, будто ловит свет) + тень снизу-справа (--bevel-shadow,
+   см. :root/body.light выше — просто rgba(0,0,0,..) в тёмной теме
+   сливался с почти чёрным --void, объём не читался вовсе; найдено
+   пользователем по скриншоту при сравнении тем). Ambient-свечение
+   (--glow) осталось третьим слоем поверх — глубина и лёгкое сияние не
+   взаимоисключают друг друга, text-shadow принимает сколько угодно
+   слоёв через запятую. */
 .brand-title { font-family:'Inter',sans-serif; font-weight:700; font-size:16px;
-               letter-spacing:.12em; text-transform:uppercase; color:var(--bright); }
-.brand small { color:var(--dim); font-weight:400; font-size:10px; letter-spacing:.1em;
+               letter-spacing:.02em;
+               text-shadow:-1px -1px 0 var(--amber-hi), 1px 1px 1px var(--bevel-shadow), 0 0 12px var(--glow);
+               background:linear-gradient(90deg, var(--bright) 42%, var(--amber-hi) 50%, var(--bright) 58%);
+               background-size:420% 100%; -webkit-background-clip:text; background-clip:text;
+               color:transparent; animation:brand-shimmer 9s ease-in-out infinite; }
+@keyframes brand-shimmer {
+  0%   { background-position:100% 0; }
+  50%  { background-position:0% 0; }
+  100% { background-position:100% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .brand-avatar { animation:none; filter:drop-shadow(0 0 6px var(--glow)); }
+  .brand-title { animation:none; background-position:50% 0; }
+}
+.brand small { color:var(--dim); font-weight:700; font-size:10px; letter-spacing:.1em;
                text-transform:uppercase; }
 .tab { white-space:nowrap; background:none; border:none; border-bottom:2px solid transparent; color:var(--dim);
        padding:12px 14px; cursor:pointer; font-size:13px;
@@ -592,7 +657,7 @@ details.msgs[open] > summary::before { content:'▾ '; }
      однострочный «PI Director» — на узких ширинах их тоже сжимаем, а
      не только вкладки. */
   .brand-avatar { width:22px; height:22px; }
-  .brand-title { font-size:12px; letter-spacing:.04em; }
+  .brand-title { font-size:12px; letter-spacing:.01em; }
   .brand small { font-size:9px; letter-spacing:.06em; }
   /* Чисто визуальное уплотнение — не прячет вкладки (правило «кнопки и
      вкладки не прячутся никогда» см. у #moreBtn), только сокращает
@@ -1032,7 +1097,7 @@ body.light .rolebadge.excess { background:rgba(154,107,18,.12); }
     <img class="brand-avatar" src="logo.png" alt="">
     <div class="brand-text">
       <span class="brand-title">PI Director</span>
-      <small data-i18n="brandSub">планировщик колоний</small>
+      <small data-i18n="brandSub">by evecraft</small>
     </div>
   </div>
   <button class="tab on" data-page="dash" data-i18n="tabDash">Дашборд</button>
@@ -1284,7 +1349,7 @@ const chosen={products:new Set(), constellations:new Set()};
    Персонажи, наоборот, живут на сервере — поэтому не пропадают при
    перезаходе и не зависят от очистки кэша. */
 const T={
- ru:{brandSub:'планировщик колоний',tabDash:'Дашборд',tabSetup:'Настройки',
+ ru:{brandSub:'by evecraft',tabDash:'Дашборд',tabSetup:'Настройки',
   chipData:'данные',help:'Справка',about:'О проекте',sso:'Войти через EVE SSO',
   online:'в игре',offline:'нет связи',noData:'нет данных',
   planBrief:'Задание на план',planBriefSub:'три шага — что, откуда, куда',
@@ -1368,7 +1433,7 @@ const T={
   cycNoFactory:'ESI не отдаёт состояние фабрик — только экстракторы',
   role_mine:'Добыча',role_mine_surplus:'Добыча (избыток)',role_proc:'Переработка',role_direct_p2:'Прямое P2',
   factW:'фабрик',pFactory:['фабрика','фабрики','фабрик']},
- en:{brandSub:'colony planner',tabDash:'Dashboard',tabSetup:'Settings',
+ en:{brandSub:'by evecraft',tabDash:'Dashboard',tabSetup:'Settings',
   chipData:'data',help:'Help',about:'About',sso:'Log in with EVE SSO',
   online:'online',offline:'offline',noData:'no data',
   planBrief:'Plan brief',planBriefSub:'three steps — what, where from, where to',
