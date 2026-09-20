@@ -4124,13 +4124,8 @@ const DOC={
    приложения их не видят.</p>
    <p>Кнопка «Отвязать» рядом с персонажем в списке слева стирает его токен
    на нашей стороне — планировщик перестаёт видеть персонажа, пока вы не
-   войдёте им заново. Это гарантировано всегда. Настоящий отзыв на стороне
-   CCP — только если владелец приложения зарегистрировал его с секретом
-   на сервере (у EVE SSO есть эндпоинт отзыва, но он принимает только
-   такие приложения): тогда отвязка ещё и отзывает доступ у CCP, и это
-   видно по ответу. Без секрета — только наша сторона, токен формально
-   ещё жив до естественного истечения. Отозвать доступ самому приложению
-   целиком в любом случае можно на eveonline.com/account/third_party_apps.</p>
+   войдёте им заново. Отозвать доступ самому приложению целиком можно
+   на eveonline.com/account/third_party_apps.</p>
    <p>Если у персонажа истёк или отозван доступ (например, сменили пароль
    EVE или отозвали приложение на eveonline.com), рядом с ним появится
    красная кнопка «Перезайти»: планировщик больше не может обновлять его
@@ -4355,12 +4350,9 @@ const DOC={
    app never sees your password. Characters, colonies and plans are tied to your
    login — other users of the app cannot see them.</p>
    <p>The "Unlink" button next to a character in the list on the left erases that
-   character's token on our side — the planner stops seeing them until you log in again.
-   That much is guaranteed. Real revocation on CCP's side only happens if the app's owner
-   registered it with a server-side secret (EVE SSO's revoke endpoint only accepts such
-   apps): then unlinking also revokes access with CCP, and the response says so. Without a
-   secret it's our side only, and the token stays formally valid until it naturally expires.
-   You can always revoke the whole app's access at eveonline.com/account/third_party_apps.</p>
+   character's token on our side — the planner stops seeing them until you log in
+   again. You can revoke the whole app's access at
+   eveonline.com/account/third_party_apps.</p>
    <p>If a character's access has expired or been revoked (say, you changed your EVE
    password or revoked the app on eveonline.com), a red "Reconnect" button appears next to
    them: the planner can no longer refresh their skills and colonies until you log in again
