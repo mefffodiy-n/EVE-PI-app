@@ -874,6 +874,17 @@ details.msgs[open] > summary::before { content:'▾ '; }
 .poco-profit .figure .val.dim { color:var(--dim); font-size:13px; }
 .poco-profit-note { margin-top:8px; color:var(--dim); font-size:11px; max-width:82ch; }
 @media (max-width:520px){ .poco-profit .figures { grid-template-columns:repeat(2,minmax(120px,1fr)); } }
+/* Разбивка выручки/список закупки/примечания — карточки той же
+   визуальной семьи, что и шаги «Что производим»/«Где добываем»/«Где
+   перерабатываем» (.step-card.hud-corner), не отдельный стиль
+   (20.09.2026, по прямому запросу пользователя: "по аналогии с верхней
+   частью страницы настроек"). auto-fit — 2 или 3 карточки в ряд по
+   ширине, перенос в один столбец на узком экране, без media-запроса. */
+.poco-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:14px; margin-top:12px; }
+.poco-row .step-body { padding-top:10px; }
+.poco-row .purchase-list-table { margin-top:0; }
+.poco-row .poco-profit-note { margin-top:6px; }
+.poco-row .poco-profit-note:first-child { margin-top:0; }
 
 /* ── Список закупки сырья P1 (19.09.2026) ──────────────────────── */
 .purchase-list-table { width:100%; border-collapse:collapse; margin-top:6px; font-size:12px; }
@@ -1089,7 +1100,6 @@ body.light .rolebadge.excess { background:rgba(154,107,18,.12); }
     <div class="counts" id="counts"></div>
   </div>
   <div id="pocoProfit"></div>
-  <div id="purchaseList"></div>
   <div id="dashBody"><div class="empty" data-i18n="noPlanLong">План не построен. Откройте вкладку «Настройки», выберите продукты и постройте план.</div></div>
   <div id="coloniesProfit"></div>
   <div id="colonies"></div>
@@ -1294,9 +1304,8 @@ const T={
   pocoHigherThanBest:'Ставка POCO здесь выше, чем на других перерабатывающих колониях плана',
   pocoIncomplete:'Чистая прибыль не считается, пока не известны все ставки и не собраны все цены — частичная сумма выглядела бы точнее, чем есть на самом деле.',
   pocoAssumption:'Оценка на {hours} часов в месяце, без истощения месторождений. Простой из-за пропускной способности причала уже учтён (см. выше), прочие простои — нет. Налог — и на вывоз, и на ввоз на каждом перемещении между планетами по цепочке.',
-  pocoRevenueByProductTitle:'Выручка по продуктам',
+  pocoRevenueByProductTitle:'Выручка по продуктам',pocoNotesTitle:'Допущения и предупреждения',
   pocoRevenueByProductQty:'Ед. / мес',pocoRevenueByProductPrice:'Цена, ISK',pocoRevenueByProductRevenue:'Выручка / мес',
-  pocoSharedTarget:'«{product}» частично уходит на переработку в другую выбранную цель этого же плана — в выручке учтена только прямая целевая доля ({pct}%)',
   purchaseListTitle:'Список закупки сырья (P1)',
   purchaseListProduct:'Продукт',purchaseListQty:'Кол-во / мес',purchaseListPrice:'Цена, ISK',
   purchaseListCost:'Стоимость / мес',purchaseListTotal:'Итого',purchaseListNoPrice:'нет цены',
@@ -1379,9 +1388,8 @@ const T={
   pocoHigherThanBest:'This POCO rate is higher than on other processing colonies in the plan',
   pocoIncomplete:'Net profit is not shown until every rate is known and every price is available — a partial sum would look more accurate than it really is.',
   pocoAssumption:'Estimate over {hours} hours per month, no deposit depletion. Downtime from causeway throughput is already accounted for (see above); other downtime is not. Tax applies on both export and import at every hop between planets in the chain.',
-  pocoRevenueByProductTitle:'Revenue by product',
+  pocoRevenueByProductTitle:'Revenue by product',pocoNotesTitle:'Assumptions & warnings',
   pocoRevenueByProductQty:'Units / mo',pocoRevenueByProductPrice:'Price, ISK',pocoRevenueByProductRevenue:'Revenue / mo',
-  pocoSharedTarget:'"{product}" is partly going into another selected target in this same plan — revenue only counts its direct target share ({pct}%)',
   purchaseListTitle:'Raw material purchase list (P1)',
   purchaseListProduct:'Product',purchaseListQty:'Qty / mo',purchaseListPrice:'Price, ISK',
   purchaseListCost:'Cost / mo',purchaseListTotal:'Total',purchaseListNoPrice:'no price',
@@ -3338,7 +3346,7 @@ function renderProfit(){
    её из расчёта (missing_rates), не подставляет «без налога». */
 async function renderPocoProfit(){
   const box=document.getElementById('pocoProfit'); if(!box) return;
-  if(!plan.length || !lastRequest){ box.innerHTML=''; renderPurchaseList(null); return; }
+  if(!plan.length || !lastRequest){ box.innerHTML=''; lastPurchaseData=null; return; }
 
   let d;
   try{
@@ -3353,9 +3361,8 @@ async function renderPocoProfit(){
       }),
     });
     d=await r.json();
-  }catch(e){ box.innerHTML=''; renderPurchaseList(null); return; }
-  if(!d || d.status!=='success'){ box.innerHTML=''; renderPurchaseList(null); return; }
-  renderPurchaseList(d);
+  }catch(e){ box.innerHTML=''; lastPurchaseData=null; return; }
+  if(!d || d.status!=='success'){ box.innerHTML=''; lastPurchaseData=null; return; }
 
   const gaps=[];
   if(d.missing_prices && d.missing_prices.length)
@@ -3364,14 +3371,10 @@ async function renderPocoProfit(){
     gaps.push(fmtPlain(t('pocoMissingRates'),{list:d.missing_rates.join(', ')}));
   if(d.missing_volumes && d.missing_volumes.length)
     gaps.push(fmtPlain(t('pocoMissingVolumes'),{list:d.missing_volumes.join(', ')}));
-  // Пересечение целевых цепочек (20.09.2026, по прямому запросу
-  // пользователя, пересмотрено в тот же день) — продукт выбран целевым
-  // И одновременно частично уходит на переработку в ДРУГОЙ выбранный
-  // целевой продукт: в выручке учтена только его прямая целевая доля,
-  // не всё построенное количество (domain/poco_tax.py — revenue_share,
-  // не полное исключение).
-  (d.shared_targets||[]).forEach(s=>
-    gaps.push(fmtPlain(t('pocoSharedTarget'),{product:s.product,pct:Math.round(s.share*100)})));
+  // Пересечение целевых цепочек (20.09.2026) уже учтено в самой выручке
+  // (domain/poco_tax.py — revenue_share, doc/ROADMAP.md) — отдельная
+  // заметка про доли убрана из панели по прямому запросу пользователя
+  // как избыточная информация; расчёт при этом не меняется.
 
   // Пропускная способность причала (20.09.2026, по прямому запросу
   // пользователя) — причал фиксированной ёмкости опустошается тем
@@ -3383,6 +3386,15 @@ async function renderPocoProfit(){
     .sort((a,b)=>a[1]-b[1]);
 
   const netKnown=d.monthly_net_profit!=null;
+  const notes=[
+    ...gaps,
+    (!netKnown&&(d.monthly_revenue!=null||d.monthly_tax!=null))?t('pocoIncomplete'):'',
+    bottlenecks.length?`${t('pocoLogisticsBottleneck')} ${
+      bottlenecks.map(([product,cycle])=>`${product} — ${Math.round(cycle*100)}%`).join(', ')
+    }`:'',
+    fmtPlain(t('pocoAssumption'),{hours:d.hours_per_month}),
+  ].filter(Boolean);
+
   box.innerHTML=`<div class="poco-profit">
     <div class="profit-head"><h3>${t('pocoProfitTitle')} ${helpTag('h-profitability')}</h3></div>
     <div class="figures">
@@ -3395,23 +3407,32 @@ async function renderPocoProfit(){
       <div class="figure net"><div class="lbl">${t('pocoNetProfit')}</div>
         <div class="val${netKnown?'':' dim'}">${netKnown?isk(d.monthly_net_profit):t('noData')}</div></div>
     </div>
-    ${(d.revenue_by_product&&d.revenue_by_product.length)?`<table class="purchase-list-table">
-      <thead><tr><th>${t('purchaseListProduct')}</th><th class="r">${t('pocoRevenueByProductQty')}</th>
-        <th class="r">${t('pocoRevenueByProductPrice')}</th><th class="r">${t('pocoRevenueByProductRevenue')}</th></tr></thead>
-      <tbody>${d.revenue_by_product.map(it=>`<tr>
-        <td>${it.product}</td>
-        <td class="r num">${nloc(Math.round(it.monthly_units))}</td>
-        <td class="r num">${it.price==null?t('purchaseListNoPrice'):nloc(Math.round(it.price))}</td>
-        <td class="r num">${it.monthly_revenue==null?'—':isk(it.monthly_revenue)}</td>
-      </tr>`).join('')}</tbody>
-    </table>`:''}
-    ${gaps.length?`<div class="poco-profit-note">${gaps.join(' · ')}</div>`:''}
-    ${!netKnown&&(d.monthly_revenue!=null||d.monthly_tax!=null)?`<div class="poco-profit-note">${t('pocoIncomplete')}</div>`:''}
-    ${bottlenecks.length?`<div class="poco-profit-note">${t('pocoLogisticsBottleneck')} ${
-      bottlenecks.map(([product,cycle])=>`${product} — ${Math.round(cycle*100)}%`).join(', ')
-    }</div>`:''}
-    <div class="poco-profit-note">${fmtPlain(t('pocoAssumption'),{hours:d.hours_per_month})}</div>
+    <div class="poco-row">
+      <div class="step-card hud-corner">
+        <div class="step-head"><span class="step-title">${t('pocoRevenueByProductTitle')}</span></div>
+        <div class="step-body">
+          ${(d.revenue_by_product&&d.revenue_by_product.length)?`<table class="purchase-list-table">
+            <thead><tr><th>${t('purchaseListProduct')}</th><th class="r">${t('pocoRevenueByProductQty')}</th>
+              <th class="r">${t('pocoRevenueByProductPrice')}</th><th class="r">${t('pocoRevenueByProductRevenue')}</th></tr></thead>
+            <tbody>${d.revenue_by_product.map(it=>`<tr>
+              <td>${it.product}</td>
+              <td class="r num">${nloc(Math.round(it.monthly_units))}</td>
+              <td class="r num">${it.price==null?t('purchaseListNoPrice'):nloc(Math.round(it.price))}</td>
+              <td class="r num">${it.monthly_revenue==null?'—':isk(it.monthly_revenue)}</td>
+            </tr>`).join('')}</tbody>
+          </table>`:`<div class="poco-profit-note">${t('noData')}</div>`}
+        </div>
+      </div>
+      ${(d.purchase_items&&d.purchase_items.length)?'<div id="purchaseList"></div>':''}
+      <div class="step-card hud-corner">
+        <div class="step-head"><span class="step-title">${t('pocoNotesTitle')}</span></div>
+        <div class="step-body">
+          ${notes.map(n=>`<div class="poco-profit-note">${n}</div>`).join('')}
+        </div>
+      </div>
+    </div>
   </div>`;
+  renderPurchaseList(d);
 }
 
 /* ── Список закупки сырья P1 (19.09.2026, по прямому запросу
@@ -3443,22 +3464,24 @@ function renderPurchaseList(d){
   const totalCost=items.reduce((sum,it)=>sum+(it.monthly_cost||0),0);
   const anyKnown=items.some(it=>it.monthly_cost!=null);
 
-  box.innerHTML=`<div class="poco-profit">
-    <div class="profit-head"><h3>${t('purchaseListTitle')} ${helpTag('h-purchase-list')}</h3></div>
-    <table class="purchase-list-table"><thead><tr>
-      <th>${t('purchaseListProduct')}</th><th class="r">${t('purchaseListQty')}</th>
-      <th class="r">${t('purchaseListPrice')}</th><th class="r">${t('purchaseListCost')}</th>
-    </tr></thead><tbody>
-    ${items.map(it=>`<tr>
-      <td>${it.product}</td>
-      <td class="r num">${nloc(Math.round(it.monthly_qty))}</td>
-      <td class="r num">${it.price==null?t('purchaseListNoPrice'):nloc(Math.round(it.price))}</td>
-      <td class="r num">${it.monthly_cost==null?'—':isk(it.monthly_cost)}</td>
-    </tr>`).join('')}
-    ${anyKnown?`<tr class="purchase-list-total"><td colspan="3">${t('purchaseListTotal')}</td>
-      <td class="r num">${isk(totalCost)}</td></tr>`:''}
-    </tbody></table>
-    <div class="poco-profit-note">${fmtPlain(t('purchaseListAsOf'),{stamp:stamp||t('purchaseListNoSnapshot')})}</div>
+  box.innerHTML=`<div class="step-card hud-corner">
+    <div class="step-head"><span class="step-title">${t('purchaseListTitle')}</span> ${helpTag('h-purchase-list')}</div>
+    <div class="step-body">
+      <table class="purchase-list-table"><thead><tr>
+        <th>${t('purchaseListProduct')}</th><th class="r">${t('purchaseListQty')}</th>
+        <th class="r">${t('purchaseListPrice')}</th><th class="r">${t('purchaseListCost')}</th>
+      </tr></thead><tbody>
+      ${items.map(it=>`<tr>
+        <td>${it.product}</td>
+        <td class="r num">${nloc(Math.round(it.monthly_qty))}</td>
+        <td class="r num">${it.price==null?t('purchaseListNoPrice'):nloc(Math.round(it.price))}</td>
+        <td class="r num">${it.monthly_cost==null?'—':isk(it.monthly_cost)}</td>
+      </tr>`).join('')}
+      ${anyKnown?`<tr class="purchase-list-total"><td colspan="3">${t('purchaseListTotal')}</td>
+        <td class="r num">${isk(totalCost)}</td></tr>`:''}
+      </tbody></table>
+      <div class="poco-profit-note">${fmtPlain(t('purchaseListAsOf'),{stamp:stamp||t('purchaseListNoSnapshot')})}</div>
+    </div>
   </div>`;
 }
 
