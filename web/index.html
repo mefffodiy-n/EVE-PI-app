@@ -1289,9 +1289,11 @@ const T={
   pocoProfitTitle:'Прогноз прибыльности плана',
   pocoRevenue:'Выручка / мес',pocoTax:'Налог POCO / мес',pocoPurchaseCost:'Закупка P1 / мес',pocoNetProfit:'Чистая прибыль / мес',
   pocoMissingPrices:'Нет цены: {list}',pocoMissingRates:'Нет данных о ставке POCO: {list}',
+  pocoMissingVolumes:'Нет данных об объёме единицы (пропускная способность причала не учтена): {list}',
+  pocoLogisticsBottleneck:'Цепочка упирается в пропускную способность причала — реальная доля рабочего времени:',
   pocoHigherThanBest:'Ставка POCO здесь выше, чем на других перерабатывающих колониях плана',
   pocoIncomplete:'Чистая прибыль не считается, пока не известны все ставки и не собраны все цены — частичная сумма выглядела бы точнее, чем есть на самом деле.',
-  pocoAssumption:'Оценка при полной загрузке цепочки без простоев и истощения месторождений, {hours} часов в месяце. Налог — и на вывоз, и на ввоз на каждом перемещении между планетами по цепочке.',
+  pocoAssumption:'Оценка на {hours} часов в месяце, без истощения месторождений. Простой из-за пропускной способности причала уже учтён (см. ниже), прочие простои — нет. Налог — и на вывоз, и на ввоз на каждом перемещении между планетами по цепочке.',
   purchaseListTitle:'Список закупки сырья (P1)',
   purchaseListProduct:'Продукт',purchaseListQty:'Кол-во / мес',purchaseListPrice:'Цена, ISK',
   purchaseListCost:'Стоимость / мес',purchaseListTotal:'Итого',purchaseListNoPrice:'нет цены',
@@ -1369,9 +1371,11 @@ const T={
   pocoProfitTitle:'Plan profitability forecast',
   pocoRevenue:'Revenue / mo',pocoTax:'POCO tax / mo',pocoPurchaseCost:'P1 purchase / mo',pocoNetProfit:'Net profit / mo',
   pocoMissingPrices:'No price: {list}',pocoMissingRates:'POCO rate unknown: {list}',
+  pocoMissingVolumes:'No unit volume data (causeway throughput not accounted for): {list}',
+  pocoLogisticsBottleneck:'The chain is limited by causeway throughput — real share of working time:',
   pocoHigherThanBest:'This POCO rate is higher than on other processing colonies in the plan',
   pocoIncomplete:'Net profit is not shown until every rate is known and every price is available — a partial sum would look more accurate than it really is.',
-  pocoAssumption:'Estimate at full chain throughput, no downtime, no deposit depletion, {hours} hours per month. Tax applies on both export and import at every hop between planets in the chain.',
+  pocoAssumption:'Estimate over {hours} hours per month, no deposit depletion. Downtime from causeway throughput is already accounted for (see below); other downtime is not. Tax applies on both export and import at every hop between planets in the chain.',
   purchaseListTitle:'Raw material purchase list (P1)',
   purchaseListProduct:'Product',purchaseListQty:'Qty / mo',purchaseListPrice:'Price, ISK',
   purchaseListCost:'Cost / mo',purchaseListTotal:'Total',purchaseListNoPrice:'no price',
@@ -3337,6 +3341,8 @@ async function renderPocoProfit(){
       body:JSON.stringify({
         rows:plan, target_products:lastRequest.target_products,
         purchased_p1:(lastPlanResp&&lastPlanResp.purchased_p1)||{},
+        duty_cycles:(lastPlanResp&&lastPlanResp.duty_cycles)||{},
+        missing_volumes:(lastPlanResp&&lastPlanResp.missing_volumes)||[],
       }),
     });
     d=await r.json();
@@ -3349,6 +3355,17 @@ async function renderPocoProfit(){
     gaps.push(fmtPlain(t('pocoMissingPrices'),{list:d.missing_prices.join(', ')}));
   if(d.missing_rates && d.missing_rates.length)
     gaps.push(fmtPlain(t('pocoMissingRates'),{list:d.missing_rates.join(', ')}));
+  if(d.missing_volumes && d.missing_volumes.length)
+    gaps.push(fmtPlain(t('pocoMissingVolumes'),{list:d.missing_volumes.join(', ')}));
+
+  // Пропускная способность причала (20.09.2026, по прямому запросу
+  // пользователя) — причал фиксированной ёмкости опустошается тем
+  // быстрее, чем больше видов и тяжелее сырьё тира; ниже 0.99 считаем
+  // достаточно заметным, чтобы показать честно, а не тонуть в шуме
+  // округления около единицы.
+  const bottlenecks=Object.entries((lastPlanResp&&lastPlanResp.duty_cycles)||{})
+    .filter(([,cycle])=>cycle<0.99)
+    .sort((a,b)=>a[1]-b[1]);
 
   const netKnown=d.monthly_net_profit!=null;
   box.innerHTML=`<div class="poco-profit">
@@ -3365,6 +3382,9 @@ async function renderPocoProfit(){
     </div>
     ${gaps.length?`<div class="poco-profit-note">${gaps.join(' · ')}</div>`:''}
     ${!netKnown&&(d.monthly_revenue!=null||d.monthly_tax!=null)?`<div class="poco-profit-note">${t('pocoIncomplete')}</div>`:''}
+    ${bottlenecks.length?`<div class="poco-profit-note">${t('pocoLogisticsBottleneck')} ${
+      bottlenecks.map(([product,cycle])=>`${product} — ${Math.round(cycle*100)}%`).join(', ')
+    }</div>`:''}
     <div class="poco-profit-note">${fmtPlain(t('pocoAssumption'),{hours:d.hours_per_month})}</div>
   </div>`;
 }
@@ -4072,11 +4092,10 @@ const DOC={
    <h3 id="h-profitability">Прогноз прибыльности плана</h3>
    <p>Панель на дашборде, сразу над построенным планом — не обобщённая
    экономика шаблона выше, а прибыльность УЖЕ ПОСТРОЕННОГО плана:
-   настоящее число колоний и фабрик из расчёта, помесячно, при полной
-   загруженности цепочки без простоев. В отличие от таблицы «Что
-   выгоднее производить», здесь учтён налог POCO — и на вывоз, и на
-   ввоз на каждом перемещении между планетами по цепочке, не только на
-   финальной продаже.</p>
+   настоящее число колоний и фабрик из расчёта, помесячно. В отличие от
+   таблицы «Что выгоднее производить», здесь учтён налог POCO — и на
+   вывоз, и на ввоз на каждом перемещении между планетами по цепочке,
+   не только на финальной продаже.</p>
    <p>Ставка POCO берётся автоматически — точное значение КОНКРЕТНОЙ
    планеты из выгрузки данных региона, той же, на которой считается весь
    остальной план. Если ставка планеты неизвестна (планета за пределами
@@ -4084,6 +4103,15 @@ const DOC={
    считает её беспошлинной. Чистая прибыль показывается только когда
    собраны все нужные цены и известны все нужные ставки — частичная
    сумма выглядела бы точнее, чем есть на самом деле.</p>
+   <p>Учтена и пропускная способность причала: он вмещает фиксированный
+   объём независимо от тира, но чем больше видов сырья туда попадает
+   (обычно 3 у P3/P4 против 2 у P2) — тем быстрее он опустошается, и
+   фабрика простаивает в ожидании новой партии, довезённой игроком.
+   Простой каскадно передаётся дальше по цепочке: если сырьё довозится
+   нестабильно (например, закупаемый P1), следующие тиры тоже не могут
+   работать быстрее, чем оно поступает. Когда это заметно ограничивает
+   цепочку, в панели появляется строка с реальной долей рабочего
+   времени по тирам.</p>
 
    <h3 id="h-purchase-list">Список закупки сырья (P1)</h3>
    <p>Панель под прогнозом прибыльности — показывается только в режиме
@@ -4304,10 +4332,9 @@ const DOC={
    <p>A panel on the dashboard, right above the built plan — not the generic
    template economics above, but the profitability of the ALREADY BUILT
    plan: the real number of colonies and factories from the calculation,
-   monthly, at full chain throughput with no downtime. Unlike the "most
-   profitable to produce" table, this one accounts for POCO tax — on both
-   export and import at every move between planets in the chain, not only
-   on the final sale.</p>
+   monthly. Unlike the "most profitable to produce" table, this one
+   accounts for POCO tax — on both export and import at every move between
+   planets in the chain, not only on the final sale.</p>
    <p>The POCO rate is filled in automatically — the exact value for that
    SPECIFIC planet, from the same regional data export the rest of the plan
    is built on. If a planet's rate is unknown (a planet outside the loaded
@@ -4315,6 +4342,14 @@ const DOC={
    treating it as tax-free. Net profit is only shown once every needed
    price is available and every needed rate is known — a partial sum would
    look more accurate than it really is.</p>
+   <p>Causeway throughput is accounted for too: it holds a fixed volume
+   regardless of tier, but the more kinds of raw material it holds
+   (usually 3 for P3/P4 versus 2 for P2), the faster it empties, and the
+   factory idles waiting for a new batch hauled in by the player. That
+   downtime cascades further down the chain: if a raw material arrives
+   unevenly (say, purchased P1), the following tiers can't run any faster
+   than it actually arrives. When this noticeably limits the chain, the
+   panel shows a line with the real share of working time per tier.</p>
 
    <h3 id="h-purchase-list">Raw material purchase list (P1)</h3>
    <p>A panel below the profitability forecast — shown only in "buy all P1 on the

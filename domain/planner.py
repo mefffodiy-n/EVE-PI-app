@@ -448,6 +448,12 @@ class PlanResult:
             # {} в обычном режиме. Фронтенд пересылает как есть в
             # /api/plan-profitability, сам план его не считает.
             "purchased_p1": self.demand.purchased_p1 if self.demand else {},
+            # Пропускная способность причала по продуктам, 20.09.2026
+            # (см. domain/logistics.py) — {} если demand не считался.
+            # Тем же путём, что purchased_p1, пересылается фронтендом в
+            # /api/plan-profitability без пересчёта на сервере заново.
+            "duty_cycles": self.demand.duty_cycles if self.demand else {},
+            "missing_volumes": sorted(self.demand.missing_volumes) if self.demand else [],
         }
 
 

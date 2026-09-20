@@ -103,6 +103,73 @@ class TestBasicChain:
         assert HOURS_PER_MONTH == 720.0
 
 
+class TestDutyCycle:
+    """
+    20.09.2026, по прямому запросу пользователя: причал фиксированной
+    ёмкости физически опустошается быстрее у тиров с бо́льшим числом
+    более тяжёлых входов — фабрика простаивает, ожидая новую партию,
+    довезённую игроком (см. docstring domain/logistics.py). duty_cycle
+    домножает и выход, и вход строки ДО расчёта выручки/налогов —
+    числа ниже сверены вручную от базовых значений
+    test_export_and_import_both_taxed_on_every_hop (revenue 8 640 000,
+    экспорт-Water 1 152 000, экспорт-Coolant 432 000, импорт 216 000).
+    """
+
+    def test_row_output_and_input_are_scaled_by_its_own_duty_cycle(self):
+        planets = _FakePlanetBook({("MINE", 1.0): 0.10, ("HOME", 2.0): 0.05})
+        result = evaluate_plan_profitability(
+            rows=[_mining_row(), _processing_row()],
+            target_products=["Coolant"],
+            prices={"Water": 10.0, "Coolant": 100.0},
+            schematics=_schematics(),
+            planets=planets,
+            duty_cycles={"Coolant": 0.5},  # Water (добыча) не указан — по умолчанию 1.0
+        )
+        # Revenue — целиком от Coolant, домножен на 0.5.
+        assert result.monthly_revenue == 8_640_000.0 * 0.5
+        # Экспорт: 1 152 000 (Water, duty_cycle=1.0, не задет) + 432 000*0.5 (Coolant).
+        assert result.monthly_export_tax == 1_152_000.0 + 432_000.0 * 0.5
+        # Импорт Water на переработку — тоже домножен на 0.5 (строка Coolant).
+        assert result.monthly_import_tax == 216_000.0 * 0.5
+        assert result.monthly_net_profit == (
+            result.monthly_revenue - result.monthly_export_tax - result.monthly_import_tax
+        )
+
+    def test_missing_duty_cycle_defaults_to_full_throughput(self):
+        """Без duty_cycles вовсе (None) — поведение как раньше, без штрафа."""
+        planets = _FakePlanetBook({("MINE", 1.0): 0.10, ("HOME", 2.0): 0.05})
+        result = evaluate_plan_profitability(
+            rows=[_mining_row(), _processing_row()],
+            target_products=["Coolant"],
+            prices={"Water": 10.0, "Coolant": 100.0},
+            schematics=_schematics(),
+            planets=planets,
+        )
+        assert result.monthly_revenue == 8_640_000.0
+        assert result.monthly_export_tax == 1_584_000.0
+        assert result.monthly_import_tax == 216_000.0
+
+    def test_missing_volumes_are_passed_through_honestly(self):
+        result = evaluate_plan_profitability(
+            rows=[_processing_row()],
+            target_products=["Coolant"],
+            prices={"Water": 10.0, "Coolant": 100.0},
+            schematics=_schematics(),
+            missing_volumes=["Water"],
+        )
+        assert result.missing_volumes == ["Water"]
+        assert result.to_dict()["missing_volumes"] == ["Water"]
+
+    def test_no_missing_volumes_is_empty_list_not_none(self):
+        result = evaluate_plan_profitability(
+            rows=[_processing_row()],
+            target_products=["Coolant"],
+            prices={"Water": 10.0, "Coolant": 100.0},
+            schematics=_schematics(),
+        )
+        assert result.missing_volumes == []
+
+
 class TestPurchaseP1:
     """
     18.09.2026, по прямому запросу пользователя: план на закупаемом P1

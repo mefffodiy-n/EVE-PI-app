@@ -102,7 +102,15 @@ class RowFlow:
     inputs_per_hour: dict[str, float] = field(default_factory=dict)
 
 
-def _row_flow(row: dict, schematics: dict[str, Schematic]) -> RowFlow | None:
+def _row_flow(row: dict, schematics: dict[str, Schematic], duty_cycle: float = 1.0) -> RowFlow | None:
+    """
+    duty_cycle — доля реального времени работы строки против простоя в
+    ожидании довозки сырья в причал (20.09.2026, см. domain/logistics.py
+    и domain/throughput.py::Demand.duty_cycles) — домножает и выход, и
+    вход строки одинаково: фабрика, реально работающая часть времени,
+    в ту же долю меньше потребляет и производит, а не только продаёт
+    меньше при той же вместимости причала.
+    """
     schematic = schematics.get(row.get("res_out"))
     if schematic is None:
         return None
@@ -113,12 +121,12 @@ def _row_flow(row: dict, schematics: dict[str, Schematic]) -> RowFlow | None:
     inputs_per_hour = {}
     if row.get("role_key") == "proc":
         for name in schematic.inputs:
-            inputs_per_hour[name] = schematic.input_per_hour(name) * factories
+            inputs_per_hour[name] = schematic.input_per_hour(name) * factories * duty_cycle
 
     return RowFlow(
         planet_type=str(row.get("planet_type", "")),
         output_product=row["res_out"],
-        output_per_hour=schematic.output_per_hour * factories,
+        output_per_hour=schematic.output_per_hour * factories * duty_cycle,
         system=row.get("system"),
         planet=row.get("planet"),
         inputs_per_hour=inputs_per_hour,
@@ -168,6 +176,11 @@ class PlanProfitability:
     # режиме плана (purchased_p1 не передан) — не отдельное поле «нет
     # закупки», просто пустой список.
     purchase_items: list[PurchaseItem] = field(default_factory=list)
+    # Продукты, для которых нет данных об объёме единицы (20.09.2026,
+    # см. domain/logistics.py) — их duty cycle честно посчитан как 1.0
+    # (без штрафа), а не выдуман; проброс из Demand.missing_volumes,
+    # этот модуль их не считает сам.
+    missing_volumes: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
@@ -184,6 +197,7 @@ class PlanProfitability:
             "missing_prices": sorted(self.missing_prices),
             "missing_rates": sorted(self.missing_rates),
             "purchase_items": [item.to_dict() for item in self.purchase_items],
+            "missing_volumes": sorted(self.missing_volumes),
         }
 
 
@@ -300,6 +314,8 @@ def evaluate_plan_profitability(
     schematics: dict[str, Schematic] | None = None,
     planets: "PlanetBook | None" = None,
     purchased_p1: dict[str, float] | None = None,
+    duty_cycles: dict[str, float] | None = None,
+    missing_volumes: list[str] | None = None,
 ) -> PlanProfitability:
     """
     rows — строки построенного плана (формат PlanRow.to_dict()): нужны
@@ -326,9 +342,22 @@ def evaluate_plan_profitability(
     не участвует ни в одной сумме, чтобы не занижать итог молча).
     Планета без известной ставки в файле — в missing_rates, её вклад в
     налог тоже пропускается по той же причине.
+
+    duty_cycles — {продукт: доля реального времени работы} из
+    PlanResult.to_dict()["duty_cycles"] (20.09.2026, режим planner.py
+    build_plan(), см. domain/logistics.py и domain/throughput.py::
+    Demand.duty_cycles) — пропускная способность причала между тирами:
+    фабрика физически простаивает, ожидая новую партию сырья, довезённую
+    игроком, и это домножает и выход, и вход каждой строки ДО расчёта
+    выручки/налогов (не отдельная поправка поверх готовой суммы —
+    иначе легко было бы посчитать её дважды или забыть про налог на
+    ввоз). Пустой/не передан — как и раньше, полная загрузка без
+    поправки (обратная совместимость для мест, которые ещё не считают
+    duty cycle, например настоящие колонии).
     """
     schematics = load_schematics() if schematics is None else schematics
     target_set = set(target_products)
+    duty_cycles = duty_cycles or {}
 
     revenue = 0.0
     export_tax = 0.0
@@ -342,7 +371,8 @@ def evaluate_plan_profitability(
     any_purchase = False
 
     for row in rows:
-        flow = _row_flow(row, schematics)
+        duty_cycle = duty_cycles.get(row.get("res_out"), 1.0)
+        flow = _row_flow(row, schematics, duty_cycle=duty_cycle)
         if flow is None:
             continue
 
@@ -406,4 +436,5 @@ def evaluate_plan_profitability(
         missing_prices=missing_prices,
         missing_rates=missing_rates,
         purchase_items=sorted(purchase_items, key=lambda item: item.product),
+        missing_volumes=list(missing_volumes or []),
     )

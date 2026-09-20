@@ -125,6 +125,7 @@ domain/           расчёты, без Flask и без сети
   planner.py      распределение персонажей по планетам
   profit.py       выгода в ISK на колонию-час
   poco_tax.py     прибыльность плана и настоящих колоний с учётом POCO
+  logistics.py    пропускная способность причала между тирами (см. docs/DOMAIN.md)
   advice.py       подсказки по вместимости пула персонажей
   direct_p2.py    P2 целиком на добывающей планете (приостановлено, см. docs/ROADMAP.md)
   plan_storage.py сохранение и сравнение планов (таблица plans)
@@ -200,6 +201,7 @@ pip install -r requirements.lock.txt           # точные версии; requ
 python -m scripts.extract_schematics --write   # создаёт data/schematics.json
 python -m alembic upgrade head                 # создаёт таблицы БД
 python -m scripts.seed_dev_characters          # dev-персонажи (только PI_ENV=dev)
+python -m scripts.backfill_type_volumes        # опционально: объёмы P0-P4 для пропускной способности причала
 python run.py                      # разработка: http://127.0.0.1:8000/ (debug)
 python -m pytest tests/ -q         # все тесты
 python -m scripts.diagnose         # проверка данных, БД и эндпоинтов

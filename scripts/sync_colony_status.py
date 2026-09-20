@@ -320,8 +320,13 @@ VOLUME_CACHE_PATH = ROOT / "data" / "cache" / "type_volumes.json"
 # из ESI. Тот же фронтенд уже полагался на эти числа для подписи
 # «X / 10 000 m³» и т.п. 500 м³ у командного центра — верифицировано
 # скриншотом реального игрового клиента (11.09.2026), у самой ESI этого
-# числа нет (не отдаёт ёмкость структур).
-STORAGE_CAPACITY_M3 = {"launchpad": 10_000, "storage_facility": 12_000, "command_center": 500}
+# числа нет (не отдаёт ёмкость структур). Источник значений — единый
+# для всего проекта data/pi_reference.json (20.09.2026: раньше был свой
+# хардкод здесь же, теперь тот же файл читает и расчёт пропускной
+# способности причала в плане, domain/logistics.py — не дублируется).
+STORAGE_CAPACITY_M3 = json.loads(
+    (ROOT / "data" / "pi_reference.json").read_text(encoding="utf-8")
+)["storage_capacity_m3"]
 
 
 def _load_volume_cache() -> dict[str, float]:
