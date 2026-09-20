@@ -262,13 +262,19 @@ def plan_profitability():
         return json_error("Каждая строка плана должна быть объектом")
 
     targets = [str(t) for t in payload["target_products"]]
-    # Необязательное поле (режим purchase_p1, 18.09.2026) — {} в обычном
-    # плане, не добавлено в схему parse_json_body() выше специально: она
-    # проверяет только обязательные поля, остальное читается из того же payload.
+    # Необязательные поля (режим purchase_p1, 18.09.2026; пропускная
+    # способность причала, 20.09.2026) — {} в обычном плане, не добавлены
+    # в схему parse_json_body() выше специально: она проверяет только
+    # обязательные поля, остальное читается из того же payload. Оба
+    # приходят из того же ответа /api/calculate, что и rows — план уже
+    # считался единожды, здесь не пересчитывается заново.
     purchased_p1 = payload.get("purchased_p1") or {}
+    duty_cycles = payload.get("duty_cycles") or {}
+    missing_volumes = payload.get("missing_volumes") or []
 
     result = evaluate_plan_profitability(
-        rows, targets, _load_prices(), planets=_load_planets_book(), purchased_p1=purchased_p1
+        rows, targets, _load_prices(), planets=_load_planets_book(),
+        purchased_p1=purchased_p1, duty_cycles=duty_cycles, missing_volumes=missing_volumes,
     )
     return json_ok(**result.to_dict(), prices_collected_at=_prices_collected_at())
 

@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 
+from domain.logistics import own_duty_cycle
 from domain.recipes import RecipeBook, load_recipes
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -74,6 +75,18 @@ class Demand:
     # (18.09.2026, по прямому запросу пользователя): эти продукты считаются
     # закупленными на бирже, не входят в factories/raw_materials этой ветки.
     purchased_p1: dict[str, float] = field(default_factory=dict)
+
+    # {продукт: доля времени реальной работы, не простоя} — пропускная
+    # способность причала (20.09.2026, по прямому запросу пользователя,
+    # см. domain/logistics.py). Каскадное: продукт не может работать
+    # стабильнее, чем самый нестабильный из его собственных входов,
+    # произведённых В ЭТОМ ЖЕ плане (сырьё P0 и закупленный P1 —
+    # граница, считаются непрерывными сами по себе — их простой уже
+    # учтён в duty cycle СЛЕДУЮЩЕГО тира, который их потребляет).
+    # Продукт без входов, требующих схемы (нет в demand.factories) —
+    # 1.0 по умолчанию, если явно не посчитан.
+    duty_cycles: dict[str, float] = field(default_factory=dict)
+    missing_volumes: list[str] = field(default_factory=list)
 
     def add(self, product: str, rate: float) -> None:
         self.units_per_hour[product] = self.units_per_hour.get(product, 0.0) + rate
@@ -205,7 +218,52 @@ def expand_demand(
         for input_name, qty_per_cycle in schematic.inputs.items():
             queue.append((input_name, factories * qty_per_cycle * 60.0 / schematic.cycle_minutes))
 
+    _compute_duty_cycles(demand, schematics)
     return demand
+
+
+def _compute_duty_cycles(demand: Demand, schematics: dict[str, Schematic]) -> None:
+    """
+    Каскадная пропускная способность причала по уже развёрнутому дереву
+    (см. Demand.duty_cycles) — заполняет demand.duty_cycles/missing_volumes.
+
+    Работает поверх готового demand.factories (продукты, для которых
+    нашлась схема), не переобходит дерево заново: для каждого продукта
+    его собственный duty cycle (own_duty_cycle()) домножается на
+    МИНИМУМ duty cycle его собственных входов, если те тоже сделаны в
+    этом плане (есть в demand.factories). Сырьё P0 и закупленный P1 —
+    граница дерева, их непрерывность уже выражена тем, что они не
+    участвуют в min() вовсе (эквивалент "их duty cycle = 1.0").
+    """
+    missing_volumes: set[str] = set()
+
+    def cumulative(product: str, visiting: set[str]) -> float:
+        if product in demand.duty_cycles:
+            return demand.duty_cycles[product]
+        if product in visiting:
+            # Цикл в дереве рецептов не должен возникать (тот же инвариант,
+            # что и seen_depth выше) — честно не даём зависнуть, если всё
+            # же случится, вместо бесконечной рекурсии.
+            return 1.0
+        visiting.add(product)
+
+        schematic = schematics[product]
+        own, missing = own_duty_cycle(schematic)
+        missing_volumes.update(missing)
+
+        result = own
+        for input_name in schematic.inputs:
+            if input_name in demand.factories:
+                result = min(result, cumulative(input_name, visiting))
+
+        visiting.discard(product)
+        demand.duty_cycles[product] = result
+        return result
+
+    for product in list(demand.factories):
+        cumulative(product, set())
+
+    demand.missing_volumes = sorted(missing_volumes)
 
 
 def templates_for_factories(product_tier: str, factory_count: float, factories_per_template: int) -> int:

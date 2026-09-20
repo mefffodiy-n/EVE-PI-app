@@ -297,5 +297,15 @@ FEATURES = FEATURES + (
 )
 
 
+FEATURES = FEATURES + (
+    Feature(
+        "causeway_throughput", "Пропускная способность причала в прогнозе прибыльности",
+        ("пропускная способность причала", "реальной долей рабочего времени"),
+        ("causeway throughput", "real share of working time"),
+        "0.10.42", "help",
+    ),
+)
+
+
 def by_section(section: str) -> tuple[Feature, ...]:
     return tuple(f for f in FEATURES if f.where == section)

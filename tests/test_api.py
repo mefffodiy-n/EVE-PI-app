@@ -246,6 +246,34 @@ class TestPlans:
         )
         assert response.get_json()["purchased_p1"] == {}
 
+    def test_calculate_includes_duty_cycles(self, client, monkeypatch):
+        """
+        20.09.2026, по прямому запросу пользователя: пропускная
+        способность причала — ответ /api/calculate обязан нести
+        duty_cycles/missing_volumes, иначе фронтенду/`/api/plan-
+        profitability` неоткуда их взять (тот же путь, что purchased_p1).
+        """
+        import api.blueprints.plans as plans
+
+        book = PlanetBook(pd.DataFrame([
+            {"Constellation": "ALPHA", "System": "HOME", "Planet": "4", "Type": "Barren",
+             RADIUS_COLUMN: 5820},
+            {"Constellation": "ALPHA", "System": "HOME", "Planet": "7", "Type": "Temperate",
+             RADIUS_COLUMN: 8100},
+        ]))
+        monkeypatch.setattr(plans, "load_planets", lambda: book)
+
+        response = client.post(
+            "/api/calculate",
+            json={"constellations": ["ALPHA"], "factory_sys": "HOME", "target_products": ["Biocells"]},
+        )
+        body = response.get_json()
+        assert body["status"] == "success", body
+        assert "duty_cycles" in body
+        assert "missing_volumes" in body
+        assert isinstance(body["duty_cycles"], dict)
+        assert isinstance(body["missing_volumes"], list)
+
     def test_saved_plan_round_trips_purchased_p1(self, client):
         """
         20.09.2026, по прямому запросу пользователя: план на закупаемом
@@ -1023,6 +1051,32 @@ class TestPlanProfitability:
         assert body["monthly_import_tax"] == 216_000.0
         assert body["monthly_net_profit"] == 6_840_000.0
         assert body["hours_per_month"] == 720.0
+
+    def test_duty_cycles_from_request_body_discount_revenue(self, monkeypatch):
+        """
+        20.09.2026, по прямому запросу пользователя: пропускная
+        способность причала передаётся тем же путём, что purchased_p1
+        — фронтенд шлёт то, что уже получил в /api/calculate, сервер
+        не пересчитывает demand заново. Числа — как в
+        tests/test_poco_tax.py::TestDutyCycle (сверены вручную).
+        """
+        self._mock_prices(monkeypatch, {"Water": 10.0, "Coolant": 100.0})
+        self._mock_schematics(monkeypatch)
+        self._mock_planets(monkeypatch, {("MINE", "1"): 0.10, ("HOME", "2"): 0.05})
+        from api import create_app
+
+        with create_app({"TESTING": True}).test_client() as client:
+            r = client.post("/api/plan-profitability", json={
+                "rows": [self.MINING_ROW, self.PROCESSING_ROW],
+                "target_products": ["Coolant"],
+                "duty_cycles": {"Coolant": 0.5},
+                "missing_volumes": ["Oxygen"],
+            })
+        body = r.get_json()
+        assert body["monthly_revenue"] == 8_640_000.0 * 0.5
+        assert body["monthly_export_tax"] == 1_152_000.0 + 432_000.0 * 0.5
+        assert body["monthly_import_tax"] == 216_000.0 * 0.5
+        assert body["missing_volumes"] == ["Oxygen"]
 
     def test_missing_price_reported_not_hidden(self, monkeypatch):
         self._mock_prices(monkeypatch, {"Coolant": 100.0})  # Water без цены
