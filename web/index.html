@@ -762,6 +762,13 @@ details.msgs[open] > summary::before { content:'▾ '; }
    действие в списке, а сигнал, что данные по этому персонажу стоят. */
 .mini.reconnect { border-color:var(--alarm); color:var(--alarm); }
 .mini.reconnect:hover { background:var(--alarm); color:var(--void); }
+/* Экспорт в Excel сливался с соседними кнопками-прыжками (.mini —
+   тот же тусклый цвет/рамка у всех), найдено пользователем по
+   скриншоту 20.09.2026 — акцентная рамка+цвет выделяют единственное
+   на этой панели действие, которое СОЗДАЁТ файл, а не просто
+   прокручивает страницу. */
+.mini.export { border-color:var(--amber); color:var(--amber); }
+.mini.export:hover { background:var(--amber); color:var(--void); }
 .picker-list { max-height:220px; overflow-y:auto; }
 .picker-list label { display:flex; align-items:center; gap:8px; padding:4px 8px;
                      cursor:pointer; font-size:12px; }
@@ -1089,7 +1096,7 @@ body.light .rolebadge.excess { background:rgba(154,107,18,.12); }
       </button>
       <div class="menu-pop" id="sortPop"></div>
     </div>
-    <button class="mini" id="exportBtn" onclick="exportPlan()" style="margin-left:10px"
+    <button class="mini export" id="exportBtn" onclick="exportPlan()" style="margin-left:10px"
             data-i18n="export">Экспорт в Excel</button>
     <button class="mini" id="jumpPlan" onclick="jumpTo('pocoProfit')" style="margin-left:6px;display:none"
             data-i18n="jumpPlan">↑ План</button>
