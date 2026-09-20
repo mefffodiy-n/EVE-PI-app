@@ -33,7 +33,7 @@ python -m venv .venv
 
 ```
 PI_ENV=prod
-PI_DATABASE_URL=postgresql+psycopg://user:pass@localhost/pidirector   # или оставить SQLite
+PI_DATABASE_URL=postgresql+psycopg://user:pass@localhost/pidirector   # см. раздел 3 — или оставить SQLite
 PI_LOG_DIR=C:\ProgramData\PI-Director\logs
 PI_BACKUP_DIR=C:\ProgramData\PI-Director\backups
 ```
@@ -49,13 +49,30 @@ PI_ESI_CALLBACK_URL=https://ваш-домен/api/auth/callback
 `PI_ENV=prod` отключает dev-заглушки персонажей: планировщику нужны
 настоящие персонажи из SSO.
 
-## 3. Postgres
+## 3. Выбор СУБД
 
-SQLite тянет один процесс без проблем, но веб и сборщики пишут в базу
-одновременно, а с ростом числа пользователей — конкурентная запись и
-JSON-колонки (`pins`/`routes`/`structures`) начинают тянуть к Postgres
-(см. docs/ROADMAP.md, Фаза 9). На бою (с 15.09.2026) стоит Postgres,
-установленный так (Ubuntu):
+Движок — только смена `PI_DATABASE_URL` + `alembic upgrade head`,
+ORM-модели одни и те же для любого движка (`infra/db.py::_build_engine()`
+выбирает драйвер по схеме URL, ничего специфичного для Postgres в
+domain/api-слое нет). Но не все три движка одинаково готовы к проду —
+ниже честно, что проверено, а что нет.
+
+### 3.1. SQLite (по умолчанию)
+
+Ничего не устанавливать — `PI_DATABASE_URL` не задан, приложение само
+создаст `data/pi_director.db`. Годится для разработки и для маленького
+однопользовательского прода без домена: тянет один процесс без проблем.
+Ограничение — веб и сборщики пишут в базу одновременно, а с ростом
+числа пользователей конкурентная запись становится узким местом (см.
+docs/ROADMAP.md, Фаза 9); JSON-колонки (`pins`/`routes`/`structures`) на
+SQLite — обычный `TEXT`, не индексируемый бинарный тип. Бэкап —
+`scripts/backup.py` копирует файл через `sqlite3.Connection.backup()`
+(согласованный снимок даже при работающем приложении), без установки
+дополнительных пакетов.
+
+### 3.2. Postgres (рекомендуется, единственная проверенная в бою)
+
+На бою (с 15.09.2026) стоит Postgres, установленный так (Ubuntu):
 
 ```bash
 sudo apt-get install -y postgresql
@@ -76,7 +93,24 @@ ORM-модели те же — миграции применятся как ес
 сохранённые планы, историю добычи) — `python -m scripts.
 migrate_sqlite_to_postgres --sqlite ... --postgres ...` ПОСЛЕ
 `alembic upgrade head` на пустой Postgres (создаёт только схему, не
-данные), см. докстринг скрипта.
+данные), см. докстринг скрипта. Бэкап — `pg_dump -Fc` (сжатый
+custom-формат), см. раздел 5.
+
+### 3.3. MySQL/MariaDB — теоретически поддержаны, на практике не готовы
+
+SQLAlchemy и Alembic одинаково генерируют DDL для MySQL/MariaDB, и
+`PI_DATABASE_URL=mysql+pymysql://...` формально заработает — но:
+JSON-колонки в MariaDB это `LONGTEXT` с CHECK, не настоящий тип (одна
+из причин, по которой прод выбрал Postgres, не MariaDB); а
+**`scripts/backup.py` вообще не умеет их бэкапить** — незнакомый
+`PI_DATABASE_URL` попадает в ветку «неизвестная СУБД», пишет
+предупреждение в лог и копирует только снимки `data/cache/*.json`, БД
+не копируется совсем (`tests/test_backup.py::
+test_unknown_database_url_still_backs_up_cache`). До появления
+`_backup_mysql()` — свой `mysqldump` по расписанию отдельно от
+`scripts.scheduler`, иначе суточный бэкап будет честно предупреждать
+в журнале и молча оставлять вас без копии самой базы. Не рекомендуется
+для прода, пока это не исправлено.
 
 ## 4. Службы Windows (NSSM)
 
@@ -101,12 +135,14 @@ Linux: два unit-файла systemd с `ExecStart=/path/.venv/bin/python -m sc
 
 ## 5. Бэкап
 
-`scripts.scheduler` делает копию раз в сутки сам — для обоих движков:
-SQLite через API `.backup()`, Postgres через `pg_dump` (нужен в PATH,
-на Ubuntu ставится вместе с пакетом `postgresql`). Если сборщики не
-крутятся постоянно, заведите отдельное задание — образец
-`deploy/backup-task.xml` (Task Scheduler → *Import Task*), путь к
-python и рабочему каталогу поправьте под себя.
+`scripts.scheduler` делает копию раз в сутки сам — но только для SQLite
+и Postgres (раздел 3.1/3.2): SQLite через API `.backup()`, Postgres
+через `pg_dump` (нужен в PATH, на Ubuntu ставится вместе с пакетом
+`postgresql`). Для MySQL/MariaDB (раздел 3.3) `scripts/backup.py` БД не
+копирует вовсе — см. предупреждение там же. Если сборщики не крутятся
+постоянно, заведите отдельное задание — образец `deploy/backup-task.xml`
+(Task Scheduler → *Import Task*), путь к python и рабочему каталогу
+поправьте под себя.
 
 Восстановление dump-файла Postgres (сжатый custom-формат, `-Fc`, с
 18.09.2026 — раньше был обычный текстовый SQL):
