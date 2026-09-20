@@ -148,10 +148,36 @@ def volume_of(product_name: str) -> float | None:
     return float(volume) if volume is not None else None
 
 
-def own_consumption_profile(schematic: "Schematic") -> tuple[dict[str, float], list[str]]:
+def causeway_units(schematic: "Schematic", total_factories: float) -> float:
     """
-    Расход м³/час по каждому входу схемы, на ВСЕ фабрики её шаблона
-    колонии — сырьё для каскада партий-эстафеты в domain/throughput.py.
+    Сколько причалов реально стоит под этот продукт в плане — не одна
+    представительная колония, а РЕАЛЬНОЕ число (`total_factories`,
+    обычно `Demand.factories[product]`) делённое на число фабрик на
+    один причал. 0.0 для исключённых фасилити (P1) или отсутствия
+    расчётного значения.
+
+    ПОЧЕМУ ЭТО ВАЖНО. Пропорции между тирами задают рецепты, а не
+    `FACILITY_FACTORIES_PER_COLONY` — например, продукту с двумя
+    входами обычно нужно вдвое больше колоний входа, чем выхода.
+    Если считать КАЖДЫЙ тир как «ровно 12 (или 8) фабрик», расчёт
+    ломает баланс масс между тирами с разным реальным числом колоний
+    — найдено 20.09.2026 пользователем при проверке экономики плана
+    (P4 показывала на порядок заниженный duty cycle из-за этого).
+    """
+    factories_per_colony = FACILITY_FACTORIES_PER_COLONY.get(schematic.facility)
+    if not factories_per_colony or total_factories <= 0:
+        return 0.0
+    return total_factories / factories_per_colony
+
+
+def own_consumption_profile(
+    schematic: "Schematic", total_factories: float,
+) -> tuple[dict[str, float], list[str]]:
+    """
+    Расход м³/час по каждому входу схемы, на ВСЕ РЕАЛЬНО построенные
+    колонии этого продукта (`total_factories`, не фиксированную
+    константу на одну колонию) — сырьё для каскада партий-эстафеты в
+    domain/throughput.py.
 
     Возвращает (профиль, недостающие_объёмы_по_именам). Если для хотя
     бы одного входа схемы нет объёма — схема целиком выходит из модели:
@@ -162,7 +188,7 @@ def own_consumption_profile(schematic: "Schematic") -> tuple[dict[str, float], l
     колонии, см. докстринг модуля.
     """
     factories_per_colony = FACILITY_FACTORIES_PER_COLONY.get(schematic.facility)
-    if factories_per_colony is None:
+    if factories_per_colony is None or total_factories <= 0:
         return {}, []
 
     profile: dict[str, float] = {}
@@ -172,7 +198,7 @@ def own_consumption_profile(schematic: "Schematic") -> tuple[dict[str, float], l
         if volume is None:
             missing.append(name)
             continue
-        profile[name] = schematic.input_per_hour(name) * factories_per_colony * volume
+        profile[name] = schematic.input_per_hour(name) * total_factories * volume
 
     if missing:
         return {}, missing

@@ -68,37 +68,49 @@ def _recipes() -> RecipeBook:
     })
 
 
-def _schematics(fuel_block_input_per_hour: float = 5.0) -> dict[str, Schematic]:
+def _schematics(fuel_block_input_per_hour: float = 5.0,
+                 fuel_block_facility: str = "advanced_industry_facility") -> dict[str, Schematic]:
     """
     Coolant: причал (1000 м³) держит 100 ед./ч Water (объём 1.0) —
-    drain=0.8333ч, цикл=1.3333ч (с простоем 0.5ч), партия=10 ед.
-    Fuel Block: получает эту партию (10 ед. Coolant, объём 1.0 = 10 м³
-    — вдесятеро меньше своей полной ёмкости причала), съедает её за
-    drain_from_upstream часов — параметр `fuel_block_input_per_hour`
-    двигает этот расход, чтобы получить два разных сценария в тестах
-    ниже (апстрим задаёт темп vs у Fuel Block самой не хватило бы
-    времени даже на приехавшую партию, случай не встречается здесь,
-    но параметр оставлен для читаемости чисел).
+    drain=0.8333ч, цикл=1.3333ч (с простоем 0.5ч).
+
+    Fuel Block: съедает партию от Coolant — `fuel_block_input_per_hour`/
+    `fuel_block_facility` двигают ей СОБСТВЕННЫЙ расход и число фабрик
+    на причал (12 у advanced, 8 у high_tech — реальные игровые
+    константы), чтобы получить два сценария в тестах ниже: при
+    ПРАВИЛЬНО пропорционированном (через demand.factories, не
+    фиксированную константу — 20.09.2026, найдено пользователем)
+    числе колоний обычная пара тир-в-тир НЕ создаёт искусственного
+    узкого места; а разные ФАСИЛИТИ (иной размер причала на колонию,
+    как у настоящих P3→P4) — создают настоящее, не по вине бага.
     """
     return {
         "Water": Schematic(product="Water", facility="basic_industry_facility",
                             inputs={}, output_qty=100.0, cycle_minutes=30.0),
         "Coolant": Schematic(product="Coolant", facility="advanced_industry_facility",
                               inputs={"Water": 100.0}, output_qty=1.0, cycle_minutes=60.0),
-        "Fuel Block": Schematic(product="Fuel Block", facility="advanced_industry_facility",
+        "Fuel Block": Schematic(product="Fuel Block", facility=fuel_block_facility,
                                  inputs={"Coolant": fuel_block_input_per_hour}, output_qty=1.0, cycle_minutes=60.0),
     }
 
 
 class TestRelayCascade:
-    def test_downstream_is_paced_by_the_slower_upstream_cycle(self, monkeypatch, tmp_path):
+    def test_properly_proportioned_tiers_are_not_falsely_bottlenecked(self, monkeypatch, tmp_path):
         """
-        Ровно сценарий пользователя: Fuel Block съедает партию от
-        Coolant за 0.1667ч (расход задан большим — fuel_block_input_
-        per_hour=5.0), а сам простой на довозку занял бы всего 0.6667ч
-        цикла — НО темп задаёт Coolant (цикл 1.3333ч, куда дольше),
-        поэтому Fuel Block простаивает и его цикл РАВЕН циклу Coolant,
-        а не своему более короткому.
+        Найденный пользователем баг (20.09.2026, при проверке экономики
+        плана): раньше КАЖДЫЙ тир считался как «ровно 12 фабрик на один
+        причал», независимо от того, сколько причалов реально нужно —
+        это ломало баланс масс между тирами с разным реальным
+        соотношением колоний. Coolant и Fuel Block — ОДНА и та же
+        фасилити (advanced_industry_facility, 12 фабрик/причал), но
+        Fuel Block ест Coolant в 5 раз быстрее одной фабрикой — значит
+        ей ПРАВИЛЬНО нужно в 5 раз БОЛЬШЕ колоний, чем производителю.
+        `expand_demand` это уже считает верно (`demand.factories`), и
+        каскад обязан использовать РЕАЛЬНОЕ число, а не константу —
+        тогда партия от Coolant ровно покрывает потребность Fuel Block,
+        и она работает С ТЕМ ЖЕ duty cycle, что и поставщик, а не
+        искусственно проседает (упавший баг раньше давал бы ей 0.125
+        вместо честных 0.625).
         """
         _setup(monkeypatch, tmp_path, type_ids={"Water": 1, "Coolant": 2},
                volumes={1: 1.0, 2: 1.0}, capacity_m3=1_000, downtime_hours=0.5)
@@ -109,9 +121,30 @@ class TestRelayCascade:
         )
 
         assert demand.duty_cycles["Coolant"] == pytest.approx(0.625, abs=1e-3)
-        # Заметно НИЖЕ, чем "непрерывный ручеёк" дал бы для Fuel Block
-        # (тот считал бы её независимо от объёма партии Coolant).
-        assert demand.duty_cycles["Fuel Block"] == pytest.approx(0.125, abs=1e-3)
+        assert demand.duty_cycles["Fuel Block"] == pytest.approx(0.625, abs=1e-3)
+
+    def test_different_facility_between_tiers_can_still_genuinely_bottleneck(self, monkeypatch, tmp_path):
+        """
+        В отличие от теста выше — если у Fuel Block ДРУГАЯ фасилити
+        (high_tech, 8 фабрик/причал вместо 12 у advanced, как настоящие
+        P3→P4 в игре) и она физически съедает свой причал БЫСТРЕЕ,
+        чем упаковывается в темп поставщика, — простой РЕАЛЬНЫЙ, не
+        артефакт исправленного бага: он не пропадает при правильном
+        пропорционировании колоний, потому что не в количестве колоний
+        дело, а в том, что причал Fuel Block физически меньше того,
+        что успевает подвезти Coolant за её более долгий цикл.
+        """
+        _setup(monkeypatch, tmp_path, type_ids={"Water": 1, "Coolant": 2},
+               volumes={1: 1.0, 2: 1.0}, capacity_m3=1_000, downtime_hours=0.5)
+
+        demand = expand_demand(
+            {"Fuel Block": 10.0},
+            schematics=_schematics(fuel_block_input_per_hour=200.0, fuel_block_facility="high_tech_industry_facility"),
+            recipes=_recipes(),
+        )
+
+        assert demand.duty_cycles["Coolant"] == pytest.approx(0.625, abs=1e-3)
+        assert demand.duty_cycles["Fuel Block"] == pytest.approx(0.46875, abs=1e-3)
         assert demand.duty_cycles["Fuel Block"] < demand.duty_cycles["Coolant"]
 
     def test_true_p0_raw_material_boundary_does_not_get_a_duty_cycle_entry(self, monkeypatch, tmp_path):

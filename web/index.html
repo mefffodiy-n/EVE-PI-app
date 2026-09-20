@@ -1294,6 +1294,9 @@ const T={
   pocoHigherThanBest:'Ставка POCO здесь выше, чем на других перерабатывающих колониях плана',
   pocoIncomplete:'Чистая прибыль не считается, пока не известны все ставки и не собраны все цены — частичная сумма выглядела бы точнее, чем есть на самом деле.',
   pocoAssumption:'Оценка на {hours} часов в месяце, без истощения месторождений. Простой из-за пропускной способности причала уже учтён (см. выше), прочие простои — нет. Налог — и на вывоз, и на ввоз на каждом перемещении между планетами по цепочке.',
+  pocoRevenueByProductTitle:'Выручка по продуктам',
+  pocoRevenueByProductQty:'Ед. / мес',pocoRevenueByProductPrice:'Цена, ISK',pocoRevenueByProductRevenue:'Выручка / мес',
+  pocoCrossedTarget:'«{product}» не считается выручкой отдельно — весь объём уходит на переработку в «{other}» в этом же плане',
   purchaseListTitle:'Список закупки сырья (P1)',
   purchaseListProduct:'Продукт',purchaseListQty:'Кол-во / мес',purchaseListPrice:'Цена, ISK',
   purchaseListCost:'Стоимость / мес',purchaseListTotal:'Итого',purchaseListNoPrice:'нет цены',
@@ -1376,6 +1379,9 @@ const T={
   pocoHigherThanBest:'This POCO rate is higher than on other processing colonies in the plan',
   pocoIncomplete:'Net profit is not shown until every rate is known and every price is available — a partial sum would look more accurate than it really is.',
   pocoAssumption:'Estimate over {hours} hours per month, no deposit depletion. Downtime from causeway throughput is already accounted for (see above); other downtime is not. Tax applies on both export and import at every hop between planets in the chain.',
+  pocoRevenueByProductTitle:'Revenue by product',
+  pocoRevenueByProductQty:'Units / mo',pocoRevenueByProductPrice:'Price, ISK',pocoRevenueByProductRevenue:'Revenue / mo',
+  pocoCrossedTarget:'"{product}" is not counted as separate revenue — the whole output goes into "{other}" in this same plan',
   purchaseListTitle:'Raw material purchase list (P1)',
   purchaseListProduct:'Product',purchaseListQty:'Qty / mo',purchaseListPrice:'Price, ISK',
   purchaseListCost:'Cost / mo',purchaseListTotal:'Total',purchaseListNoPrice:'no price',
@@ -3357,6 +3363,12 @@ async function renderPocoProfit(){
     gaps.push(fmtPlain(t('pocoMissingRates'),{list:d.missing_rates.join(', ')}));
   if(d.missing_volumes && d.missing_volumes.length)
     gaps.push(fmtPlain(t('pocoMissingVolumes'),{list:d.missing_volumes.join(', ')}));
+  // Пересечение целевых цепочек (20.09.2026, по прямому запросу
+  // пользователя) — продукт выбран целевым, но весь его выход в этом
+  // плане уходит на переработку в ДРУГОЙ выбранный целевой продукт:
+  // не считается выручкой отдельно, domain/poco_tax.py::_effective_targets.
+  (d.crossed_targets||[]).forEach(c=>
+    gaps.push(fmtPlain(t('pocoCrossedTarget'),{product:c.product,other:c.consumed_by})));
 
   // Пропускная способность причала (20.09.2026, по прямому запросу
   // пользователя) — причал фиксированной ёмкости опустошается тем
@@ -3380,6 +3392,16 @@ async function renderPocoProfit(){
       <div class="figure net"><div class="lbl">${t('pocoNetProfit')}</div>
         <div class="val${netKnown?'':' dim'}">${netKnown?isk(d.monthly_net_profit):t('noData')}</div></div>
     </div>
+    ${(d.revenue_by_product&&d.revenue_by_product.length)?`<table class="purchase-list-table">
+      <thead><tr><th>${t('purchaseListProduct')}</th><th class="r">${t('pocoRevenueByProductQty')}</th>
+        <th class="r">${t('pocoRevenueByProductPrice')}</th><th class="r">${t('pocoRevenueByProductRevenue')}</th></tr></thead>
+      <tbody>${d.revenue_by_product.map(it=>`<tr>
+        <td>${it.product}</td>
+        <td class="r num">${nloc(Math.round(it.monthly_units))}</td>
+        <td class="r num">${it.price==null?t('purchaseListNoPrice'):nloc(Math.round(it.price))}</td>
+        <td class="r num">${it.monthly_revenue==null?'—':isk(it.monthly_revenue)}</td>
+      </tr>`).join('')}</tbody>
+    </table>`:''}
     ${gaps.length?`<div class="poco-profit-note">${gaps.join(' · ')}</div>`:''}
     ${!netKnown&&(d.monthly_revenue!=null||d.monthly_tax!=null)?`<div class="poco-profit-note">${t('pocoIncomplete')}</div>`:''}
     ${bottlenecks.length?`<div class="poco-profit-note">${t('pocoLogisticsBottleneck')} ${
@@ -4112,6 +4134,15 @@ const DOC={
    работать быстрее, чем оно поступает. Когда это заметно ограничивает
    цепочку, в панели появляется строка с реальной долей рабочего
    времени по тирам.</p>
+   <p>Под чистой прибылью — разбивка выручки по конечным продуктам:
+   сколько единиц и на сколько ISK по снимку рыночных цен получится к
+   концу месяца по каждому виду. Если один из выбранных целевых
+   продуктов при этом сам является сырьём для ДРУГОГО выбранного
+   целевого продукта (например, выбраны и промежуточный, и конечный
+   продукт одной цепочки), он не считается выручкой отдельно — весь
+   его объём физически уходит на переработку дальше, панель честно
+   об этом предупреждает, вместо того чтобы посчитать один и тот же
+   материал дважды.</p>
 
    <h3 id="h-purchase-list">Список закупки сырья (P1)</h3>
    <p>Панель под прогнозом прибыльности — показывается только в режиме
@@ -4350,6 +4381,14 @@ const DOC={
    unevenly (say, purchased P1), the following tiers can't run any faster
    than it actually arrives. When this noticeably limits the chain, the
    panel shows a line with the real share of working time per tier.</p>
+   <p>Below net profit is a breakdown of revenue by final product: how many
+   units and how much ISK, by the market price snapshot, each one is
+   expected to bring in by month's end. If one of the selected target
+   products is itself a raw material for ANOTHER selected target product
+   (say you picked both an intermediate and a final product from the same
+   chain), it is not counted as separate revenue — its entire output
+   physically goes into further processing, and the panel warns about
+   this instead of counting the same material twice.</p>
 
    <h3 id="h-purchase-list">Raw material purchase list (P1)</h3>
    <p>A panel below the profitability forecast — shown only in "buy all P1 on the
