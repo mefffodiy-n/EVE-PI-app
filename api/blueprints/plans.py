@@ -344,6 +344,9 @@ def save_plan():
             assumptions=payload.get("assumptions") or [],
             account_id=current_account_id(),
             purchased_p1=payload.get("purchased_p1") or {},
+            duty_cycles=payload.get("duty_cycles") or {},
+            missing_volumes=payload.get("missing_volumes") or [],
+            revenue_share=payload.get("revenue_share") or {},
         )
     except PlanStorageError as exc:
         return json_error(str(exc))

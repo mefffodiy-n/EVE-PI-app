@@ -3091,7 +3091,14 @@ async function savePlan(){
       // Режим purchase_p1 (20.09.2026) — без этого поля список закупки
       // сырья не восстанавливался бы при открытии сохранённого плана
       // (renderPurchaseList() читает его из lastPlanResp.purchased_p1).
-      purchased_p1:(lastPlanResp&&lastPlanResp.purchased_p1)||{}})});
+      purchased_p1:(lastPlanResp&&lastPlanResp.purchased_p1)||{},
+      // Партии-эстафетой + доля продукта при пересечении целей
+      // (21.09.2026) — без них повторное открытие плана считало
+      // прибыльность заново с нуля (duty_cycle=1.0 везде, revenue_share
+      // пустой), теряя все поправки прогноза (найдено пользователем).
+      duty_cycles:(lastPlanResp&&lastPlanResp.duty_cycles)||{},
+      missing_volumes:(lastPlanResp&&lastPlanResp.missing_volumes)||[],
+      revenue_share:(lastPlanResp&&lastPlanResp.revenue_share)||{}})});
   const d=await r.json();
   if(d.status!=='success'){ alert(d.message); return; }
   currentPlanId=d.plan.id;
@@ -3118,7 +3125,17 @@ async function openSaved(id){
   // Планы, сохранённые до этой колонки, честно возвращают {} — список
   // закупки для них не покажется, а прибыльность (выручка/налог) от
   // purchased_p1 не зависит и считается верно в любом случае.
-  lastPlanResp={critical_warnings:[], purchased_p1:d.plan.purchased_p1||{}};
+  // duty_cycles/missing_volumes/revenue_share (21.09.2026) — тем же
+  // путём: без них renderPocoProfit() шлёт в /api/plan-profitability
+  // пустые {}/[], и та честно считает "полную загрузку без поправок"
+  // вместо реального прогноза — план "тупел" при каждом повторном
+  // открытии (найдено пользователем). Планы до этой колонки — как и с
+  // purchased_p1, честно {}/[] (сам прогноз посчитается, просто без
+  // поправок причала/пересечения целей, как и было в первой версии
+  // фичи).
+  lastPlanResp={critical_warnings:[], purchased_p1:d.plan.purchased_p1||{},
+    duty_cycles:d.plan.duty_cycles||{}, missing_volumes:d.plan.missing_volumes||[],
+    revenue_share:d.plan.revenue_share||{}};
   renderMessages();
   renderAnswers(); renderTable(); renderDash(); renderCrew(); renderShopping(); renderPocoProfit(); renderSaved();
   show('dash');

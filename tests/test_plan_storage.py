@@ -68,6 +68,36 @@ class TestSaving:
         again = load(plan.id)
         assert again.purchased_p1 == {}
 
+    def test_profitability_inputs_round_trip(self):
+        """
+        21.09.2026, по прямому запросу пользователя: при повторном
+        открытии плана прогноз прибыльности "тупел" до полной загрузки
+        без поправок — duty_cycles/missing_volumes/revenue_share не
+        сохранялись вместе с планом (только purchased_p1). Все три поля
+        должны пережить сохранение/загрузку так же, как purchased_p1.
+        """
+        plan = save(
+            "С поправками", {}, ROWS,
+            duty_cycles={"Coolant": 0.42}, missing_volumes=["Water"],
+            revenue_share={"Coolant": 0.5},
+        )
+        again = load(plan.id)
+        assert again.duty_cycles == {"Coolant": 0.42}
+        assert again.missing_volumes == ["Water"]
+        assert again.revenue_share == {"Coolant": 0.5}
+        body = again.to_dict()
+        assert body["duty_cycles"] == {"Coolant": 0.42}
+        assert body["missing_volumes"] == ["Water"]
+        assert body["revenue_share"] == {"Coolant": 0.5}
+
+    def test_no_profitability_inputs_stores_empty_not_none(self):
+        """Обычный план — {}/[] при чтении, не None (правило 1, честный пробел)."""
+        plan = save("Обычный", {}, ROWS)
+        again = load(plan.id)
+        assert again.duty_cycles == {}
+        assert again.missing_volumes == []
+        assert again.revenue_share == {}
+
 
 class TestSafety:
     @pytest.mark.parametrize(
