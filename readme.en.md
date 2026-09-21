@@ -95,6 +95,7 @@ A fresh clone can't compute plans without a few one-off steps:
 ```
 .venv\Scripts\python -m scripts.extract_schematics --write   # data/schematics.json — input/output quantities
 .venv\Scripts\python -m alembic upgrade head                 # database tables
+.venv\Scripts\python -m scripts.migrate_planets_csv_to_db    # planet reference data (Fountain region) — once per DB
 .venv\Scripts\python -m scripts.seed_dev_characters           # dev characters (PI_ENV=dev only)
 ```
 
@@ -231,13 +232,17 @@ request (details and discussion history — `docs/ROADMAP.md`):
   such template in the DalShooth set), but computed from individual
   structure costs, and has never been checked in game. Turning it back
   on is an in-game check, not new development.
-- **Multi-region support** — also already supported by the code
-  (`domain/planets.py::regions()`, grouping by the `Region` column), but
-  `data/planet_industry.csv` only describes the **Fountain** region
-  (confirmed by the user on 2026-09-16). Neither ESI nor the SDE expose
-  resource density for planets (verified the same day) — extending to
-  each further region needs the same kind of manual export that
-  produced the current file.
+- **Multi-region support** — plan approved 2026-09-17, split into 5
+  phases/PRs (`docs/ROADMAP.md`, Phase 10). Phase 1 (planet reference
+  data moved into the database, `regions`/`planets` tables instead of a
+  CSV) shipped 2026-09-21. Data still only covers the **Fountain**
+  region (confirmed by the user on 2026-09-16) — Phases 2-5 (a
+  region-wide skeleton collector from the SDE, an admin panel for
+  manual density entry, region availability in the planner) remain
+  queued, each waiting on its own explicit request. Neither ESI nor the
+  SDE expose resource density for planets (verified the same day) —
+  extending to each further region needs the same kind of manual export
+  that produced the current Fountain data.
 
 ## Version
 

@@ -291,8 +291,8 @@ class TestRealColonyLoad:
     планеты (data/planet_industry.csv, не ESI — она радиус не отдаёт).
     """
 
-    def test_computes_from_real_planet_in_region_csv(self):
-        # 57-KJB I — реальная строка CSV, радиус 2570 км (см. test_planets.py).
+    def test_computes_from_real_planet_in_region_csv(self, seed_57kjb_planet):
+        # 57-KJB I — известная планета региона, радиус 2570 км (см. conftest.py).
         structures = [
             {"kind": "command_center", "count": 1},
             {"kind": "extractor_control_unit", "count": 1},
@@ -316,7 +316,7 @@ class TestRealColonyLoad:
                                       planet_index_=4, ccu_level=5)
         assert all(v is None for v in load.values())
 
-    def test_command_center_excluded_before_calling_domain(self):
+    def test_command_center_excluded_before_calling_domain(self, seed_57kjb_planet):
         """
         Командный центр — единственная структура в списке. Если бы он не
         фильтровался, calculate_real_colony_load() упал бы (его нет в

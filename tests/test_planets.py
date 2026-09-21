@@ -1,28 +1,40 @@
 """
-Тесты domain.planets: PlanetBook.radius_km().
+Тесты domain.planets.
+
+С 21.09.2026 (Фаза 1 мультирегиональности) load_planets() читает
+`regions`/`planets` из БД, а не data/planet_industry.csv — фикстура
+seed_57kjb_planet() ниже заполняет изолированную тестовую БД (conftest.py::
+isolate_database) строками, эквивалентными реальной 57-KJB I из
+прежнего CSV, чтобы сами проверки (радиус/POCO/констелляция) не
+менялись. load_planets.cache_clear() вызывается conftest.py перед
+каждым тестом — без этого @lru_cache(maxsize=1) отдавал бы результат
+первого теста, вызвавшего load_planets(), всем последующим (раньше
+кэш был безопасен: источник-файл не менялся между тестами, теперь
+меняется).
 """
 
 from __future__ import annotations
+
+import pytest
 
 from domain.planets import load_planets, planet_number_to_roman
 
 
 class TestRadiusKm:
-    def test_known_planet_returns_real_radius(self):
-        """57-KJB I — реальная строка data/planet_industry.csv, радиус 2570 км."""
+    def test_known_planet_returns_real_radius(self, seed_57kjb_planet):
         book = load_planets()
         assert book.radius_km("57-KJB", 1) == 2570.0
 
-    def test_accepts_string_and_float_planet_number(self):
+    def test_accepts_string_and_float_planet_number(self, seed_57kjb_planet):
         book = load_planets()
         assert book.radius_km("57-KJB", "1") == book.radius_km("57-KJB", 1.0)
 
-    def test_unknown_system_is_none(self):
-        """Файл покрывает только загруженный регион, не весь New Eden."""
+    def test_unknown_system_is_none(self, seed_57kjb_planet):
+        """БД покрывает только загруженный регион, не весь New Eden."""
         book = load_planets()
         assert book.radius_km("Jita", 4) is None
 
-    def test_unknown_planet_number_in_known_system_is_none(self):
+    def test_unknown_planet_number_in_known_system_is_none(self, seed_57kjb_planet):
         book = load_planets()
         assert book.radius_km("57-KJB", 99) is None
 
@@ -30,20 +42,19 @@ class TestRadiusKm:
 class TestPocoRate:
     """Ставка POCO по конкретной планете — единственный источник (domain/poco_tax.py)."""
 
-    def test_known_planet_returns_real_rate_as_fraction(self):
-        """57-KJB I — та же строка, что и у радиуса, ставка 3% -> 0.03."""
+    def test_known_planet_returns_real_rate_as_fraction(self, seed_57kjb_planet):
         book = load_planets()
         assert book.poco_rate("57-KJB", 1) == 0.03
 
-    def test_accepts_string_and_float_planet_number(self):
+    def test_accepts_string_and_float_planet_number(self, seed_57kjb_planet):
         book = load_planets()
         assert book.poco_rate("57-KJB", "1") == book.poco_rate("57-KJB", 1.0)
 
-    def test_unknown_system_is_none(self):
+    def test_unknown_system_is_none(self, seed_57kjb_planet):
         book = load_planets()
         assert book.poco_rate("Jita", 4) is None
 
-    def test_unknown_planet_number_in_known_system_is_none(self):
+    def test_unknown_planet_number_in_known_system_is_none(self, seed_57kjb_planet):
         book = load_planets()
         assert book.poco_rate("57-KJB", 99) is None
 
@@ -55,13 +66,49 @@ class TestConstellationOf:
     неё есть в этом же файле, просто не читались.
     """
 
-    def test_known_system_returns_its_constellation(self):
+    def test_known_system_returns_its_constellation(self, seed_57kjb_planet):
         book = load_planets()
         assert book.constellation_of("57-KJB") == "MINOTAUR"
 
-    def test_unknown_system_is_none(self):
+    def test_unknown_system_is_none(self, seed_57kjb_planet):
         book = load_planets()
         assert book.constellation_of("Jita") is None
+
+
+class TestRegionsFromDb:
+    """
+    21.09.2026, Фаза 1 мультирегиональности: колонки «Region» не было
+    ни в одном CSV (данные покрывали один регион без явной пометки),
+    поэтому PlanetBook.regions() всегда возвращал {} — с переносом в
+    БД колонка появляется по-честному, и уже существующий метод
+    оживает без собственных изменений.
+    """
+
+    def test_regions_lists_constellations_by_region(self, seed_57kjb_planet):
+        book = load_planets()
+        assert book.regions() == {"Fountain": ["MINOTAUR"]}
+
+    def test_resolve_resource_column_finds_seeded_resource(self, seed_57kjb_planet):
+        book = load_planets()
+        assert book.resolve_resource_column("Aqueous Liquids") == "Aqueous Liquids"
+
+    def test_resolve_resource_column_none_when_never_recorded(self, seed_57kjb_planet):
+        """Ресурс, которого нет ни у одной планеты БД — честный пробел, не 0."""
+        book = load_planets()
+        assert book.resolve_resource_column("Water") is None
+
+
+class TestEmptyDatabase:
+    """
+    Свежий клон без `alembic upgrade head`/переноса — БД либо пуста,
+    либо таблиц ещё нет вовсе. Страница должна открыться, а не упасть.
+    """
+
+    def test_no_planets_gives_empty_book_not_exception(self):
+        book = load_planets()
+        assert book.constellations() == []
+        assert book.regions() == {}
+        assert book.radius_km("57-KJB", 1) is None
 
 
 class TestPlanetNumberToRoman:
@@ -96,5 +143,3 @@ class TestPlanetNumberToRoman:
 
     def test_none_becomes_empty_string(self):
         assert planet_number_to_roman(None) == ""
-
-
