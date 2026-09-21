@@ -111,6 +111,75 @@ class TestEmptyDatabase:
         assert book.radius_km("57-KJB", 1) is None
 
 
+class TestCacheTtl:
+    """
+    21.09.2026, Фаза 2 мультирегиональности: `scripts/refresh_sde.py`
+    пишет в regions/planets из ДРУГОГО процесса (планировщик), поэтому
+    вечный `@lru_cache` заменён на TTL (`PLANETS_CACHE_TTL_SECONDS`) —
+    без него уже запущенный веб-процесс никогда не увидел бы новые
+    регионы.
+    """
+
+    def test_returns_cached_value_before_ttl_expires(self, seed_57kjb_planet):
+        first = load_planets()
+        # Вторая планета добавлена мимо load_planets() — если бы кэша не
+        # было, следующий вызов увидел бы её немедленно.
+        from infra.db import session_scope
+        from infra.models import Planet, Region
+
+        with session_scope() as session:
+            region = session.query(Region).filter_by(name="Fountain").one()
+            session.add(Planet(
+                region_id=region.id, constellation="MINOTAUR", system="57-KJB",
+                planet_number=2, planet_type="Barren", radius_km=1000.0,
+            ))
+
+        assert load_planets() is first
+        assert load_planets().dataframe.shape[0] == first.dataframe.shape[0]
+
+    def test_recomputes_after_ttl_expires(self, seed_57kjb_planet, monkeypatch):
+        import time
+
+        import domain.planets as planets_module
+
+        clock = [1000.0]
+        monkeypatch.setattr(time, "monotonic", lambda: clock[0])
+
+        first = load_planets()
+
+        from infra.db import session_scope
+        from infra.models import Planet, Region
+
+        with session_scope() as session:
+            region = session.query(Region).filter_by(name="Fountain").one()
+            session.add(Planet(
+                region_id=region.id, constellation="MINOTAUR", system="57-KJB",
+                planet_number=2, planet_type="Barren", radius_km=1000.0,
+            ))
+
+        clock[0] += planets_module.PLANETS_CACHE_TTL_SECONDS + 1
+        second = load_planets()
+        assert second is not first
+        assert second.dataframe.shape[0] == first.dataframe.shape[0] + 1
+
+    def test_cache_clear_forces_immediate_refresh(self, seed_57kjb_planet):
+        from infra.db import session_scope
+        from infra.models import Planet, Region
+
+        first = load_planets()
+
+        with session_scope() as session:
+            region = session.query(Region).filter_by(name="Fountain").one()
+            session.add(Planet(
+                region_id=region.id, constellation="MINOTAUR", system="57-KJB",
+                planet_number=2, planet_type="Barren", radius_km=1000.0,
+            ))
+
+        load_planets.cache_clear()
+        second = load_planets()
+        assert second.dataframe.shape[0] == first.dataframe.shape[0] + 1
+
+
 class TestPlanetNumberToRoman:
     """
     18.09.2026, найдено пользователем: номер планеты расчётного плана
