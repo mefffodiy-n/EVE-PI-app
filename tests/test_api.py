@@ -135,6 +135,23 @@ class TestReference:
         response = client.post("/api/systems", json={"constellations": ["ALPHA"]})
         assert response.get_json()["systems"] == ["HOME"]
 
+    def test_systems_without_ccu_reports_no_recommendation(self, client):
+        """Без ccu рекомендовать нечего — честно null, не гадать (правило 1)."""
+        response = client.post("/api/systems", json={"constellations": ["ALPHA", "BETA"]})
+        assert response.get_json()["recommended"] is None
+
+    def test_systems_with_ccu_recommends_best_home_system(self, client):
+        """
+        21.09.2026, по прямому запросу пользователя: HOME (ALPHA) —
+        планета радиусом 8100 км помещается под двойной шаблон при CCU 5
+        (порог 12800 км) и её POCO-ставка ровно 1%; FAR (BETA) — только
+        планета 18000 км, под двойной не помещается никогда.
+        """
+        response = client.post(
+            "/api/systems", json={"constellations": ["ALPHA", "BETA"], "ccu": 5}
+        )
+        assert response.get_json()["recommended"] == "HOME"
+
     @pytest.mark.parametrize(
         "payload",
         [

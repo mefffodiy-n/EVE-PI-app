@@ -13,7 +13,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from domain.factory_site import describe_thresholds, select_factory_sites
+from domain.factory_site import describe_thresholds, recommend_home_system, select_factory_sites
 from domain.planets import POCO_RATE_COLUMN, RADIUS_COLUMN, PlanetBook
 
 
@@ -355,3 +355,92 @@ def test_thresholds_reported_for_ui():
     assert at5["p2p3_2factory"] is not None
     assert at5["p4_2factory"] is not None
     assert describe_thresholds(4)["p2p3_2factory"] is None, "при CCU 4 двойной недоступен"
+
+
+class TestRecommendHomeSystem:
+    """
+    21.09.2026, по прямому запросу пользователя — дефолтная домашняя
+    система не первая по алфавиту, а с наибольшим числом Barren/
+    Temperate планет маленького радиуса (помещается двойной шаблон) и
+    налогом POCO 1%; при отсутствии точного совпадения по налогу —
+    тот же счёт без фильтра по налогу, средний налог как довесок.
+    """
+
+    THRESHOLD = 12800.0  # describe_thresholds(5)["p2p3_2factory"]
+
+    def test_none_when_threshold_unknown(self):
+        book = _book(SMALL_SYSTEM)
+        assert recommend_home_system(book, ["HOME"], None) is None
+
+    def test_none_when_no_systems_listed(self):
+        book = _book(SMALL_SYSTEM)
+        assert recommend_home_system(book, [], self.THRESHOLD) is None
+
+    def test_none_when_nothing_fits_anywhere(self):
+        book = _book([
+            {"System": "HOME", "Planet": 1, "Type": "Gas", RADIUS_COLUMN: 5000,
+             POCO_RATE_COLUMN: 1},
+        ])
+        assert recommend_home_system(book, ["HOME"], self.THRESHOLD) is None
+
+    def test_exact_one_percent_match_wins_over_bigger_count_without_it(self):
+        """
+        AWAY — три подходящих планеты, но налог не 1% ни у одной. HOME —
+        всего одна подходящая планета, зато ровно с 1% налогом. По
+        прямому решению пользователя точное совпадение по налогу важнее
+        количества.
+        """
+        book = _book([
+            {"System": "HOME", "Planet": 1, "Type": "Barren", RADIUS_COLUMN: 5000,
+             POCO_RATE_COLUMN: 1},
+            {"System": "AWAY", "Planet": 1, "Type": "Barren", RADIUS_COLUMN: 4000,
+             POCO_RATE_COLUMN: 5},
+            {"System": "AWAY", "Planet": 2, "Type": "Temperate", RADIUS_COLUMN: 4500,
+             POCO_RATE_COLUMN: 5},
+            {"System": "AWAY", "Planet": 3, "Type": "Barren", RADIUS_COLUMN: 6000,
+             POCO_RATE_COLUMN: 5},
+        ])
+        assert recommend_home_system(book, ["HOME", "AWAY"], self.THRESHOLD) == "HOME"
+
+    def test_falls_back_to_count_without_tax_filter_when_no_exact_match(self):
+        """Нигде нет 1% — ранжируем по числу подходящих планет без учёта налога."""
+        book = _book([
+            {"System": "HOME", "Planet": 1, "Type": "Barren", RADIUS_COLUMN: 5000,
+             POCO_RATE_COLUMN: 5},
+            {"System": "AWAY", "Planet": 1, "Type": "Barren", RADIUS_COLUMN: 4000,
+             POCO_RATE_COLUMN: 5},
+            {"System": "AWAY", "Planet": 2, "Type": "Temperate", RADIUS_COLUMN: 4500,
+             POCO_RATE_COLUMN: 5},
+        ])
+        assert recommend_home_system(book, ["HOME", "AWAY"], self.THRESHOLD) == "AWAY"
+
+    def test_average_tax_breaks_tie_on_equal_count(self):
+        """Одинаковое число подходящих планет — выигрывает система с меньшим средним налогом."""
+        book = _book([
+            {"System": "HOME", "Planet": 1, "Type": "Barren", RADIUS_COLUMN: 5000,
+             POCO_RATE_COLUMN: 8},
+            {"System": "AWAY", "Planet": 1, "Type": "Barren", RADIUS_COLUMN: 4000,
+             POCO_RATE_COLUMN: 3},
+        ])
+        assert recommend_home_system(book, ["HOME", "AWAY"], self.THRESHOLD) == "AWAY"
+
+    def test_oversized_planets_and_unpreferred_types_are_ignored(self):
+        book = _book([
+            {"System": "HOME", "Planet": 1, "Type": "Barren", RADIUS_COLUMN: 20000,
+             POCO_RATE_COLUMN: 1},  # слишком крупная под двойной
+            {"System": "HOME", "Planet": 2, "Type": "Gas", RADIUS_COLUMN: 4000,
+             POCO_RATE_COLUMN: 1},  # не Barren/Temperate
+            {"System": "AWAY", "Planet": 1, "Type": "Temperate", RADIUS_COLUMN: 4000,
+             POCO_RATE_COLUMN: 5},
+        ])
+        assert recommend_home_system(book, ["HOME", "AWAY"], self.THRESHOLD) == "AWAY"
+
+    def test_systems_outside_the_given_list_are_ignored(self):
+        book = _book([
+            {"System": "HOME", "Planet": 1, "Type": "Barren", RADIUS_COLUMN: 5000,
+             POCO_RATE_COLUMN: 5},
+            {"System": "ELSEWHERE", "Planet": 1, "Type": "Barren", RADIUS_COLUMN: 4000,
+             POCO_RATE_COLUMN: 1},
+        ])
+        # ELSEWHERE подошла бы лучше, но не входит в переданный список систем.
+        assert recommend_home_system(book, ["HOME"], self.THRESHOLD) == "HOME"

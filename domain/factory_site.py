@@ -57,7 +57,12 @@ from domain.capacity import (
     max_planet_radius_that_fits,
     min_ccu_level_that_fits,
 )
-from domain.planets import PREFERRED_FACTORY_PLANET_TYPES, RADIUS_COLUMN, PlanetBook
+from domain.planets import (
+    POCO_RATE_COLUMN,
+    PREFERRED_FACTORY_PLANET_TYPES,
+    RADIUS_COLUMN,
+    PlanetBook,
+)
 from domain.plan_messages import render as render_message
 
 # Какой шаблон отвечает какому тиру переработки.
@@ -510,3 +515,63 @@ def describe_thresholds(ccu_level: int) -> dict[str, float | None]:
         except UnsupportedSetup:
             result[key] = None
     return result
+
+
+def recommend_home_system(
+    planets: PlanetBook, systems: list[str], threshold_km: float | None,
+) -> str | None:
+    """
+    Домашняя система по умолчанию — та, где больше всего Barren/
+    Temperate планет радиусом не выше threshold_km (помещается двойной
+    шаблон P2/P3 — «маленький радиус» уточнён пользователем 21.09.2026
+    как этот же порог, а не отдельное произвольное число).
+
+    Среди подходящих планет предпочтение — системе, где их больше ИМЕННО
+    С НАЛОГОМ POCO РОВНО 1% (`exact_count`). Если такого совпадения нет
+    НИ У ОДНОЙ системы, ранжируем по тому же счёту БЕЗ фильтра по налогу
+    (`general_count`) — не откатываемся к алфавиту, — а средний налог
+    среди этих планет решает при равенстве счёта (тоже прямое решение
+    пользователя: «то же самое, но с учётом налога», не два несвязанных
+    правила). Финальная развязка при полном совпадении — алфавит: группа
+    pandas уже даёт системы в этом порядке, сортировка ниже стабильна.
+
+    None — если порог неизвестен (CCU ещё не выбран) или ни у одной из
+    перечисленных систем нет ни одной подходящей планеты вовсе: фронтенд
+    в этом случае оставляет старое поведение (первая по алфавиту),
+    честно, без выдумывания рекомендации на пустом месте (правило 1).
+    """
+    if threshold_km is None or not systems:
+        return None
+
+    df = planets.dataframe
+    if df.empty or "System" not in df.columns or "Type" not in df.columns:
+        return None
+
+    import pandas as pd
+
+    radius = pd.to_numeric(df[RADIUS_COLUMN], errors="coerce")
+    poco = pd.to_numeric(df[POCO_RATE_COLUMN], errors="coerce")
+
+    mask = (
+        df["System"].isin(systems)
+        & df["Type"].isin(PREFERRED_FACTORY_PLANET_TYPES)
+        & radius.notna() & (radius <= threshold_km)
+    )
+    if not mask.any():
+        return None
+
+    subset = df.loc[mask, ["System"]].copy()
+    subset["_poco"] = poco[mask]
+    subset["_exact"] = subset["_poco"].sub(1.0).abs().lt(1e-6)
+
+    grouped = subset.groupby("System", sort=True).agg(
+        exact_count=("_exact", "sum"),
+        general_count=("_exact", "size"),
+        avg_tax=("_poco", "mean"),
+    )
+    ordered = grouped.sort_values(
+        by=["exact_count", "general_count", "avg_tax"],
+        ascending=[False, False, True],
+        kind="mergesort",  # стабильная — сохраняет алфавит groupby при полном равенстве
+    )
+    return str(ordered.index[0])

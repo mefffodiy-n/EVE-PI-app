@@ -834,6 +834,12 @@ details.msgs[open] > summary::before { content:'▾ '; }
    прокручивает страницу. */
 .mini.export { border-color:var(--amber); color:var(--amber); }
 .mini.export:hover { background:var(--amber); color:var(--void); }
+/* «Добавить персонажа» — единственное действие в карточке «Персонажи»,
+   которое реально расширяет пул (не просто фильтр/сортировка), должно
+   выделяться так же, как «Экспорт» (21.09.2026, по прямому запросу
+   пользователя). */
+.mini.add-character { border-color:var(--amber); color:var(--amber); }
+.mini.add-character:hover { background:var(--amber); color:var(--void); }
 .picker-list { max-height:220px; overflow-y:auto; }
 .picker-list label { display:flex; align-items:center; gap:8px; padding:4px 8px;
                      cursor:pointer; font-size:12px; }
@@ -1268,7 +1274,7 @@ body.light .rolebadge.excess { background:rgba(154,107,18,.12); }
         <div class="step-body">
           <div class="field">
             <label for="factorySys" data-i18n="homeSystem">Домашняя система</label>
-            <select id="factorySys"></select>
+            <select id="factorySys" onchange="loadSystemPlanets()"></select>
           </div>
           <div class="thresholds" id="thresholdNote"></div>
 
@@ -4298,8 +4304,10 @@ const DOC={
    протоколу CCP только первого персонажа — как только связан хотя бы
    один, кнопка пропадает из шапки. Добавить ещё персонажей после
    этого можно только на вкладке «Настройки», в карточке «Где
-   перерабатываем» → «Персонажи», кнопкой «Добавить персонажа». Сразу
-   после входа планировщик подтягивает настоящие уровни скиллов
+   перерабатываем» → «Персонажи», кнопкой «Добавить персонажа». После
+   входа (первого и любого следующего персонажа) приложение открывается
+   именно на вкладке «Настройки», не «Дашборд» — здесь же сразу видно
+   результат. Сразу после входа планировщик подтягивает настоящие уровни скиллов
    (Command Center Upgrades и Interplanetary Consolidation) и реальные
    колонии — не нужно ждать ближайшего планового обновления, обычно
    это занимает несколько секунд. Токены хранятся на сервере в
@@ -4550,7 +4558,9 @@ const DOC={
    character through CCP's official protocol — once at least one is linked, the
    button disappears from the top bar. To add more characters after that, go to
    the Settings tab, in the "Where to process" card → "Characters", and use the
-   "Add character" button there. Right after you log in the planner pulls your
+   "Add character" button there. After logging in (the first character or any
+   next one) the app opens directly on the Settings tab, not the Dashboard —
+   you see the result right there. Right after you log in the planner pulls your
    real skill levels (Command Center Upgrades and Interplanetary Consolidation)
    and your real colonies — no need to wait for the next scheduled refresh, it
    usually takes a few seconds. Tokens are stored encrypted on the server; the
@@ -5000,9 +5010,24 @@ function msg(t,bad){ document.getElementById('messages').insertAdjacentHTML('bef
 async function loadSystems(){
   const c=picked('constellations');
   if(!c.length){ fill('factorySys',[]); return; }
+  // Домашняя система (переработка) выбирается из ВСЕГО региона, не
+  // только из констелляций, выбранных под добычу (21.09.2026, по
+  // прямому запросу пользователя — логистика возит сырьё между
+  // системами, привязывать переработку к добыче незачем); allConstellations
+  // (boot(), из d.bases) — уже весь регион, отдельно собирать не нужно.
+  // ccu — тем же способом, что и loadThresholds(): по нему сервер
+  // подбирает домашнюю систему с наибольшим числом Barren/Temperate
+  // планет маленького радиуса и налогом POCO 1% (см. recommend_home_
+  // system(), domain/factory_site.py); без выбранных персонажей ccu=0,
+  // сервер честно вернёт recommended=null — останется старое поведение.
+  const ccu=Math.max(0,...crew.map(x=>x.ccu||0));
   const r=await fetch(`${API}/systems`,{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({constellations:c})});
-  fill('factorySys',(await r.json()).systems||[]);
+    body:JSON.stringify({constellations:allConstellations, ccu})});
+  const d=await r.json();
+  const systems=d.systems||[];
+  fill('factorySys',systems);
+  if(d.recommended && systems.includes(d.recommended))
+    document.getElementById('factorySys').value=d.recommended;
   loadSystemPlanets();
 }
 
@@ -5088,7 +5113,7 @@ function renderCrew(){
   if(ssoBtn) ssoBtn.style.display=hasLinked?'none':'';
   const hintBox=document.getElementById('crewHint');
   if(hintBox) hintBox.innerHTML=hasLinked
-    ? `<button class="mini" onclick="startLogin()">${t('addCharacter')}</button>` : '';
+    ? `<button class="mini add-character" onclick="startLogin()">${t('addCharacter')}</button>` : '';
   if(!crew.length){
     box.innerHTML=`<div style="color:var(--dim);font-size:12px">${t('noData')}</div>`;
     fitStepFills();
@@ -5387,6 +5412,24 @@ function show(p){
   // стала видимой.
   if(p==='setup') fitStepFills();
 }
+
+/* После входа через EVE SSO callback (api/blueprints/auth.py::callback())
+   редиректит на /?auth=ok или /?auth=error&reason=... — раньше фронтенд
+   этот параметр вообще не читал, и добавление второго и следующих
+   персонажей молча оставляло пользователя на дефолтной вкладке
+   «Дашборд» (21.09.2026, по прямому запросу пользователя). auth=error
+   раньше терялся точно так же — ошибка есть, а сказать о ней было
+   некому: тот же пробел, чинится тем же изменением. history.replaceState
+   — чтобы обновление страницы (F5) не повторяло переключение вкладки
+   при уже отработанном редиректе. */
+function handleAuthRedirect(){
+  const params=new URLSearchParams(location.search);
+  const auth=params.get('auth');
+  if(!auth) return;
+  show('setup');
+  if(auth==='error') msg(params.get('reason')||t('ssoUnavailable'), true);
+  history.replaceState(null,'',location.pathname);
+}
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>show(t.dataset.page));
 document.querySelectorAll('.tool[data-view]').forEach(t=>t.onclick=()=>{
   view=t.dataset.view;
@@ -5413,6 +5456,7 @@ setTheme(store.get('pi-theme','dark'));
 lang=store.get('pi-lang','ru');
 
 measureTopbar(); measureTools();
+handleAuthRedirect();
 boot(); loadMeta(); loadCrew(); loadProfit(); loadColonies(); loadSaved(); applyLang();
 // Онлайн меняется медленно; снимок обновляет фоновый сборщик,
 // поэтому опрашиваем раз в минуту и только читаем готовое.
