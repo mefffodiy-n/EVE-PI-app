@@ -52,6 +52,22 @@ IGNORED_CONSTELLATION_VALUES = {"max P2"}
 RADIUS_COLUMN = "Radius [km]"
 POCO_RATE_COLUMN = "POCO Tax Rate [%]"
 
+# `Region.status` (infra/models.py) — единственный статус, из которого
+# load_planets() реально строит PlanetBook. Регион без плотности сырья
+# (весь New Eden, кроме Fountain, с 21.09.2026 — Фаза 2 мультирегио-
+# нальности, scripts/refresh_sde.py) заводится со статусом "no_data" и
+# ИСКЛЮЧАЕТСЯ здесь же, на уровне запроса к БД — не только потому, что
+# план на нём всё равно не посчитать (плотности нет), но и по чисто
+# практической причине, найденной 21.09.2026: без фильтра PlanetBook
+# тянул все ~68 тыс. скелетных планет всех ~68 регионов на каждую
+# холодную сборку (TTL истёк/новый процесс) — DB-запрос уходил с 0.15с
+# до 3.8с, а наивный перебор по 1132 констелляциям в /api/initial-data
+# (api/blueprints/reference.py::_initial_payload) — ещё почти 5с сверху,
+# вместе почти вся жалоба пользователя «страница открывается 16 секунд».
+# Будущей Фазе 3 (admin-панель) понадобится видеть no_data-регионы —
+# ей нужен отдельный запрос без этого фильтра, не правка этой функции.
+READY_STATUS = "ready"
+
 # Дата, на которую сделана выгрузка data/planet_industry.csv — не поле
 # из самого файла (в нём такой метки нет), а дата последнего изменения
 # файла в репозитории (`git log -1 -- data/planet_industry.csv`),
@@ -584,6 +600,7 @@ def _build_planet_book() -> PlanetBook:
             query = (
                 select(PlanetRow, RegionRow.name)
                 .join(RegionRow, PlanetRow.region_id == RegionRow.id)
+                .where(RegionRow.status == READY_STATUS)
                 .order_by(RegionRow.name, PlanetRow.system, PlanetRow.planet_number)
             )
             rows = [
