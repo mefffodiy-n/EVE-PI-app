@@ -32,7 +32,6 @@ planet_industry.csv`, и тот же `PlanetBook` с тем же публичн�
 from __future__ import annotations
 
 from dataclasses import dataclass
-from functools import lru_cache
 from pathlib import Path
 
 import pandas as pd
@@ -513,11 +512,27 @@ def _expand_densities(rows: list[dict]) -> pd.DataFrame:
     return pd.DataFrame(flat_rows)
 
 
-@lru_cache(maxsize=1)
+# Фаза 2 мультирегиональности (21.09.2026) впервые заводит писателя
+# regions/planets, работающего в ДРУГОМ ПРОЦЕССЕ (scripts/refresh_sde.py,
+# запускается scripts/scheduler.py) одновременно с уже запущенным
+# веб-процессом. Вечный @lru_cache (как было в Фазе 1) означал бы, что
+# веб-процесс никогда не увидит новые регионы/планеты без ручного
+# перезапуска — межпроцессный кэш сбросить нечем. TTL вместо вечного
+# кэша — тот же порядок величины, что у других «протухающих через
+# время» данных проекта (access-токен ESI ~20 мин, sync_colonies раз в
+# 30 мин): правило 5 («справочники считаются раз на процесс») по-прежнему
+# соблюдено, просто «раз на процесс» теперь ограничено этим временем,
+# а не длится вечно.
+PLANETS_CACHE_TTL_SECONDS = 900
+
+_cache: tuple[PlanetBook, float] | None = None
+
+
 def load_planets() -> PlanetBook:
     """
     Построить PlanetBook из таблиц БД `regions`/`planets` (Фаза 1
-    мультирегиональности, 21.09.2026 — см. докстринг модуля).
+    мультирегиональности, 21.09.2026 — см. докстринг модуля), с TTL-
+    кэшем на `PLANETS_CACHE_TTL_SECONDS` (см. комментарий выше).
 
     Собирает DataFrame ТОЙ ЖЕ формы, что раньше строилась из CSV: те же
     имена колонок (`Constellation`, `System`, `Planet`, `Type`,
@@ -529,17 +544,34 @@ def load_planets() -> PlanetBook:
     ранее мёртвый код regions()/systems_in_regions() оживает без правки
     самого PlanetBook.
 
-    `@lru_cache(maxsize=1)` — как и раньше: данные не меняются в рантайме
-    (запись через admin-панель — Фаза 3, ещё не реализована; когда
-    появится, ей потребуется свой `load_planets.cache_clear()` после
-    записи — не забота этой фазы).
-
     Пустая БД или отсутствующие таблицы (свежий клон без `alembic upgrade
     head`/переноса) — PlanetBook с пустым DataFrame, не исключение:
     страница должна открыться, а честное "нет данных" сообщит уже
     вызывающий код (как и раньше для отсутствующего файла); тот же
     принцип, что у `domain/plan_storage.py::list_plans()`.
     """
+    global _cache
+    import time
+
+    if _cache is not None and (time.monotonic() - _cache[1]) < PLANETS_CACHE_TTL_SECONDS:
+        return _cache[0]
+
+    book = _build_planet_book()
+    _cache = (book, time.monotonic())
+    return book
+
+
+def _cache_clear() -> None:
+    """Сбросить кэш немедленно — тесты (изоляция БД) и сами сборщики после записи."""
+    global _cache
+    _cache = None
+
+
+load_planets.cache_clear = _cache_clear  # type: ignore[attr-defined]
+
+
+def _build_planet_book() -> PlanetBook:
+    """Собственно запрос к БД и сборка DataFrame — см. load_planets() выше."""
     from sqlalchemy import select
     from sqlalchemy.exc import OperationalError
 
