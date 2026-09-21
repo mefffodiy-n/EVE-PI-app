@@ -261,6 +261,27 @@ class TestScript:
                 f"Второе значение молча затирает первое."
             )
 
+    def test_job_label_keys_cover_every_scheduler_job(self):
+        """
+        21.09.2026, найдено пользователем: добавили джоб `refresh_sde` в
+        `scripts/scheduler.py`, но забыли дописать его в JOB_LABEL_KEYS
+        (`web/index.html`) — подсказка по статусу сборщиков молча
+        откатывалась на русское имя с сервера (`j.name`) и не
+        переводилась на английском (правило 9). Ловим до следующего
+        такого же пропуска, а не по новой жалобе.
+        """
+        from scripts.scheduler import JOBS
+
+        name, text = _frontend()
+        block = text[text.index("const JOB_LABEL_KEYS={") : text.index("};", text.index("const JOB_LABEL_KEYS={"))]
+        mapped_keys = set(re.findall(r"(\w+):'job", block))
+
+        job_keys = {job.key for job in JOBS}
+        missing = sorted(job_keys - mapped_keys)
+        assert not missing, (
+            f"{name}: джобы без перевода имени в JOB_LABEL_KEYS: {', '.join(missing)}"
+        )
+
 
     def test_no_script_outside_script_tag(self):
         """
