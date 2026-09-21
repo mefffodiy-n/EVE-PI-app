@@ -3,7 +3,8 @@
 
 Контракт зафиксирован существующим фронтендом (web/index.html):
   GET  /api/initial-data -> {status, bases[], products[], product_ids{}}
-  POST /api/systems      -> {status, systems[]}   body: {constellations: [...]}
+  POST /api/systems      -> {status, systems[], recommended}
+                            body: {constellations: [...], ccu?: int}
 
 Данные здесь полностью статичны в пределах процесса, поэтому считаются
 один раз и отдаются с ETag — это самый дешёвый способ не нагружать
@@ -216,6 +217,18 @@ def initial_data():
 
 @bp.post("/systems")
 def systems():
+    """
+    `ccu` — необязательный уровень Command Center Upgrades (максимум по
+    пулу персонажей, фронтенд считает так же, как для /api/thresholds).
+    С ним в ответе появляется `recommended` — система с наибольшим
+    числом Barren/Temperate планет маленького радиуса и налогом POCO 1%
+    (domain/factory_site.py::recommend_home_system(), 21.09.2026, по
+    прямому запросу пользователя — раньше фронтенд молча выбирал первую
+    по алфавиту). Без `ccu` или когда рекомендовать нечего —
+    `recommended: null`, честно (правило 1).
+    """
+    from domain.factory_site import recommend_home_system
+
     payload, error = parse_json_body({"constellations": list})
     if error:
         return json_error(error)
@@ -224,7 +237,16 @@ def systems():
     if not constellations:
         return json_error("Список констелляций пуст")
 
-    return json_ok(systems=load_planets().systems_in(constellations))
+    book = load_planets()
+    result = book.systems_in(constellations)
+
+    ccu = payload.get("ccu")
+    recommended = None
+    if isinstance(ccu, int):
+        threshold = describe_thresholds(ccu).get("p2p3_2factory")
+        recommended = recommend_home_system(book, result, threshold)
+
+    return json_ok(systems=result, recommended=recommended)
 
 
 @bp.get("/system-planets")
