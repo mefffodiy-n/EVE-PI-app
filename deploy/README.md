@@ -22,7 +22,20 @@ python -m venv .venv
 .venv\Scripts\pip install -r requirements.lock.txt
 .venv\Scripts\python -m scripts.extract_schematics --write
 .venv\Scripts\python -m alembic upgrade head
+.venv\Scripts\python -m scripts.migrate_planets_csv_to_db
 ```
+
+Последний шаг — разовый перенос справочника планет (`data/
+planet_industry.csv`, регион Fountain) в таблицы `regions`/`planets`
+(Фаза 1 мультирегиональности, 21.09.2026): без него `alembic upgrade
+head` создаёт таблицы пустыми, и `/api/initial-data` честно сообщит
+`data_problems` вместо списка констелляций. Источник (сам CSV) — файл
+в git, а не что-то, что нужно доставать заново на каждом сервере: он
+приезжает вместе с `git clone`/`git pull`, поэтому переезд на другой
+VPS не требует ничего особого — та же последовательность из четырёх
+команд на пустом сервере, тот же файл уже в репозитории. Повторный
+запуск без `--force` ничего не сломает — скрипт откажется дублировать
+уже перенесённые строки.
 
 `.venv\Scripts\python -m scripts.diagnose` — проверяет, что данные и БД на месте.
 
@@ -297,8 +310,16 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.lock.txt
 
 # .env — см. раздел 2, PI_DATABASE_URL на sqlite-файл в data/,
 # PI_TOKEN_KEY сгенерировать, PI_BACKUP_DIR=/opt/pi-director/backups
+#
+# ВАЖНО: .env обязательно источником (set -a && source .env && set +a)
+# ПЕРЕД alembic — голый `.venv/bin/python -m alembic upgrade head` без
+# этого не увидит PI_DATABASE_URL и молча смигрирует не ту БД (по
+# умолчанию — SQLite-заглушку вместо настоящей MariaDB/Postgres из
+# .env); проверено на бою 21.09.2026 — лог alembic должен показать
+# `Context impl MySQLImpl`/`PostgresqlImpl`, не `SQLiteImpl`.
 set -a && source .env && set +a
 .venv/bin/python -m alembic upgrade head
+.venv/bin/python -m scripts.migrate_planets_csv_to_db   # регион Fountain — один раз на сервер
 
 sudo apt-get install -y nginx certbot python3-certbot-nginx
 # nginx.conf.sample → /etc/nginx/sites-available/pi-director,

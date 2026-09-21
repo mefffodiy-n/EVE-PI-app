@@ -5,19 +5,28 @@ POCO. Единственный регион, для которого сейча�
 за его пределами недоступен, см. regions()/systems_in_regions() ниже и
 Фазу 10 в docs/ROADMAP.md про мультирегиональность.
 
-Источник данных: data/planet_industry.csv — перенесён из прошлой реализации
-(там файл назывался "planet industry.csv", с пробелом в имени; в новой
-структуре переименован и лежит в data/, само содержимое не меняется).
+Источник данных (с 21.09.2026, Фаза 1 мультирегиональности): таблицы БД
+`regions`/`planets` (infra/models.py) — `load_planets()` строит из них
+тот же по форме DataFrame, что раньше строился из `data/
+planet_industry.csv`, и тот же `PlanetBook` с тем же публичным API:
+методы ниже (radius_km, poco_rate, resolve_resource_column и т.д.)
+ничего не знают о том, что источник сменился с файла на БД, — они
+по-прежнему ищут значения по именам колонок DataFrame.
 
-Формат файла (после служебной шапки из 2 строк):
+Сам CSV остаётся источником ИСТОРИИ данных (968 планет Fountain,
+перенесены в БД один раз скриптом `scripts/migrate_planets_csv_to_db.py`,
+переиспользующим CSV-парсинг из `_load_from_csv()` ниже — единственного
+оставшегося потребителя этой функции). Формат файла (после служебной
+шапки из 2 строк):
     Constellation; System; Planet; Type; Radius [km]; POCO Tax Rate [%];
-    POCO Owner; <34 колонки R0-ресурсов (плотность на планете)>;
-    <28 колонок P2-ресурсов для сценария "прямое R0 -> P2">
+    POCO Owner; <30 колонок R0-ресурсов (плотность на планете)>;
+    <24 колонки P2-ресурсов для сценария "прямое R0 -> P2">
 
 ВАЖНО: в исходном CSV встречались опечатки в заголовках колонок
 ("Polyramids" вместо "Polyaramids", "Supertensil Plastics" вместо
 "Supertensile Plastics" — см. docs/ROADMAP.md, раздел 1). Эти опечатки
-нормализуются здесь, а не патчатся точечно в местах использования.
+нормализовались при переносе в БД (`_normalize_columns` ниже), поэтому
+в `r0_densities`/`p2_direct_densities` уже лежат исправленные имена.
 """
 
 from __future__ import annotations
@@ -467,17 +476,111 @@ def _clean_rows(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-@lru_cache(maxsize=1)
-def load_planets(path: Path = DEFAULT_PLANETS_PATH) -> PlanetBook:
+def _load_from_csv(path: Path = DEFAULT_PLANETS_PATH) -> PlanetBook:
     """
-    Загрузить и нормализовать data/planet_industry.csv.
+    Загрузить и нормализовать data/planet_industry.csv напрямую из файла.
 
-    В отличие от v1 (df читался прямо в глобальный STATIC_DATA dict в main.py
-    при старте веб-приложения), здесь загрузка изолирована от веб-слоя —
-    её можно вызывать и из тестов, и из воркеров синхронизации, и из API.
+    Не публичный путь загрузки с 21.09.2026 (см. load_planets() ниже) —
+    единственный оставшийся вызывающий код: `scripts/
+    migrate_planets_csv_to_db.py`, переносящий CSV в БД один раз на
+    окружение. Оставлена отдельной функцией (не удалена вместе с
+    переключением на БД), чтобы не дублировать уже отлаженный парсинг
+    (опечатки в заголовках, битые строки, радиус с пробелами-разделителями)
+    во втором месте.
     """
     df = pd.read_csv(path, sep=";", skiprows=1, encoding="utf-8")
     df = _normalize_columns(df)
     df = _clean_rows(df)
     df = _normalize_radius(df)
+    return PlanetBook(df)
+
+
+def _expand_densities(rows: list[dict]) -> pd.DataFrame:
+    """
+    {"r0_densities": {...}, "p2_direct_densities": {...}, ...} по каждой
+    строке -> один DataFrame с отдельной колонкой на каждый встретившийся
+    ресурс (как раньше давал pd.read_csv на широкой таблице). Строится
+    через pd.DataFrame(rows) с уже развёрнутыми словарями, а не
+    pd.json_normalize, — проще, и число ресурсов в проекте небольшое
+    (30+24), объединение словарей построчно не создаёт узкого места.
+    """
+    flat_rows = []
+    for row in rows:
+        flat = {k: v for k, v in row.items() if k not in ("r0_densities", "p2_direct_densities")}
+        flat.update(row.get("r0_densities") or {})
+        flat.update(row.get("p2_direct_densities") or {})
+        flat_rows.append(flat)
+    return pd.DataFrame(flat_rows)
+
+
+@lru_cache(maxsize=1)
+def load_planets() -> PlanetBook:
+    """
+    Построить PlanetBook из таблиц БД `regions`/`planets` (Фаза 1
+    мультирегиональности, 21.09.2026 — см. докстринг модуля).
+
+    Собирает DataFrame ТОЙ ЖЕ формы, что раньше строилась из CSV: те же
+    имена колонок (`Constellation`, `System`, `Planet`, `Type`,
+    RADIUS_COLUMN, POCO_RATE_COLUMN, `POCO Owner`, плюс по одной колонке
+    на каждый ресурс из r0_densities/p2_direct_densities), плюс новая
+    колонка `Region` — её не было ни в одном CSV (данные покрывали один
+    регион без явной пометки), поэтому PlanetBook.regions() всегда
+    возвращал {}; теперь она есть по-честному, и уже существующий,
+    ранее мёртвый код regions()/systems_in_regions() оживает без правки
+    самого PlanetBook.
+
+    `@lru_cache(maxsize=1)` — как и раньше: данные не меняются в рантайме
+    (запись через admin-панель — Фаза 3, ещё не реализована; когда
+    появится, ей потребуется свой `load_planets.cache_clear()` после
+    записи — не забота этой фазы).
+
+    Пустая БД или отсутствующие таблицы (свежий клон без `alembic upgrade
+    head`/переноса) — PlanetBook с пустым DataFrame, не исключение:
+    страница должна открыться, а честное "нет данных" сообщит уже
+    вызывающий код (как и раньше для отсутствующего файла); тот же
+    принцип, что у `domain/plan_storage.py::list_plans()`.
+    """
+    from sqlalchemy import select
+    from sqlalchemy.exc import OperationalError
+
+    from infra.db import session_scope
+    from infra.models import Planet as PlanetRow
+    from infra.models import Region as RegionRow
+
+    try:
+        with session_scope() as session:
+            query = (
+                select(PlanetRow, RegionRow.name)
+                .join(RegionRow, PlanetRow.region_id == RegionRow.id)
+                .order_by(RegionRow.name, PlanetRow.system, PlanetRow.planet_number)
+            )
+            rows = [
+                {
+                    "Region": region_name,
+                    "Constellation": planet.constellation,
+                    "System": planet.system,
+                    "Planet": float(planet.planet_number),
+                    "Type": planet.planet_type,
+                    RADIUS_COLUMN: planet.radius_km,
+                    POCO_RATE_COLUMN: planet.poco_tax_rate,
+                    "POCO Owner": planet.poco_owner,
+                    "r0_densities": planet.r0_densities,
+                    "p2_direct_densities": planet.p2_direct_densities,
+                }
+                for planet, region_name in session.execute(query)
+            ]
+    except OperationalError:
+        rows = []
+
+    if not rows:
+        # Свежая БД без переноса (см. докстринг выше) — пустой DataFrame,
+        # но с базовыми колонками, чтобы методы PlanetBook (обращающиеся
+        # к ним по имени) вернули честные пустые результаты, а не упали
+        # на KeyError.
+        df = pd.DataFrame(columns=[
+            "Region", "Constellation", "System", "Planet", "Type",
+            RADIUS_COLUMN, POCO_RATE_COLUMN, "POCO Owner",
+        ])
+    else:
+        df = _expand_densities(rows)
     return PlanetBook(df)

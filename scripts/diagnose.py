@@ -87,11 +87,13 @@ def check_planets() -> bool:
 
         book = load_planets()
         df = book.dataframe
-    except FileNotFoundError:
-        _line(BAD, "planet_industry.csv не найден — см. пункт [1]")
-        return False
     except Exception as exc:
-        _line(BAD, f"не удалось прочитать CSV: {type(exc).__name__}: {exc}")
+        _line(BAD, f"не удалось прочитать planets/regions из БД: {type(exc).__name__}: {exc}")
+        return False
+
+    if df.empty:
+        _line(BAD, "таблицы planets/regions пусты — выполните "
+                   "python -m scripts.migrate_planets_csv_to_db")
         return False
 
     _line(OK, f"строк: {len(df)}")

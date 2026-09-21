@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, BigInteger, Integer, String, Text
+from sqlalchemy import JSON, BigInteger, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from infra.db import Base, UtcDateTime
@@ -244,6 +244,73 @@ class Colony(Base):
     # никак. None — колония ни разу не синхронизирована этим полем
     # (старая запись до этой миграции).
     game_last_update: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
+
+
+class Region(Base):
+    """
+    Регион New Eden (Фаза 1 мультирегиональности, 21.09.2026,
+    docs/ROADMAP.md — план утверждён 17.09.2026). `id` — суррогатный
+    autoincrement, не настоящий SDE region_id: сверка с реальными id при
+    догрузке других регионов — задача Фазы 2 (`scripts/refresh_sde.py`,
+    сверяет по `name`), не этой миграции, переносящей только Fountain.
+
+    `status` используется начиная с Фазы 3 (admin-панель/`refresh_sde.py`):
+    регион без достаточной плотности сырья помечается `no_data` и не
+    показывается пользователям в планировщике (правило 1 — честный
+    пробел, не подставное число). Fountain при переносе получает
+    `ready` сразу — плотность для него уже есть.
+    """
+
+    __tablename__ = "regions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(64), unique=True)
+    status: Mapped[str] = mapped_column(String(16), default="ready")
+
+
+class Planet(Base):
+    """
+    Одна планета — замена `data/planet_industry.csv` (Фаза 1
+    мультирегиональности, 21.09.2026). `domain/planets.py::load_planets()`
+    строит из этих строк тот же `PlanetBook`, что раньше строился из CSV
+    (тот же публичный API, те же имена колонок в собранном DataFrame) —
+    см. докстринг load_planets().
+
+    `id` — суррогатный autoincrement по той же причине, что и `Region.id`
+    (см. её докстринг): настоящих SDE planet_id для перенесённых из CSV
+    планет нет, сверка с ними — забота Фазы 2.
+
+    `planet_number` — Integer здесь (в отличие от float64 у исходного
+    CSV, где дробность — просто артефакт pandas): load_planets()
+    приводит к float при сборке DataFrame, чтобы сравнение
+    `Planet == float(x)` в PlanetBook его не заметило.
+
+    `r0_densities`/`p2_direct_densities` — словари {имя_ресурса:
+    плотность}, имена — те же, что были колонками CSV (30 и 24 штуки
+    соответственно), один в один. load_planets() разворачивает их
+    обратно в отдельные колонки DataFrame с исходными именами — весь
+    остальной код PlanetBook ищет ресурсы по имени колонки и не заметил
+    переноса в БД.
+    """
+
+    __tablename__ = "planets"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    region_id: Mapped[int] = mapped_column(ForeignKey("regions.id"))
+
+    constellation: Mapped[str] = mapped_column(String(64))
+    system: Mapped[str] = mapped_column(String(64))
+    planet_number: Mapped[int] = mapped_column(Integer)
+    planet_type: Mapped[str] = mapped_column(String(32))
+
+    radius_km: Mapped[float | None] = mapped_column(nullable=True)
+    # Сырой процент, как в CSV (напр. 3.0 = 3%) — PlanetBook.poco_rate()
+    # сам делит на 100, поведение не меняется переносом в БД.
+    poco_tax_rate: Mapped[float | None] = mapped_column(nullable=True)
+    poco_owner: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    r0_densities: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    p2_direct_densities: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
 
 class ExtractionSample(Base):

@@ -222,16 +222,16 @@ def _load_planets_book():
     """
     Для точной автоматической ставки POCO по конкретной планете
     (domain/planets.py::PlanetBook.poco_rate(), см. domain/poco_tax.py) —
-    тот же файл, что и весь остальной расчёт, читается один раз на
-    процесс. `None`, если файла нет (свежий репозиторий без данных) —
-    тогда прогноз прибыльности честно остаётся на ручном вводе по типу.
+    тот же источник, что и весь остальной расчёт. БД без переноса
+    (свежий репозиторий/сервер без `scripts.migrate_planets_csv_to_db`) —
+    load_planets() честно отдаёт пустой PlanetBook (не бросает
+    исключение, см. её докстринг), poco_rate() на нём для любой планеты
+    вернёт None сам — прогноз прибыльности так и останется на ручном
+    вводе по типу, как и раньше.
     """
-    try:
-        from domain.planets import load_planets
+    from domain.planets import load_planets
 
-        return load_planets()
-    except FileNotFoundError:
-        return None
+    return load_planets()
 
 
 @bp.post("/plan-profitability")

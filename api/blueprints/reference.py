@@ -166,21 +166,30 @@ def _initial_payload() -> dict:
 
     try:
         book = load_planets()
-        payload["bases"] = book.constellations()
-        payload["regions"] = book.regions()
-        payload["system_counts"] = {
-            c: int((book.dataframe["Constellation"] == c).sum())
-            for c in payload["bases"]
-        }
-    except FileNotFoundError:
+        if book.dataframe.empty:
+            # БД без переноса (свежий клон/сервер до `scripts.
+            # migrate_planets_csv_to_db`) — load_planets() с 21.09.2026
+            # (Фаза 1 мультирегиональности) не падает на этом, а честно
+            # отдаёт пустой PlanetBook (см. её докстринг); раньше здесь
+            # ловился FileNotFoundError отсутствующего CSV — теперь
+            # пустоту нужно обнаруживать явно, иначе списки констелляций
+            # и систем молча окажутся пустыми без объяснения (правило 1).
+            payload["data_problems"].append(
+                "Таблицы planets/regions пусты — списки констелляций и "
+                "систем будут пусты. Выполните: python -m alembic upgrade "
+                "head && python -m scripts.migrate_planets_csv_to_db "
+                "(см. deploy/README.md, раздел 1)."
+            )
+        else:
+            payload["bases"] = book.constellations()
+            payload["regions"] = book.regions()
+            payload["system_counts"] = {
+                c: int((book.dataframe["Constellation"] == c).sum())
+                for c in payload["bases"]
+            }
+    except Exception as exc:  # данные в БД испорчены неожиданным образом
         payload["data_problems"].append(
-            "Не найден файл data/planet_industry.csv — списки констелляций "
-            "и систем будут пусты. Скопируйте его из корня старого "
-            "репозитория, переименовав без пробела в имени."
-        )
-    except Exception as exc:  # формат файла испорчен
-        payload["data_problems"].append(
-            f"Не удалось разобрать data/planet_industry.csv: "
+            f"Не удалось разобрать данные о планетах: "
             f"{type(exc).__name__}: {exc}"
         )
 
@@ -215,12 +224,7 @@ def systems():
     if not constellations:
         return json_error("Список констелляций пуст")
 
-    try:
-        return json_ok(systems=load_planets().systems_in(constellations))
-    except FileNotFoundError:
-        return json_error(
-            "Не найден файл data/planet_industry.csv — список систем недоступен.", 503
-        )
+    return json_ok(systems=load_planets().systems_in(constellations))
 
 
 @bp.get("/system-planets")
@@ -240,10 +244,7 @@ def system_planets():
     if not system:
         return json_error("Не указана система")
 
-    try:
-        frame = load_planets().factory_candidates(system)
-    except FileNotFoundError:
-        return json_error("Нет данных по планетам", 503)
+    frame = load_planets().factory_candidates(system)
 
     planets = []
     for _, row in frame.iterrows():

@@ -326,16 +326,14 @@ def _colony_to_row(colony: dict, planets, recipes) -> dict:
 def _load_planets_and_recipes():
     """
     Тот же способ читать справочники, что и у остальных эндпоинтов
-    (`api/blueprints/plans.py::_load_planets_book()`) — `None`, если
-    файла нет, а не падение: экспорт колоний тогда просто останется без
-    радиуса/ставки POCO/констелляции/входа рецепта, честно (правило 1).
+    (`api/blueprints/plans.py::_load_planets_book()`) — БД без переноса
+    даёт пустой PlanetBook, не исключение (см. load_planets()); экспорт
+    колоний тогда просто останется без радиуса/ставки POCO/констелляции,
+    честно (правило 1).
     """
-    try:
-        from domain.planets import load_planets
+    from domain.planets import load_planets
 
-        planets = load_planets()
-    except FileNotFoundError:
-        planets = None
+    planets = load_planets()
     from domain.recipes import load_recipes
 
     return planets, load_recipes()

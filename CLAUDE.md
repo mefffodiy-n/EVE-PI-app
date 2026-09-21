@@ -2,10 +2,13 @@
 
 Планировщик планетарного производства для EVE Online. Считает, сколько колоний
 и каких нужно, распределяет их по персонажам и показывает, где план упирается
-в ограничения. Данные о планетах (плотности сырья, радиус) сейчас загружены
-только для региона **Fountain** — расчёт для других регионов New Eden
-недоступен, пока для них нет такого же файла (`data/planet_industry.csv`,
-см. `docs/ROADMAP.md`, Фаза 10 — мультирегиональность).
+в ограничения. Данные о планетах (плотности сырья, радиус) хранятся в БД
+(таблицы `regions`/`planets`, `infra/models.py` — с 21.09.2026, Фаза 1
+мультирегиональности; перенесены из `data/planet_industry.csv` скриптом
+`scripts/migrate_planets_csv_to_db.py`, см. `deploy/README.md` раздел 1) и
+сейчас загружены только для региона **Fountain** — расчёт для других
+регионов New Eden недоступен, пока для них нет таких же данных (см.
+`docs/ROADMAP.md`, Фаза 10 — мультирегиональность, Фазы 2-5 в очереди).
 
 Этот файл — то, что нужно знать, прежде чем что-то менять. Правила ниже не
 пожелания: часть из них проверяется тестами, и нарушение роняет сборку.
@@ -135,7 +138,8 @@ domain/           расчёты, без Flask и без сети
 infra/            конфиг окружения и доступ к БД (общий для domain/api/scripts)
   config.py       PI_ENV, PI_DATABASE_URL, настройки EVE SSO — чтение env
   db.py           движок SQLAlchemy, session_scope, декларативная база
-  models.py       ORM-модели: characters, plans, credentials, colonies
+  models.py       ORM-модели: characters, plans, credentials, colonies,
+                  regions/planets (справочник планет, см. domain/planets.py)
   crypto.py       шифрование токенов ESI перед записью в БД (Fernet)
   credentials.py  запись зашифрованных токенов (общее для auth и refresh_tokens)
   logging.py      журнал в файл + консоль (PI_LOG_DIR), ротация
@@ -164,6 +168,7 @@ scripts/          всё, что ходит в сеть или готовит д
   check_templates.py       разбор набора шаблонов
   resolve_pi_structure_type_ids.py  разово: type_id структур PI по типам планет
   backfill_type_volumes.py разово: объём (м³) каждого продукта PI заранее
+  migrate_planets_csv_to_db.py  разово на окружение: CSV -> regions/planets
   cleanup.py               уборка от файлов прошлых этапов
 
 deploy/           службы Windows (NSSM), nginx, задание бэкапа — README + образцы
@@ -174,7 +179,10 @@ data/             только чтение
   eve_webtools_reference.json  type_id, раскладка сырья по типам планет
   type_ids.json             105 записей, включая структуры и командные центры
   templates/                68 игровых шаблонов (только вариант 00)
-  planet_industry.csv       968 планет региона Fountain (единственный поддержанный сейчас)
+  planet_industry.csv       968 планет региона Fountain — источник истории;
+                            с 21.09.2026 расчёт читает regions/planets в БД
+                            (infra/models.py), не этот файл напрямую (перенесён
+                            один раз scripts/migrate_planets_csv_to_db.py)
   schematics.json           создаётся локально, в git не хранится
   pi_director.db            SQLite dev-БД, создаётся `alembic upgrade head`, не в git
 
@@ -200,6 +208,7 @@ github.com/Alexmidrus/EveGAS_calc).
 pip install -r requirements.lock.txt           # точные версии; requirements.txt — только границы
 python -m scripts.extract_schematics --write   # создаёт data/schematics.json
 python -m alembic upgrade head                 # создаёт таблицы БД
+python -m scripts.migrate_planets_csv_to_db    # справочник планет (регион Fountain) в regions/planets
 python -m scripts.seed_dev_characters          # dev-персонажи (только PI_ENV=dev)
 python -m scripts.backfill_type_volumes        # опционально: объёмы P0-P4 для пропускной способности причала
 python run.py                      # разработка: http://127.0.0.1:8000/ (debug)
@@ -209,11 +218,17 @@ python -m scripts.scheduler        # сборщики по расписанию 
 ```
 
 Production: `python -m scripts.serve` (waitress) вместо `run.py`, всё за
-nginx, оба процесса — службами. Пошагово — `deploy/README.md`.
+nginx, оба процесса — службами. Пошагово, включая перенос переезда на
+новый (пустой) сервер и типичную ошибку с `.env` при миграции —
+`deploy/README.md`, разделы 1 и 7.4.
 
-Первые три команды — разовая подготовка: без `data/schematics.json` план
-не считается, без миграций нет таблиц, без seed планировщику некого
-распределять.
+Первые четыре команды — разовая подготовка: без `data/schematics.json`
+план не считается, без миграций нет таблиц, без переноса CSV в БД
+таблицы `regions`/`planets` пусты и расчёт не найдёт ни одной планеты,
+без seed планировщику некого распределять. Все четыре нужны на КАЖДОМ
+новом окружении (включая переезд VPS на другой сервер) — источники
+(шаблоны, CSV) лежат в git и приезжают вместе с репозиторием, команды
+просто прогоняются заново на пустой БД.
 
 Вход через EVE SSO (Фаза 3) требует переменных окружения: `PI_ESI_CLIENT_ID`
 (регистрация на developers.eveonline.com), `PI_TOKEN_KEY` (ключ шифрования
