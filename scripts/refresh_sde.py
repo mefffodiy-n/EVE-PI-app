@@ -59,7 +59,6 @@ from __future__ import annotations
 
 import json
 import sys
-import tempfile
 import urllib.error
 import urllib.request
 import zipfile
@@ -284,14 +283,22 @@ def main() -> int:
         return 0
 
     print(f"Новый билд SDE: {build}. Скачиваю архив…")
-    with tempfile.TemporaryDirectory() as tmp:
-        zip_path = Path(tmp) / "sde.zip"
+    # data/cache/, не системный tempfile.TemporaryDirectory(): прод-служба
+    # запущена под systemd с ProtectSystem=strict + явным ReadWritePaths
+    # (deploy/README.md, раздел 7.4) — /tmp там НЕ входит в разрешённые
+    # пути и недоступен на запись, что и обнаружилось на бою 21.09.2026
+    # (FileNotFoundError: No usable temporary directory found).
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    zip_path = CACHE_DIR / "sde_download.zip"
+    try:
         try:
             download(zip_path)
             stats = sync(zip_path)
         except Exception as exc:
             print(f"Не удалось обновить скелет планет: {type(exc).__name__}: {exc}")
             return 1
+    finally:
+        zip_path.unlink(missing_ok=True)
 
     _save_synced_build(build)
 

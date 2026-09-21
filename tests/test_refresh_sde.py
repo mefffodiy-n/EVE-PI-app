@@ -187,3 +187,39 @@ class TestMainSkipsDownloadWhenBuildUnchanged(object):
 
         assert code == 0
         assert called == []
+
+
+class TestMainDownloadPath:
+    """
+    21.09.2026, найдено на бою: `main()` качал архив через `tempfile.
+    TemporaryDirectory()` (системный `/tmp`) — прод-служба запущена под
+    systemd с `ProtectSystem=strict` и явным `ReadWritePaths`
+    (deploy/README.md, раздел 7.4), `/tmp` туда не входит, скачивание
+    падало с `FileNotFoundError`. Архив должен качаться под `data/cache/`
+    (уже разрешённый на запись путь) и удаляться после обработки.
+    """
+
+    def test_downloads_into_cache_dir_and_cleans_up(self, tmp_path, monkeypatch):
+        cache_dir = tmp_path / "cache"
+        monkeypatch.setattr(refresh_sde, "CACHE_DIR", cache_dir)
+        monkeypatch.setattr(refresh_sde, "BUILD_SNAPSHOT", cache_dir / "sde_build.json")
+        monkeypatch.setattr(refresh_sde, "current_build_number", lambda: 99)
+
+        seen_paths = []
+
+        def fake_download(dest):
+            seen_paths.append(dest)
+            dest.write_bytes(b"fake zip contents")
+
+        monkeypatch.setattr(refresh_sde, "download", fake_download)
+        monkeypatch.setattr(refresh_sde, "sync", lambda zip_path: {
+            "regions_created": 0, "planets_created": 0,
+            "planets_skipped": 0, "unknown_type_ids": [],
+        })
+
+        code = refresh_sde.main()
+
+        assert code == 0
+        assert len(seen_paths) == 1
+        assert seen_paths[0].parent == cache_dir
+        assert not seen_paths[0].exists()  # удалён после обработки
