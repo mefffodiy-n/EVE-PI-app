@@ -111,6 +111,39 @@ class TestEmptyDatabase:
         assert book.radius_km("57-KJB", 1) is None
 
 
+class TestNoDataRegionsExcluded:
+    """
+    21.09.2026, найдено при разборе жалобы пользователя «страница
+    открывается 16 секунд» — вместе и баг, и причина просадки
+    производительности. `scripts/refresh_sde.py` (Фаза 2) заводит
+    регион со статусом `no_data`, а load_planets() должен был его не
+    показывать («не показывается пользователям в планировщике»,
+    docs/ROADMAP.md) — но ничего в domain/planets.py этот статус не
+    проверяло: PlanetBook честно тянул все ~68 тыс. скелетных планет
+    всех регионов на каждую холодную сборку кэша.
+    """
+
+    def test_no_data_region_is_excluded_from_planet_book(self, seed_57kjb_planet):
+        from infra.db import session_scope
+        from infra.models import Planet, Region
+
+        with session_scope() as session:
+            region = Region(name="Testonia", status="no_data")
+            session.add(region)
+            session.flush()
+            session.add(Planet(
+                region_id=region.id, constellation="NEWVALE", system="N3W-SY",
+                planet_number=1, planet_type="Barren", radius_km=5000.0,
+            ))
+
+        load_planets.cache_clear()
+        book = load_planets()
+
+        assert "Testonia" not in book.regions()
+        assert book.radius_km("N3W-SY", 1) is None  # честно нет, не 5000
+        assert "57-KJB" in set(book.dataframe["System"])  # ready-регион остаётся
+
+
 class TestCacheTtl:
     """
     21.09.2026, Фаза 2 мультирегиональности: `scripts/refresh_sde.py`
