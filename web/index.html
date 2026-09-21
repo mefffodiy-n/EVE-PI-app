@@ -3624,7 +3624,7 @@ async function renderColoniesProfit(){
 
   const netKnown=d.monthly_net_profit!=null;
   box.innerHTML=`<div class="poco-profit">
-    <div class="profit-head"><h3>${t('coloniesProfitTitle')} ${helpTag('h-ingame')}</h3></div>
+    <div class="profit-head"><h3>${t('coloniesProfitTitle')} ${helpTag('h-colonies-profit')}</h3></div>
     <div class="figures">
       <div class="figure"><div class="lbl">${t('pocoRevenue')}</div>
         <div class="val${d.monthly_revenue==null?' dim':''}">${d.monthly_revenue==null?t('noData'):isk(d.monthly_revenue)}</div></div>
@@ -4344,10 +4344,12 @@ const DOC={
    причале. Без маршрутов или сразу после пересинхронизации — честное
    «неизвестно», а не выдуманное состояние.</p>
    <p>Колония, добывающая меньше 48 000 ед./ч, помечена как дефицитная —
-   на такой скорости ресурса не хватит на всю цепочку. <b>Прогноз прибыльности по факту</b>
-   над списком колоний считает налог POCO так же,
-   как и в расчётном плане, но по настоящей текущей скорости каждой колонии,
-   не по теоретическому максимуму; налог на ввоз между разными колониями не
+   на такой скорости ресурса не хватит на всю цепочку.</p>
+
+   <h3 id="h-colonies-profit">Прогноз прибыльности по факту</h3>
+   <p>Панель над списком колоний в игре — считает налог POCO так же, как и
+   в расчётном плане, но по настоящей текущей скорости каждой колонии, не по
+   теоретическому максимуму; налог на ввоз между разными колониями не
    считается — ESI не отдаёт, какая колония кормит какую.</p>
 
    <h3 id="h-honest-gaps">Чего программа пока не знает</h3>
@@ -4588,10 +4590,13 @@ const DOC={
    launchpad will run out of material. Without routes or right after a resync, it says an
    honest "unknown" instead of guessing.</p>
    <p>A colony extracting under 48,000 units/hour is flagged as in deficit — at that rate
-   the resource won't cover the whole chain. <b>Actual profitability forecast</b> above
-   the colony list accounts for POCO tax the same way the plan version does, but by each
-   colony's real current rate, not the theoretical maximum; import tax between different
-   colonies isn't counted — ESI doesn't report which colony feeds which.</p>
+   the resource won't cover the whole chain.</p>
+
+   <h3 id="h-colonies-profit">Actual profitability forecast</h3>
+   <p>The panel above the in-game colony list — accounts for POCO tax the same way the
+   plan version does, but by each colony's real current rate, not the theoretical maximum;
+   import tax between different colonies isn't counted — ESI doesn't report which colony
+   feeds which.</p>
 
    <h3 id="h-honest-gaps">What the program does not know yet</h3>
    <p><b>Region.</b> Planet data only exists for Fountain — neither ESI nor CCP's static
