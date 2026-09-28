@@ -358,6 +358,27 @@ class TestJsSyntaxErrors:
         assert _js_syntax_errors("function f( { return 1; }")
 
 
+class TestHtmlEscaping:
+    """
+    28.09.2026 (внешняя рецензия): имя плана вводит пользователь, имя
+    персонажа приходит из ESI, а рисовались они в innerHTML как есть —
+    имя вида `<img src=x onerror=...>` исполнилось бы на странице.
+    """
+
+    def test_esc_helper_exists_and_escapes_quotes(self):
+        _, script = _frontend()
+        assert "function esc(" in script
+        for ch in ("&amp;", "&lt;", "&gt;", "&quot;", "&#39;"):
+            assert ch in script
+
+    @pytest.mark.parametrize("raw", [
+        "${p.name}", "${d.left.name}", "${d.right.name}", "${c.name}", "${name} ·",
+    ])
+    def test_user_names_are_never_interpolated_raw(self, raw):
+        _, script = _frontend()
+        assert raw not in script, f"{raw} попадает в innerHTML без esc()"
+
+
 class TestVersion:
     def test_version_lives_in_one_place(self):
         """

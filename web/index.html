@@ -1623,6 +1623,11 @@ function buildSortMenu(){
     <span class="mark">${x.key===sortBy?'✓':''}</span>${t(x.t)}</button>`).join('');
 }
 
+// Имена планов вводит пользователь, имена персонажей приходят из ESI —
+// в innerHTML только через esc() (найдено внешней рецензией 28.09.2026).
+function esc(v){
+  return String(v??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
 function initials(name){
   return String(name||'').split(/\s+/).filter(Boolean).slice(0,2)
     .map(w=>w[0].toUpperCase()).join('');
@@ -2873,7 +2878,7 @@ function renderDash(){
     rows.forEach(p=>(byPilot[p.character]=byPilot[p.character]||[]).push(p));
     box.innerHTML=Object.entries(byPilot).map(([name,items])=>`
       <div class="pilot-row">
-        <div class="who" title="${name} · ${pl(items.length,'pColony')}">
+        <div class="who" title="${esc(name)} · ${pl(items.length,'pColony')}">
           <div class="pilot-lg" style="width:52px;height:52px;font-size:16px">${initials(name)}${avatarImg(charIdOf(name))}</div>
         </div>
         <div class="orbs">${items.map(p=>orb(p,52,false)).join('')}</div>
@@ -3072,7 +3077,7 @@ function renderSaved(){
       <input type="checkbox" style="width:auto" ${cmpPick.has(p.id)?'checked':''}
              onchange="toggleCmp('${p.id}',this.checked)">
       <div class="body">
-        <div class="nm" title="${p.name}">${p.name}</div>
+        <div class="nm" title="${esc(p.name)}">${esc(p.name)}</div>
         <div class="meta">${p.colonies} ${t('colonies2')} · ${p.characters} ${t('chars2')} · ${p.peak_load}%</div>
       </div>
       <div class="acts">
@@ -3167,7 +3172,7 @@ async function runCompare(){
     ? `<div style="margin-top:6px">${label}:<ul>${items.map(x=>
         `<li>${x.system} ${romanNumeral(x.planet)} — ${x.product}</li>`).join('')}</ul></div>` : '';
   box.innerHTML=`<div class="cmp">
-    <div><b>${d.left.name}</b> → <b>${d.right.name}</b></div>
+    <div><b>${esc(d.left.name)}</b> → <b>${esc(d.right.name)}</b></div>
     <div style="margin-top:4px">
       ${t('colonies2')}: ${sign(d.delta.colonies)} ·
       ${t('chars2')}: ${sign(d.delta.characters)} ·
@@ -3344,7 +3349,7 @@ function renderColonies(){
       const freeSlots=Array.from({length:freeN},()=>`<div class="orb-slot" title="${t('freeSlot')}">+</div>`).join('');
       return `
       <div class="pilot-row">
-        <div class="who" title="${name} · ${pl(items.length,'pColony')}">
+        <div class="who" title="${esc(name)} · ${pl(items.length,'pColony')}">
           <div class="pilot-lg" style="width:52px;height:52px;font-size:16px">${initials(name)}${avatarImg(charIdOf(name))}</div>
         </div>
         <div class="orbs">${items.map(p=>orb(p,52,false)).join('')}${freeSlots}</div>
@@ -5183,7 +5188,7 @@ function renderCrew(){
       spread?' · '+spread.systems.join(', '):''}">
       <div class="crew-primary-slot">${primaryControl}</div>
       <div class="pilot-lg" style="width:22px;height:22px;font-size:9px">${initials(c.name)}${avatarImg(c.character_id)}</div>
-      <span>${c.name}</span>
+      <span>${esc(c.name)}</span>
       <span class="lv">${used}/${c.planet_slots}${sys}</span>
       ${c.needs_reconnect?`<button class="mini reconnect" style="padding:1px 6px;font-size:10px;margin-left:6px"
         title="${t('reconnectHint')}" onclick="startLogin()"
