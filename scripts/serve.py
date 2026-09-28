@@ -37,7 +37,18 @@ def main() -> int:
     threads = int(os.environ.get("PI_THREADS", "4"))
 
     log.info("waitress: http://%s:%d, потоков %d", host, port, threads)
-    serve(create_app(), host=host, port=port, threads=threads, ident="PI-Director")
+    # waitress без trusted_proxy молча стирает X-Forwarded-Proto от nginx,
+    # и приложение не видит HTTPS (HSTS не ставился).
+    serve(
+        create_app(),
+        host=host,
+        port=port,
+        threads=threads,
+        ident="PI-Director",
+        trusted_proxy="127.0.0.1",
+        trusted_proxy_headers={"x-forwarded-proto"},
+        clear_untrusted_proxy_headers=True,
+    )
     return 0
 
 
