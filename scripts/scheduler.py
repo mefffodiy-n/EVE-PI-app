@@ -157,6 +157,33 @@ def _write_status_snapshot() -> None:
     STATUS_SNAPSHOT.write_text(json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
+def restore_state() -> None:
+    """
+    Подхватить last_run/failures из снимка прошлого запуска.
+
+    Без этого каждый рестарт службы (а это каждый деплой) считал все
+    джобы «ни разу не запускавшимися» и гонял их все сразу — в том числе
+    ежемесячный refresh_sde, обращавшийся к CDN CCP при каждом деплое
+    (замечено 29.09.2026). Теперь на старте выполняются только джобы,
+    срок которых реально подошёл; никогда не запускавшиеся (нет снимка,
+    новый ключ) — как раньше, сразу.
+    """
+    try:
+        data = json.loads(STATUS_SNAPSHOT.read_text(encoding="utf-8"))
+        saved = {row["key"]: row for row in data.get("jobs", [])}
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return
+    for job in JOBS:
+        row = saved.get(job.key)
+        if not row or not row.get("last_run"):
+            continue
+        try:
+            job.last_run = datetime.fromisoformat(row["last_run"]).timestamp()
+            job.failures = int(row.get("failures", 0))
+        except (ValueError, TypeError):
+            continue
+
+
 def run_job(job: Job) -> None:
     log.info("%s: запуск", job.name)
     try:
@@ -215,10 +242,16 @@ def main() -> int:
     signal.signal(signal.SIGINT, stop)
     signal.signal(signal.SIGTERM, stop)
 
-    # Первый прогон сразу: иначе после запуска приложение целый час
-    # показывало бы «нет данных», хотя сборщик работает.
+    # Первый прогон сразу для тех, кому пора (или кто ещё не запускался):
+    # иначе после первого старта приложение целый час показывало бы
+    # «нет данных». Свежие после рестарта не трогаем — см. restore_state().
+    restore_state()
+    now = time.time()
     for job in JOBS:
-        run_job(job)
+        if job.due(now):
+            run_job(job)
+        else:
+            log.info("%s: пропуск на старте — последний запуск ещё свеж", job.name)
 
     while not stopping:
         now = time.time()

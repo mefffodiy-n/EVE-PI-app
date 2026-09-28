@@ -103,3 +103,45 @@ class TestRunJobSnapshot:
         monkeypatch.setattr(sched, "JOBS", [job])
         sched.run_job(job)
         assert _read_snapshot()["jobs"][0]["every_minutes"] == 10
+
+
+class TestRestoreState:
+    """29.09.2026: рестарт при деплое не должен перезапускать свежие джобы."""
+
+    def _write(self, jobs):
+        sched.STATUS_SNAPSHOT.write_text(json.dumps({"jobs": jobs}), encoding="utf-8")
+
+    def test_fresh_job_is_not_due_after_restore(self, job, monkeypatch):
+        monkeypatch.setattr(sched, "JOBS", [job])
+        sched.run_job(job)  # пишет снимок
+        job.last_run, job.failures = 0.0, 0  # «новый процесс»
+        sched.restore_state()
+        assert job.last_run > 0
+        assert not job.due(job.last_run + 60)
+
+    def test_stale_job_is_due_after_restore(self, job, monkeypatch):
+        monkeypatch.setattr(sched, "JOBS", [job])
+        self._write([{"key": "test_job", "last_run": "2020-01-01T00:00:00+00:00", "failures": 0}])
+        sched.restore_state()
+        assert job.due(__import__("time").time())
+
+    def test_failures_are_restored(self, job, monkeypatch):
+        monkeypatch.setattr(sched, "JOBS", [job])
+        self._write([{"key": "test_job", "last_run": "2020-01-01T00:00:00+00:00", "failures": 3}])
+        sched.restore_state()
+        assert job.failures == 3
+
+    def test_unknown_or_never_run_job_stays_due(self, job, monkeypatch):
+        monkeypatch.setattr(sched, "JOBS", [job])
+        self._write([{"key": "other", "last_run": "2099-01-01T00:00:00+00:00", "failures": 0},
+                     {"key": "test_job", "last_run": None, "failures": 0}])
+        sched.restore_state()
+        assert job.last_run == 0.0 and job.due(__import__("time").time())
+
+    @pytest.mark.parametrize("content", [None, "не json", '{"jobs": "x"}', "[]"])
+    def test_missing_or_broken_snapshot_is_ignored(self, job, monkeypatch, content):
+        monkeypatch.setattr(sched, "JOBS", [job])
+        if content is not None:
+            sched.STATUS_SNAPSHOT.write_text(content, encoding="utf-8")
+        sched.restore_state()
+        assert job.last_run == 0.0
