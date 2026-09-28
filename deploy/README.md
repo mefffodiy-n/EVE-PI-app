@@ -244,6 +244,13 @@ pg_restore --no-owner --clean --if-exists -d pidirector pi-backup-*/pidirector.d
 отдаёт напрямую. TLS обязателен: `PI_ESI_CALLBACK_URL` должен быть `https`,
 иначе EVE SSO отклонит.
 
+Там же — ограничение частоты запросов на IP (`limit_req`, ответ 429):
+тяжёлые эндпоинты (`calculate`, `advice`, `export`, `*-profitability`) —
+3 зап/с, `/api/auth/` — 2 зап/с, остальной API — 20 зап/с (с запасом
+`burst`). Директивы `limit_req_zone` лежат вне `server{}` — файл должен
+подключаться внутри `http{}` (sites-available / conf.d так и подключаются).
+При обновлении копируйте файл целиком и проверяйте `nginx -t`.
+
 ---
 
 ## 7. Развёртывание на чистом Ubuntu VPS (проверено на бою)
