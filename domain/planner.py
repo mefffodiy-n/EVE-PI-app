@@ -34,6 +34,7 @@ import math
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
+from typing import Any
 
 from domain.capacity import (
     calculate_colony_load,
@@ -639,7 +640,7 @@ def _group_by_system(candidates, priority: dict[str, int] | None = None) -> list
     return [item for system in order for item in grouped[system]]
 
 
-def _breakdown(load) -> dict[str, float]:
+def _breakdown(load) -> dict[str, Any]:
     """Доли слагаемых нагрузки в процентах от ёмкости командного центра."""
     cpu_total = load.capacity.cpu or 1.0
     pg_total = load.capacity.pg or 1.0
@@ -1081,9 +1082,9 @@ def build_plan(
     # Какие системы дают больше всего нужного сырья. Считается один раз
     # на весь план: список сырья от продукта к продукту не меняется.
     needed_raw = sorted({
-        recipes.get(name).source
-        for name in demand.factories
-        if recipes.get(name) and recipes.get(name).tier == "P1" and recipes.get(name).source
+        r.source
+        for r in (recipes.get(name) for name in demand.factories)
+        if r and r.tier == "P1" and r.source
     })
     system_priority = planets.system_coverage(needed_raw, request.constellations)
 

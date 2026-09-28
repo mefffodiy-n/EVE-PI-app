@@ -231,6 +231,7 @@ python -m scripts.seed_dev_characters          # dev-персонажи (тол�
 python -m scripts.backfill_type_volumes        # опционально: объёмы P0-P4 для пропускной способности причала
 python run.py                      # разработка: http://127.0.0.1:8000/ (debug)
 python -m pytest tests/ -q         # все тесты
+mypy                               # типы domain/ и infra/ (mypy.ini, в CI)
 python -m scripts.diagnose         # проверка данных, БД и эндпоинтов
 python -m scripts.scheduler        # сборщики по расписанию (с журналом в файл)
 ```
