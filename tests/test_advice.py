@@ -203,6 +203,57 @@ class TestExtraLines:
         assert result.extra_lines_available < generous.extra_lines_available
 
 
+class TestSharedChainAccounting:
+    """
+    29.09.2026, найдено пользователем: при запасе в 1 колонию окно
+    подсказок закрывалось (порог «spare >= 4»), хотя цепочка на 1 колонию
+    помещалась; а прогноз «занято 90» расходился с планом (89), потому что
+    продукты считались поодиночке, а build_plan() — общим expand_demand().
+    """
+
+    def test_single_product_matches_colonies_for(self, schematics, recipes):
+        from domain.profit import colonies_for, colonies_for_targets
+        for name in ("Biocells", "Robotics", "Broadcast Node"):
+            p, m, _ = colonies_for(name, schematics, recipes)
+            assert colonies_for_targets({name: 1}, schematics, recipes) == (p, m)
+
+    def test_shared_set_never_exceeds_sum_of_singles(self, schematics, recipes):
+        from domain.profit import colonies_for, colonies_for_targets
+        names = ["Robotics", "Camera Drones", "Biocells"]
+        p, m = colonies_for_targets({n: 1 for n in names}, schematics, recipes)
+        sp = sum(colonies_for(n, schematics, recipes)[0] for n in names)
+        sm = sum(colonies_for(n, schematics, recipes)[1] for n in names)
+        assert p <= sp and m <= sm
+
+    def test_needed_colonies_match_shared_calculation(self, schematics, recipes):
+        from domain.profit import colonies_for_targets
+        names = ["Robotics", "Camera Drones"]
+        result = advise(names, crew(40), PRICES, schematics, recipes, lines_per_target=2)
+        p, m = colonies_for_targets({n: 2 for n in names}, schematics, recipes)
+        assert result.needed_colonies == p + m
+
+    def test_hints_shown_whenever_something_fits_the_remainder(self, schematics, recipes):
+        """Пока в остаток помещается хоть одна цепочка — «surplus», а не «fits»."""
+        from domain.advice import _candidates, pool_capacity
+        seen_small_spare = False
+        for n, ic in [(n, ic) for n in range(1, 40) for ic in range(6)]:
+            pool = crew(n, ic=ic)
+            result = advise(["Biocells"], pool, PRICES, schematics, recipes,
+                            purchase_p1=True)
+            if result.status == "deficit":
+                continue
+            spare = result.spare_slots
+            fitting = _candidates(PRICES, pool_capacity(pool), schematics, recipes,
+                                  exclude={"Biocells"}, max_colonies=spare, purchase_p1=True)
+            if 0 < spare < 4 and fitting:
+                seen_small_spare = True
+            if fitting:
+                assert result.status == "surplus", (n, ic, spare)
+            else:
+                assert result.status == "fits" or result.extra_lines_available > 0
+        assert seen_small_spare
+
+
 class TestPurchaseP1:
     """
     18.09.2026, найдено пользователем: план на закупаемом P1 (planner.py::
