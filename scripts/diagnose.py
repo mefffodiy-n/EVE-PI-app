@@ -233,7 +233,7 @@ def check_characters() -> bool:
     from sqlalchemy import inspect
 
     from infra.db import engine
-    from scripts.seed_dev_characters import load_characters
+    from domain.characters import load_characters
 
     tables = set(inspect(engine()).get_table_names())
     missing = {"characters", "plans"} - tables

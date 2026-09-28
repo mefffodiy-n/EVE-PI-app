@@ -200,7 +200,7 @@ def save(name: str, request: dict, rows: list[dict],
 
 def _dev_unrestricted() -> bool:
     """
-    Тот же байпас, что у scripts/seed_dev_characters.py::load_characters():
+    Тот же байпас, что у domain/characters.py::load_characters():
     в dev (однопользовательская среда, сессии не имеют смысла) account_id
     целиком игнорируется — иначе ломались бы все места, где план читают
     без понятия о сессии (скрипты, тесты, scripts/diagnose.py).

@@ -50,7 +50,7 @@ bp = Blueprint("admin", __name__)
 def _is_admin() -> bool:
     from api.session import current_account_id
     from infra import config
-    from scripts.seed_dev_characters import load_characters
+    from domain.characters import load_characters
 
     if not config.ADMIN_CHARACTER_IDS:
         return False

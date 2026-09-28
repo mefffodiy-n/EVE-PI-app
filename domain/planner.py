@@ -111,7 +111,7 @@ class CharacterSlot:
     """
     Персонаж, доступный для назначения на планеты.
 
-    На Фазе 1 источник — scripts/seed_dev_characters.py (dev-заглушки).
+    На Фазе 1 источник — domain/characters.py::load_characters (БД).
     В Фазе 3 те же поля придут из sync_character_skills (реальный ESI).
     Планировщик о происхождении данных не знает и знать не должен.
     """

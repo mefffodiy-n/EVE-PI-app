@@ -14,7 +14,8 @@ import pytest
 
 from infra import config, db
 from infra.models import Character
-from scripts.seed_dev_characters import DEV_CHARACTERS, load_characters, seed
+from domain.characters import load_characters
+from scripts.seed_dev_characters import DEV_CHARACTERS, seed
 
 
 class TestSeed:

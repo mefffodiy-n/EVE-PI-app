@@ -184,7 +184,7 @@ def characters():
     """
     from sqlalchemy import select
 
-    from scripts.seed_dev_characters import load_characters
+    from domain.characters import load_characters
 
     from api.session import current_account_id
     from infra.db import session_scope
@@ -251,7 +251,7 @@ def colonies():
     from api.session import current_account_id
     from infra.db import session_scope
     from infra.models import Character, Colony, ExtractionSample
-    from scripts.seed_dev_characters import load_characters
+    from domain.characters import load_characters
 
     allowed_ids = {c.character_id for c in load_characters(current_account_id())}
 

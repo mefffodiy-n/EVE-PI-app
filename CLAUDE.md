@@ -131,6 +131,7 @@ domain/           расчёты, без Flask и без сети
   templates.py    разбор игровых JSON-шаблонов застройки
   throughput.py   производительность фабрик, разворот потребности
   factory_site.py подбор планет под переработку
+  characters.py   load_characters: персонажи из БД для планировщика (dev/esi, account_id)
   planner.py      распределение персонажей по планетам
   profit.py       выгода в ISK на колонию-час
   poco_tax.py     прибыльность плана и настоящих колоний с учётом POCO
