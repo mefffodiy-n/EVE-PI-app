@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
 from collections import OrderedDict
 from functools import wraps
 from threading import Lock
@@ -45,26 +46,57 @@ from flask import jsonify, request
 
 class LruResultCache:
     """
-    Потокобезопасный LRU-кэш результатов.
+    Потокобезопасный LRU-кэш результатов, с TTL на запись.
 
     Не functools.lru_cache, потому что нужен контроль над размером в
-    элементах и возможность инвалидации из фоновых задач (когда сборщики
-    обновят данные, кэш надо сбросить).
+    элементах и над временем жизни записи.
+
+    НАЙДЕНО 28.09.2026 (внешняя рецензия кода, перепроверено grep'ом по
+    репозиторию): `clear()` НИКОГДА не вызывалась — ни одним сборщиком,
+    ни одним обработчиком, нигде, хотя её докстринг прямо утверждал
+    обратное («вызывается сборщиками после обновления данных»). На
+    практике это означало: после `sync_character_skills` (персонаж
+    прокачал CCU/IC в игре) тот же запрос с теми же параметрами получал
+    ИЗ КЭША план, посчитанный на СТАРЫХ скиллах — до вытеснения записи
+    из LRU (256 записей) или перезапуска процесса, то есть потенциально
+    неделями на боевом сервере. Тот же класс бага, что уже чинили у
+    `domain/planets.py::load_planets()` неделей раньше (там кэш тоже
+    был не вечным изначально, а обнаружился при добавлении второго
+    писателя данных) — здесь кэш был "вечным" с самого начала.
+
+    Исправление — TTL на запись (`ttl_seconds`), тот же принцип и тот
+    же порядок величины, что и `PLANETS_CACHE_TTL_SECONDS` в
+    `domain/planets.py` (900с): план не может быть старше того времени,
+    за которое реально обновляются его входные данные (скиллы
+    персонажей — раз в 6 часов по расписанию, но пользователь мог
+    синхронизировать раньше вручную; справочник планет — TTL 900с там
+    же). Не версия данных в ключе (второй вариант из рецензии) — она
+    потребовала бы протаскивать `updated_at` через несколько слоёв и
+    держать её синхронной с ЛЮБым будущим источником входных данных
+    плана; TTL проще, самодостаточен и не может «забыться» так же, как
+    забылась ручная инвалидация.
     """
 
-    def __init__(self, maxsize: int = 128):
+    def __init__(self, maxsize: int = 128, ttl_seconds: float | None = None):
         self._maxsize = maxsize
-        self._data: OrderedDict[str, Any] = OrderedDict()
+        self._ttl_seconds = ttl_seconds
+        self._data: OrderedDict[str, tuple[Any, float]] = OrderedDict()
         self._lock = Lock()
         self.hits = 0
         self.misses = 0
 
+    def _is_expired(self, stored_at: float) -> bool:
+        return self._ttl_seconds is not None and (time.monotonic() - stored_at) >= self._ttl_seconds
+
     def get_or_compute(self, key: str, compute: Callable[[], Any]) -> Any:
         with self._lock:
             if key in self._data:
-                self._data.move_to_end(key)
-                self.hits += 1
-                return self._data[key]
+                value, stored_at = self._data[key]
+                if not self._is_expired(stored_at):
+                    self._data.move_to_end(key)
+                    self.hits += 1
+                    return value
+                del self._data[key]  # протухла — считаем как промах, не как хит
             self.misses += 1
 
         # Считаем ВНЕ блокировки: иначе один долгий расчёт заблокирует
@@ -72,14 +104,14 @@ class LruResultCache:
         value = compute()
 
         with self._lock:
-            self._data[key] = value
+            self._data[key] = (value, time.monotonic())
             self._data.move_to_end(key)
             while len(self._data) > self._maxsize:
                 self._data.popitem(last=False)
         return value
 
     def clear(self) -> None:
-        """Вызывается сборщиками после обновления данных (Фаза 2)."""
+        """Немедленный сброс — тесты (изоляция) и ручное обслуживание."""
         with self._lock:
             self._data.clear()
 
@@ -89,8 +121,12 @@ class LruResultCache:
 
 
 # Планы: разных комбинаций «констелляции + продукты + система» немного,
-# поэтому небольшого кэша достаточно.
-plan_cache = LruResultCache(maxsize=256)
+# поэтому небольшого кэша достаточно. TTL — тот же порядок величины,
+# что у domain/planets.py::PLANETS_CACHE_TTL_SECONDS (900с) — план не
+# должен пережить пересинхронизацию скиллов/справочника планет надолго
+# (см. докстринг класса выше).
+PLAN_CACHE_TTL_SECONDS = 900
+plan_cache = LruResultCache(maxsize=256, ttl_seconds=PLAN_CACHE_TTL_SECONDS)
 
 
 def cache_key(*parts: Any) -> str:
