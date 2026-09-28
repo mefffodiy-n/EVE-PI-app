@@ -45,6 +45,23 @@ def _load_snapshot() -> dict:
         return {}
 
 
+def buy_prices(raw_prices: dict) -> dict[str, float]:
+    """Цены покупки (buy_max) из снимка: за неё товар можно продать сразу — оценка консервативна."""
+    return {
+        name: entry["buy_max"]
+        for name, entry in raw_prices.items()
+        if isinstance(entry, dict) and entry.get("buy_max")
+    }
+
+
+def load_buy_prices() -> dict[str, float]:
+    """Цены покупки из снимка; при любой проблеме со снимком — пустой словарь."""
+    try:
+        return buy_prices((_load_snapshot() or {}).get("prices") or {})
+    except Exception:
+        return {}
+
+
 def _age_minutes(iso: str | None) -> int | None:
     if not iso:
         return None
@@ -84,11 +101,7 @@ def best_product():
 
     # Берём цену покупки: за неё товар можно продать немедленно.
     # Оценка получается консервативной, и это правильнее завышенной.
-    prices = {
-        name: entry["buy_max"]
-        for name, entry in raw_prices.items()
-        if isinstance(entry, dict) and entry.get("buy_max")
-    }
+    prices = buy_prices(raw_prices)
 
     try:
         slots = max(1, min(6, int(request.args.get("planet_slots", 6))))

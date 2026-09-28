@@ -58,11 +58,7 @@ def calculate():
     # честными предупреждениями (не крашится), но заведомо большее
     # значение не имеет смысла ни для одного реального пула персонажей;
     # нечисловое значение — тихо как 1, не 400 (не критично для расчёта).
-    try:
-        lines_per_target = int(payload.get("lines_per_target", 1))
-    except (TypeError, ValueError):
-        lines_per_target = 1
-    lines_per_target = max(1, min(lines_per_target, 50))
+    lines_per_target = _parse_lines_per_target(payload)
     # Прямое P2 приостановлено (15.09.2026, решение пользователя): состав
     # застройки (domain/direct_p2.py) — расчёт из стоимостей отдельных
     # структур, а не выписка из проверенного игрового шаблона (готового
@@ -154,11 +150,7 @@ def advice():
     # Уже выбранное число линий (18.09.2026, по прямому запросу
     # пользователя) — чтобы «избыток»/«дефицит» не расходились с тем,
     # что реально построит build_plan() при этом значении.
-    try:
-        lines_per_target = int(payload.get("lines_per_target", 1))
-    except (TypeError, ValueError):
-        lines_per_target = 1
-    lines_per_target = max(1, min(lines_per_target, 50))
+    lines_per_target = _parse_lines_per_target(payload)
     if not targets:
         return json_error("no_targets")
 
@@ -171,18 +163,7 @@ def advice():
 
     # Цены нужны только для сортировки подсказок по выгоде. Их
     # отсутствие не мешает посчитать вместимость, и модуль об этом скажет.
-    prices: dict[str, float] = {}
-    try:
-        from api.blueprints.market import _load_snapshot
-
-        raw = (_load_snapshot() or {}).get("prices") or {}
-        prices = {
-            name: entry["buy_max"]
-            for name, entry in raw.items()
-            if isinstance(entry, dict) and entry.get("buy_max")
-        }
-    except Exception:
-        prices = {}
+    prices = _load_prices()
 
     return json_ok(**advise(
         targets, characters, prices, purchase_p1=purchase_p1, lines_per_target=lines_per_target
@@ -191,17 +172,18 @@ def advice():
 
 def _load_prices() -> dict[str, float]:
     """Тот же снимок рыночных цен, что и у /api/market/best-product (правило 3 — только чтение)."""
-    try:
-        from api.blueprints.market import _load_snapshot
+    from api.blueprints.market import load_buy_prices
 
-        raw = (_load_snapshot() or {}).get("prices") or {}
-        return {
-            name: entry["buy_max"]
-            for name, entry in raw.items()
-            if isinstance(entry, dict) and entry.get("buy_max")
-        }
-    except Exception:
-        return {}
+    return load_buy_prices()
+
+
+def _parse_lines_per_target(payload: dict) -> int:
+    """Число линий на продукт из тела запроса: 1..50, нечисловое — тихо 1."""
+    try:
+        value = int(payload.get("lines_per_target", 1))
+    except (TypeError, ValueError):
+        value = 1
+    return max(1, min(value, 50))
 
 
 def _prices_collected_at() -> str | None:
