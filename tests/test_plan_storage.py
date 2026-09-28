@@ -120,7 +120,7 @@ class TestSafety:
         assert list_plans() == []
 
     def test_missing_plan_reports_clearly(self):
-        with pytest.raises(PlanStorageError, match="не найден"):
+        with pytest.raises(PlanStorageError, match="plan_gone"):
             load("0123456789ab")
 
 
@@ -177,9 +177,9 @@ class TestAccountIsolation:
         assert list_plans(account_id=None) == []
 
         assert load(plan_a.id, account_id="acct-a").name == "A"
-        with pytest.raises(PlanStorageError, match="не найден"):
+        with pytest.raises(PlanStorageError, match="plan_gone"):
             load(plan_a.id, account_id="acct-b")
-        with pytest.raises(PlanStorageError, match="не найден"):
+        with pytest.raises(PlanStorageError, match="plan_gone"):
             load(plan_a.id, account_id=None)
 
     def test_prod_delete_is_scoped_to_owner(self, monkeypatch):
@@ -199,7 +199,7 @@ class TestAccountIsolation:
         plan_b = save("B", {}, ROWS, account_id="acct-b")
 
         monkeypatch.setattr(config, "IS_DEV", False)
-        with pytest.raises(PlanStorageError, match="не найден"):
+        with pytest.raises(PlanStorageError, match="plan_gone"):
             compare(plan_a.id, plan_b.id, account_id="acct-a")
 
 

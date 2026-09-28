@@ -111,7 +111,7 @@ def mark_region_ready(region_id: int):
     with session_scope() as session:
         region = session.get(Region, region_id)
         if region is None:
-            return json_error("Регион не найден", 404)
+            return json_error("region_not_found", 404)
         region.status = "ready"
     from domain.planets import load_planets
 
@@ -140,7 +140,7 @@ def download_template(region_id: int):
     with session_scope() as session:
         region = _region_or_404(session, region_id)
         if region is None:
-            return json_error("Регион не найден", 404)
+            return json_error("region_not_found", 404)
         region_name = region.name
 
     book = load_region_for_admin(region_id)
@@ -180,13 +180,13 @@ def upload_region(region_id: int):
     from infra.models import Planet
 
     if "file" not in request.files:
-        return json_error("Нет файла ('file')")
+        return json_error("file_missing")
     upload = request.files["file"]
 
     try:
         df = pd.read_csv(upload.stream, sep=";", encoding="utf-8")
     except Exception as exc:  # noqa: BLE001
-        return json_error(f"Не удалось разобрать CSV: {type(exc).__name__}: {exc}")
+        return json_error("csv_unreadable", detail=f"{type(exc).__name__}: {exc}")
 
     df = _normalize_columns(df)
     df = _clean_rows(df) if "Constellation" in df.columns else df
@@ -198,7 +198,7 @@ def upload_region(region_id: int):
     with session_scope() as session:
         region = _region_or_404(session, region_id)
         if region is None:
-            return json_error("Регион не найден", 404)
+            return json_error("region_not_found", 404)
 
         planets_by_key = {
             (p.system, p.planet_number): p
@@ -291,7 +291,7 @@ def update_planet(planet_id: int):
     with session_scope() as session:
         planet = session.get(Planet, planet_id)
         if planet is None:
-            return json_error("Планета не найдена", 404)
+            return json_error("planet_not_found", 404)
 
         if "radius_km" in payload:
             planet.radius_km = payload["radius_km"]

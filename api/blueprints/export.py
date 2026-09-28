@@ -60,6 +60,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
 from api.cache import json_error
+from api.errors import Err
 from domain.planets import planet_number_to_roman
 
 bp = Blueprint("export", __name__)
@@ -503,14 +504,14 @@ def _write_summary_and_check_sheets(workbook: Workbook, rows: list[dict], tr: di
         reserve.number_format = "0.0"
 
 
-def _validate_rows(rows: object, field_name: str) -> str | None:
+def _validate_rows(rows: object, field_name: str) -> Err | None:
     """Общая проверка plan_data/colonies_data — список объектов в пределах лимита."""
     if not isinstance(rows, list):
-        return f"Поле '{field_name}' должно быть списком"
+        return Err("field_not_list", field=field_name)
     if len(rows) > MAX_EXPORT_ROWS:
-        return f"Слишком много строк в '{field_name}': {len(rows)}, максимум {MAX_EXPORT_ROWS}"
+        return Err("too_many_rows", field=field_name, count=len(rows), limit=MAX_EXPORT_ROWS)
     if not all(isinstance(item, dict) for item in rows):
-        return f"Каждый элемент '{field_name}' должен быть объектом"
+        return Err("items_not_objects", field=field_name)
     return None
 
 
@@ -518,7 +519,7 @@ def _validate_rows(rows: object, field_name: str) -> str | None:
 def export_plan():
     payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
-        return json_error("Ожидается JSON-объект в теле запроса")
+        return json_error("body_not_object")
 
     rows = payload.get("plan_data") or []
     colonies = payload.get("colonies_data") or []
@@ -527,7 +528,7 @@ def export_plan():
     lang = "en" if str(payload.get("lang", "ru")).lower().startswith("en") else "ru"
 
     if not rows and not colonies:
-        return json_error("Нечего экспортировать: нет ни плана, ни колоний")
+        return json_error("nothing_to_export")
     for field_name, value in (
         ("plan_data", rows), ("colonies_data", colonies), ("purchase_items", purchase_items),
     ):

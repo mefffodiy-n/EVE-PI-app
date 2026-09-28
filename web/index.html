@@ -1326,6 +1326,16 @@ const FLASK='http://127.0.0.1:8000';
 const LIVE_SERVER=/^(127\.0\.0\.1|localhost)$/.test(location.hostname)
   && location.port && location.port!=='8000';
 const API=LIVE_SERVER?`${FLASK}/api`:'/api';
+// Язык ответа сервера (тексты ошибок API — правило 9): Accept-Language на каждый запрос к API.
+const _origFetch=window.fetch.bind(window);
+window.fetch=(url,opts={})=>{
+  if(String(url).startsWith(API)){
+    const h=new Headers(opts.headers||{});
+    if(!h.has('Accept-Language')) h.set('Accept-Language',lang);
+    opts={...opts,headers:h};
+  }
+  return _origFetch(url,opts);
+};
 const ICON=(id,size)=>`https://images.evetech.net/types/${id}/icon?size=${size||64}`;
 // Портрет персонажа — тот же публичный CDN CCP, без токена. Только для
 // реальных ESI-персонажей: у dev-заглушек этого character_id не

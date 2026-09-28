@@ -36,7 +36,17 @@ ID_PATTERN = re.compile(r"^[0-9a-f]{12}$")
 
 
 class PlanStorageError(ValueError):
-    """Сохранить или прочитать план не удалось."""
+    """
+    Сохранить или прочитать план не удалось.
+
+    Несёт код и параметры, а не готовый текст: API рендерит их на языке
+    запроса по каталогу api/errors.py (правило 9).
+    """
+
+    def __init__(self, code: str, **params) -> None:
+        super().__init__(code)
+        self.code = code
+        self.params = params
 
 
 @dataclass
@@ -122,7 +132,7 @@ class StoredPlan:
 
 def _valid_id(plan_id: str) -> str:
     if not ID_PATTERN.match(plan_id or ""):
-        raise PlanStorageError(f"Недопустимый идентификатор плана: {plan_id!r}")
+        raise PlanStorageError("plan_bad_id", plan_id=repr(plan_id))
     return plan_id
 
 
@@ -149,15 +159,15 @@ def save(name: str, request: dict, rows: list[dict],
     from infra.models import Plan
 
     if not _dev_unrestricted() and account_id is None:
-        raise PlanStorageError("Войдите через EVE SSO, чтобы сохранять планы")
+        raise PlanStorageError("plan_login_required")
 
     name = (name or "").strip() or f"План от {datetime.now().strftime('%d.%m %H:%M')}"
     if len(name) > MAX_NAME_LENGTH:
         name = name[:MAX_NAME_LENGTH].rstrip() + "…"
     if not rows:
-        raise PlanStorageError("Пустой план сохранять нечего")
+        raise PlanStorageError("plan_empty")
     if len(rows) > MAX_ROWS:
-        raise PlanStorageError(f"Слишком большой план: {len(rows)} строк, максимум {MAX_ROWS}")
+        raise PlanStorageError("plan_too_big", count=len(rows), limit=MAX_ROWS)
 
     plan = StoredPlan(
         id=uuid.uuid4().hex[:12],
@@ -179,10 +189,7 @@ def save(name: str, request: dict, rows: list[dict],
             select(func.count()).select_from(Plan).where(Plan.account_id == account_id)
         ) or 0
         if count >= MAX_PLANS:
-            raise PlanStorageError(
-                f"Сохранено уже {count} планов, это предел. "
-                f"Удалите ненужные, чтобы освободить место."
-            )
+            raise PlanStorageError("plan_limit", count=count)
         session.add(Plan(
             id=plan.id, name=plan.name, created_at=plan.created_at,
             request=plan.request, rows=plan.rows,
@@ -225,9 +232,9 @@ def load(plan_id: str, account_id: str | None = None) -> StoredPlan:
     with session_scope() as session:
         row = session.get(Plan, plan_id)
         if row is None:
-            raise PlanStorageError("План не найден — возможно, он был удалён")
+            raise PlanStorageError("plan_gone")
         if not unrestricted and row.account_id != account_id:
-            raise PlanStorageError("План не найден — возможно, он был удалён")
+            raise PlanStorageError("plan_gone")
         return StoredPlan._from_row(row)
 
 
