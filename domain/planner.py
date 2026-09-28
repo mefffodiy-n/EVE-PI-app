@@ -662,6 +662,362 @@ def _processing_tier_key(tier: str) -> str:
     return "P4" if tier == "P4" else "P2_P3"
 
 
+def _target_flows(request, recipes, schematics, result) -> dict[str, float]:
+    """Шаг 1: цели плана -> выпуск в час на одну линию (пропуски — предупреждениями)."""
+    # 1. Потребность. Одна линия = один полный шаблон целевого продукта.
+    targets: dict[str, float] = {}
+    for product in request.target_products:
+        tier = _tier_of(product, recipes)
+        if tier is None:
+            result.warn("unknown_product", product=product)
+            continue
+        schematic = schematics.get(product)
+        if schematic is None:
+            result.warn("no_template_for_product", product=product)
+            continue
+        template_key = TEMPLATE_BY_TIER[_processing_tier_key(tier)][1]
+        factories = FACTORIES_PER_TEMPLATE[template_key]
+        targets[product] = schematic.output_per_hour * factories * request.lines_per_target
+
+    return targets
+
+
+def _place_processing_tier(
+    tier_key, items, request, characters, schematics, planets, result, pool, row_counter,
+) -> int:
+    """Шаг 2-3: разместить переработку ОДНОГО тира (P2_P3 или P4); возвращает счётчик строк."""
+    single_key = TEMPLATE_BY_TIER[tier_key][1]
+    per_template = FACTORIES_PER_TEMPLATE[single_key]
+    templates_needed = sum(
+        int(math.ceil(count / per_template)) for _, count in items
+    )
+
+    selection = select_factory_sites(
+        planets,
+        request.factory_system,
+        tier_key,
+        ccu_level=max((c.command_center_upgrades_level for c in characters), default=0),
+        templates_needed=templates_needed,
+        allow_single_fallback=request.allow_single_template_fallback,
+        # 18.09.2026, найдено пользователем: без этого предела
+        # select_factory_sites() планировал двойные шаблоны на КАЖДУЮ
+        # колонию тира, если хоть у одного персонажа во всём пуле
+        # был CCU V — реальных CCU5-персонажей на всё не хватало, и
+        # оставшиеся колонии массово проваливались с «не хватило
+        # персонажей» чуть ниже. Снимок СВОБОДНЫХ (ещё не занятых
+        # добычей/предыдущим тиром) CCU5-слотов прямо перед подбором
+        # площадок — сам подбор ограничивает число двойных шаблонов
+        # тем, что реально можно укомплектовать, без ложного отказа.
+        max_double_templates=pool.free_slots_matching(require_ccu5=True),
+    )
+    result.site_selections.append(selection)
+    result.warnings.extend(selection.warnings)
+    result.warning_data.extend(selection.warning_data)
+
+    # Раздаём назначенные площадки под конкретные продукты.
+    queue: list[str] = []
+    for product, count in items:
+        queue.extend([product] * int(math.ceil(count / per_template)))
+
+    # Только колонии ЭТОГО тира — не общий счётчик result.rows
+    # (18.09.2026, найдено пользователем: «не хватает персонажей: 0»
+    # в сводке плана противоречило собственному предупреждению
+    # «Переработка P4: не хватило свободных персонажей» строкой
+    # ниже). StaffingGap.planets_placed раньше считался как
+    # `len([r for r in result.rows if ...])` — общее число УЖЕ
+    # построенных строк переработки СО ВСЕХ тиров, включая P2/P3,
+    # обработанный раньше в этом же цикле. К моменту, когда доходит
+    # очередь до P4, result.rows уже содержит десятки строк P2/P3 —
+    # заведомо больше, чем templates_needed именно для P4, поэтому
+    # `planets_missing = max(0, planets_needed - planets_placed)`
+    # всегда получался нулём, даже когда P4 реально не хватило
+    # персонажей на своё же значение planets_needed.
+    placed_in_tier = 0
+    for assignment in selection.assignments:
+        for _ in range(assignment.template_count):
+            if not queue:
+                break
+            product = queue.pop(0)
+            character = pool.take(
+                require_ccu5=assignment.template_count == 2,
+                # min_ccu (18.09.2026, найдено пользователем): для
+                # переработки эта проверка вообще отсутствовала —
+                # персонаж с CCU 0-1 мог получить колонию, которая
+                # по игре ему физически не помещается (тот же пробел,
+                # что уже закрыт для добычи — min_ccu_level_that_fits
+                # ("miner_00", radius) чуть ниже). Растёт с радиусом
+                # площадки, поэтому берётся из САМОГО назначения
+                # (select_factory_sites() уже посчитал его для этой
+                # конкретной планеты), не константа тира.
+                min_ccu=assignment.min_ccu_level,
+                # Одиночный шаблон не нуждается в CCU V — как и у
+                # добычи (см. take() docstring), тратить на него
+                # прокачанного персонажа расточительно: только CCU V
+                # умеет ставить двойной шаблон, а его на плане может
+                # не хватить (18.09.2026, найдено пользователем —
+                # без этого одиночные колонии одного тира выбирали
+                # CCU5-персонажей раньше двойных колоний другого
+                # тира, обработанного позже в этом же цикле).
+                prefer_least_skilled=assignment.template_count == 1,
+                planet=(assignment.candidate.system, assignment.candidate.planet),
+            )
+            template_key = assignment.template_key
+            template_count = assignment.template_count
+            fallback_min_ccu = None
+            if character is None and assignment.template_count == 2:
+                # 18.09.2026, найдено пользователем на реальном плане
+                # (2 подходящих планеты в системе, много двойных
+                # назначений): max_double_templates выше ограничивает
+                # ОБЩЕЕ число свободных CCU5-слотов, но не то, что
+                # одному и тому же человеку нельзя дать ВТОРУЮ колонию
+                # на ТОЙ ЖЕ планете (pool.take(planet=...) уже
+                # исключает его сам). Если РАЗНЫХ CCU5-персонажей
+                # меньше, чем планет × назначений, эта планета не
+                # получит второго — но одиночный шаблон здесь всё
+                # равно физически помещается и годится любому
+                # подходящему персонажу. Пробуем его, прежде чем
+                # честно сдаться.
+                fallback_min_ccu = min_ccu_level_that_fits(
+                    single_key, assignment.candidate.radius_km,
+                    planet_type=assignment.candidate.planet_type,
+                ) or 0
+                character = pool.take(
+                    min_ccu=fallback_min_ccu,
+                    prefer_least_skilled=True,
+                    planet=(assignment.candidate.system, assignment.candidate.planet),
+                )
+                if character is not None:
+                    template_key = single_key
+                    template_count = 1
+
+            if character is None:
+                needed_level = fallback_min_ccu if fallback_min_ccu is not None else assignment.min_ccu_level
+                result.staffing_gaps.append(
+                    StaffingGap(
+                        role="Переработка",
+                        planets_needed=len(selection.assignments),
+                        planets_placed=placed_in_tier,
+                        min_ccu_level=needed_level,
+                        details=f"{tier_key.replace('_', '/')}: не хватило персонажей",
+                    )
+                )
+                result.warn("processing_understaffed",
+                            tier=tier_key.replace("_", "/"))
+                break
+            row_counter += 1
+            placed_in_tier += 1
+            load = calculate_colony_load(
+                template_key,
+                character.command_center_upgrades_level,
+                assignment.candidate.radius_km,
+                planet_type=assignment.candidate.planet_type,
+            )
+            result.rows.append(
+                PlanRow(
+                    id=f"row-{row_counter}",
+                    char_id=character.character_id,
+                    character=character.name,
+                    role=f"Переработка {tier_key.replace('_', '/')}",
+                    planet=assignment.candidate.planet,
+                    system=assignment.candidate.system,
+                    constellation="",
+                    cc_type=f"1x {assignment.candidate.planet_type} Command Center",
+                    res_out=product,
+                    res_in=", ".join(sorted(schematics[product].inputs))
+                    if product in schematics
+                    else None,
+                    structures=f"{FACTORIES_PER_TEMPLATE[template_key]} фабрик",
+                    structures_detail=_structures_detail(
+                        template_key, assignment.candidate.planet_type
+                    ),
+                    type_id=_type_ids().get(product),
+                    template_key=template_key,
+                    template_count=template_count,
+                    planet_type=assignment.candidate.planet_type,
+                    planet_radius_km=assignment.candidate.radius_km,
+                    cpu_percent=load.cpu_percent,
+                    pg_percent=load.pg_percent,
+                    **_breakdown(load),
+                )
+            )
+    return row_counter
+
+
+def _place_processing(
+    request, characters, recipes, schematics, planets, result, pool, demand, row_counter,
+) -> int:
+    """Шаг 2-3: сгруппировать переработку по тирам и разместить их в порядке возрастания спроса."""
+    # 2-3. Переработка: группируем по тиру и размещаем в домашней системе.
+    processing: dict[str, list[tuple[str, float]]] = {"P2_P3": [], "P4": []}
+    for product, factory_count in sorted(demand.factories.items()):
+        tier = _tier_of(product, recipes)
+        if tier in (None, "P1"):
+            continue
+        processing[_processing_tier_key(tier)].append((product, factory_count))
+
+    # Меньший спрос — первым (18.09.2026, найдено пользователем: план
+    # с P2/P3 и P4 вместе отдавал P4 ноль колоний, хотя ему было нужно
+    # всего 2, — P2/P3 обрабатывался первым по порядку словаря {"P2_P3",
+    # "P4"} и, если его собственный спрос превышал весь пул персонажей,
+    # успевал забрать ВСЕХ свободных персонажей на ВСЕХ подходящих
+    # планетах до того, как очередь доходила до P4 вообще). Порядок по
+    # возрастанию суммарного спроса — тир с маленькой, реально
+    # закрываемой потребностью получает первый шанс на ограниченный пул,
+    # а не остаётся ни с чем только из-за порядка словаря; тир с
+    # заведомо большим спросом всё равно останется недоукомплектован,
+    # просто честно, а не за счёт того, что меньшему не досталось вовсе.
+    tier_order = sorted(processing, key=lambda k: sum(count for _, count in processing[k]))
+    for tier_key in tier_order:
+        items = processing[tier_key]
+        if not items:
+            continue
+        row_counter = _place_processing_tier(
+            tier_key, items, request, characters, schematics, planets, result, pool,
+            row_counter,
+        )
+    return row_counter
+
+
+def _place_extraction_for_product(
+    product, factory_count, request, recipes, planets, result, pool, system_priority,
+    row_counter,
+) -> int:
+    """Шаг 4: добыча одного P1 — шаблоны miner_00 на планетах с нужным сырьём."""
+    per_miner = FACTORIES_PER_TEMPLATE["miner_00"]
+    recipe = recipes.get(product)
+    raw_name = recipe.source if recipe else None
+    templates_needed = int(
+        math.ceil(factory_count / per_miner * max(request.extraction_margin, 1.0))
+    )
+    placed = 0
+
+    candidates = planets.planets_with_resource(raw_name, request.constellations) if raw_name else None
+    if candidates is None or candidates.empty:
+        result.warn("extraction_none", resource=raw_name, product=product)
+        return row_counter
+
+    skill_shortfall = False
+    # Планеты перебираются по кругу: одна планета несёт колонии
+    # нескольких персонажей, поэтому число планет с нужным сырьём
+    # не ограничивает добычу — ограничивают только персонажи.
+    #
+    # Порядок при этом СГРУППИРОВАН ПО СИСТЕМАМ. Плотность остаётся
+    # главным критерием — она определяет, какая система идёт раньше, —
+    # но внутри системы планеты идут подряд. Иначе колонии одного
+    # персонажа рассыпаются по всему региону, и урожай приходится
+    # собирать за шесть перелётов вместо одного.
+    planet_rows = _group_by_system(candidates, system_priority)
+    colony_round = 0
+    while placed < templates_needed:
+        progressed_this_round = False
+        for _, row in planet_rows:
+            if placed >= templates_needed:
+                break
+            radius = float(row.get(RADIUS_COLUMN) or 0.0)
+            system_name = str(row.get("System", ""))
+
+            # Сначала выясняем, какая прокачка нужна ИМЕННО НА ЭТОЙ планете:
+            # на крупной шаблон может не влезть при CCU IV и влезть при CCU V.
+            # Определять до выбора персонажа важно ещё и потому, что иначе
+            # неудачная попытка расходовала бы его слот впустую.
+            required_ccu = min_ccu_level_that_fits("miner_00", radius)
+            if required_ccu is None:
+                if colony_round == 0:
+                    result.warnings.append(
+                        f"{row.get('System')} {row.get('Planet')}: добывающий шаблон "
+                        f"не помещается ни при каком уровне Command Center Upgrades "
+                        f"(радиус {radius:,.0f} км).".replace(",", "\u00a0")
+                    )
+                continue
+
+            # Берём наименее прокачанного из подходящих: персонажи с CCU V
+            # ценнее на переработке, где только они ставят два шаблона.
+            character = pool.take(
+                min_ccu=required_ccu,
+                prefer_least_skilled=True,
+                planet=(system_name, str(row.get("Planet", ""))),
+                prefer_system=system_name,
+            )
+            if character is None:
+                skill_shortfall = True
+                continue
+
+            load = calculate_colony_load(
+                "miner_00", character.command_center_upgrades_level, radius
+            )
+
+            row_counter += 1
+            placed += 1
+            progressed_this_round = True
+            result.rows.append(
+                PlanRow(
+                    id=f"row-{row_counter}",
+                    char_id=character.character_id,
+                    character=character.name,
+                    role="Добыча",
+                    planet=str(row.get("Planet", "")),
+                    system=str(row.get("System", "")),
+                    constellation=str(row.get("Constellation", "")),
+                    cc_type=f"1x {row.get('Type')} Command Center",
+                    res_out=product,
+                    res_in=raw_name,
+                    structures=f"{per_miner} фабрик",
+                    structures_detail=_structures_detail(
+                        "miner_00", str(row.get("Type", ""))
+                    ),
+                    type_id=_type_ids().get(product),
+                    template_key="miner_00",
+                    template_count=1,
+                    planet_type=str(row.get("Type", "")),
+                    planet_radius_km=radius,
+                    cpu_percent=load.cpu_percent,
+                    pg_percent=load.pg_percent,
+                    **_breakdown(load),
+                )
+            )
+
+        # Ни одной колонии за полный круг — дальше повторять бессмысленно:
+        # либо кончились персонажи, либо шаблон никуда не помещается.
+        if not progressed_this_round:
+            break
+        colony_round += 1
+
+    if placed < templates_needed:
+        result.staffing_gaps.append(
+            StaffingGap(
+                role="Добыча",
+                planets_needed=templates_needed,
+                planets_placed=placed,
+                min_ccu_level=MINER_MIN_CCU,
+                details=f"{product} (сырьё «{raw_name}»)",
+            )
+        )
+        result.warn(
+            "extraction_deficit",
+            product=product, needed=templates_needed, placed=placed,
+            reason="skill" if skill_shortfall else "fit",
+        )
+    return row_counter
+
+
+def _place_extraction(
+    request, recipes, planets, result, pool, demand, system_priority, row_counter,
+) -> int:
+    # 4. Добыча: шаблоны miner_00 на планетах с нужным сырьём.
+    # request.purchase_p1 явного if здесь не требует: в этом режиме
+    # expand_demand() вообще не кладёт P1 в demand.factories (весь P1 —
+    # в demand.purchased_p1), значит цикл ниже просто не находит, что
+    # размещать — тот же эффект, что и явное отключение блока.
+    for product, factory_count in sorted(demand.factories.items()):
+        if _tier_of(product, recipes) != "P1":
+            continue
+        row_counter = _place_extraction_for_product(
+            product, factory_count, request, recipes, planets, result, pool,
+            system_priority, row_counter,
+        )
+    return row_counter
+
+
 def build_plan(
     request: PlanRequest,
     characters: list[CharacterSlot],
@@ -691,21 +1047,7 @@ def build_plan(
         result.warn("no_schematics_file")
         return result
 
-    # 1. Потребность. Одна линия = один полный шаблон целевого продукта.
-    targets: dict[str, float] = {}
-    for product in request.target_products:
-        tier = _tier_of(product, recipes)
-        if tier is None:
-            result.warn("unknown_product", product=product)
-            continue
-        schematic = schematics.get(product)
-        if schematic is None:
-            result.warn("no_template_for_product", product=product)
-            continue
-        template_key = TEMPLATE_BY_TIER[_processing_tier_key(tier)][1]
-        factories = FACTORIES_PER_TEMPLATE[template_key]
-        targets[product] = schematic.output_per_hour * factories * request.lines_per_target
-
+    targets = _target_flows(request, recipes, schematics, result)
     if not targets:
         result.warn("no_usable_products")
         return result
@@ -745,307 +1087,15 @@ def build_plan(
     })
     system_priority = planets.system_coverage(needed_raw, request.constellations)
 
-    # 2-3. Переработка: группируем по тиру и размещаем в домашней системе.
-    processing: dict[str, list[tuple[str, float]]] = {"P2_P3": [], "P4": []}
-    for product, factory_count in sorted(demand.factories.items()):
-        tier = _tier_of(product, recipes)
-        if tier in (None, "P1"):
-            continue
-        processing[_processing_tier_key(tier)].append((product, factory_count))
+    row_counter = _place_processing(
+        request, characters, recipes, schematics, planets, result, pool, demand,
+        row_counter,
+    )
 
-    # Меньший спрос — первым (18.09.2026, найдено пользователем: план
-    # с P2/P3 и P4 вместе отдавал P4 ноль колоний, хотя ему было нужно
-    # всего 2, — P2/P3 обрабатывался первым по порядку словаря {"P2_P3",
-    # "P4"} и, если его собственный спрос превышал весь пул персонажей,
-    # успевал забрать ВСЕХ свободных персонажей на ВСЕХ подходящих
-    # планетах до того, как очередь доходила до P4 вообще). Порядок по
-    # возрастанию суммарного спроса — тир с маленькой, реально
-    # закрываемой потребностью получает первый шанс на ограниченный пул,
-    # а не остаётся ни с чем только из-за порядка словаря; тир с
-    # заведомо большим спросом всё равно останется недоукомплектован,
-    # просто честно, а не за счёт того, что меньшему не досталось вовсе.
-    tier_order = sorted(processing, key=lambda k: sum(count for _, count in processing[k]))
-    for tier_key in tier_order:
-        items = processing[tier_key]
-        if not items:
-            continue
-        single_key = TEMPLATE_BY_TIER[tier_key][1]
-        per_template = FACTORIES_PER_TEMPLATE[single_key]
-        templates_needed = sum(
-            int(math.ceil(count / per_template)) for _, count in items
-        )
+    row_counter = _place_extraction(
+        request, recipes, planets, result, pool, demand, system_priority, row_counter,
+    )
 
-        selection = select_factory_sites(
-            planets,
-            request.factory_system,
-            tier_key,
-            ccu_level=max((c.command_center_upgrades_level for c in characters), default=0),
-            templates_needed=templates_needed,
-            allow_single_fallback=request.allow_single_template_fallback,
-            # 18.09.2026, найдено пользователем: без этого предела
-            # select_factory_sites() планировал двойные шаблоны на КАЖДУЮ
-            # колонию тира, если хоть у одного персонажа во всём пуле
-            # был CCU V — реальных CCU5-персонажей на всё не хватало, и
-            # оставшиеся колонии массово проваливались с «не хватило
-            # персонажей» чуть ниже. Снимок СВОБОДНЫХ (ещё не занятых
-            # добычей/предыдущим тиром) CCU5-слотов прямо перед подбором
-            # площадок — сам подбор ограничивает число двойных шаблонов
-            # тем, что реально можно укомплектовать, без ложного отказа.
-            max_double_templates=pool.free_slots_matching(require_ccu5=True),
-        )
-        result.site_selections.append(selection)
-        result.warnings.extend(selection.warnings)
-        result.warning_data.extend(selection.warning_data)
-
-        # Раздаём назначенные площадки под конкретные продукты.
-        queue: list[str] = []
-        for product, count in items:
-            queue.extend([product] * int(math.ceil(count / per_template)))
-
-        # Только колонии ЭТОГО тира — не общий счётчик result.rows
-        # (18.09.2026, найдено пользователем: «не хватает персонажей: 0»
-        # в сводке плана противоречило собственному предупреждению
-        # «Переработка P4: не хватило свободных персонажей» строкой
-        # ниже). StaffingGap.planets_placed раньше считался как
-        # `len([r for r in result.rows if ...])` — общее число УЖЕ
-        # построенных строк переработки СО ВСЕХ тиров, включая P2/P3,
-        # обработанный раньше в этом же цикле. К моменту, когда доходит
-        # очередь до P4, result.rows уже содержит десятки строк P2/P3 —
-        # заведомо больше, чем templates_needed именно для P4, поэтому
-        # `planets_missing = max(0, planets_needed - planets_placed)`
-        # всегда получался нулём, даже когда P4 реально не хватило
-        # персонажей на своё же значение planets_needed.
-        placed_in_tier = 0
-        for assignment in selection.assignments:
-            for _ in range(assignment.template_count):
-                if not queue:
-                    break
-                product = queue.pop(0)
-                character = pool.take(
-                    require_ccu5=assignment.template_count == 2,
-                    # min_ccu (18.09.2026, найдено пользователем): для
-                    # переработки эта проверка вообще отсутствовала —
-                    # персонаж с CCU 0-1 мог получить колонию, которая
-                    # по игре ему физически не помещается (тот же пробел,
-                    # что уже закрыт для добычи — min_ccu_level_that_fits
-                    # ("miner_00", radius) чуть ниже). Растёт с радиусом
-                    # площадки, поэтому берётся из САМОГО назначения
-                    # (select_factory_sites() уже посчитал его для этой
-                    # конкретной планеты), не константа тира.
-                    min_ccu=assignment.min_ccu_level,
-                    # Одиночный шаблон не нуждается в CCU V — как и у
-                    # добычи (см. take() docstring), тратить на него
-                    # прокачанного персонажа расточительно: только CCU V
-                    # умеет ставить двойной шаблон, а его на плане может
-                    # не хватить (18.09.2026, найдено пользователем —
-                    # без этого одиночные колонии одного тира выбирали
-                    # CCU5-персонажей раньше двойных колоний другого
-                    # тира, обработанного позже в этом же цикле).
-                    prefer_least_skilled=assignment.template_count == 1,
-                    planet=(assignment.candidate.system, assignment.candidate.planet),
-                )
-                template_key = assignment.template_key
-                template_count = assignment.template_count
-                fallback_min_ccu = None
-                if character is None and assignment.template_count == 2:
-                    # 18.09.2026, найдено пользователем на реальном плане
-                    # (2 подходящих планеты в системе, много двойных
-                    # назначений): max_double_templates выше ограничивает
-                    # ОБЩЕЕ число свободных CCU5-слотов, но не то, что
-                    # одному и тому же человеку нельзя дать ВТОРУЮ колонию
-                    # на ТОЙ ЖЕ планете (pool.take(planet=...) уже
-                    # исключает его сам). Если РАЗНЫХ CCU5-персонажей
-                    # меньше, чем планет × назначений, эта планета не
-                    # получит второго — но одиночный шаблон здесь всё
-                    # равно физически помещается и годится любому
-                    # подходящему персонажу. Пробуем его, прежде чем
-                    # честно сдаться.
-                    fallback_min_ccu = min_ccu_level_that_fits(
-                        single_key, assignment.candidate.radius_km,
-                        planet_type=assignment.candidate.planet_type,
-                    ) or 0
-                    character = pool.take(
-                        min_ccu=fallback_min_ccu,
-                        prefer_least_skilled=True,
-                        planet=(assignment.candidate.system, assignment.candidate.planet),
-                    )
-                    if character is not None:
-                        template_key = single_key
-                        template_count = 1
-
-                if character is None:
-                    needed_level = fallback_min_ccu if fallback_min_ccu is not None else assignment.min_ccu_level
-                    result.staffing_gaps.append(
-                        StaffingGap(
-                            role="Переработка",
-                            planets_needed=len(selection.assignments),
-                            planets_placed=placed_in_tier,
-                            min_ccu_level=needed_level,
-                            details=f"{tier_key.replace('_', '/')}: не хватило персонажей",
-                        )
-                    )
-                    result.warn("processing_understaffed",
-                                tier=tier_key.replace("_", "/"))
-                    break
-                row_counter += 1
-                placed_in_tier += 1
-                load = calculate_colony_load(
-                    template_key,
-                    character.command_center_upgrades_level,
-                    assignment.candidate.radius_km,
-                    planet_type=assignment.candidate.planet_type,
-                )
-                result.rows.append(
-                    PlanRow(
-                        id=f"row-{row_counter}",
-                        char_id=character.character_id,
-                        character=character.name,
-                        role=f"Переработка {tier_key.replace('_', '/')}",
-                        planet=assignment.candidate.planet,
-                        system=assignment.candidate.system,
-                        constellation="",
-                        cc_type=f"1x {assignment.candidate.planet_type} Command Center",
-                        res_out=product,
-                        res_in=", ".join(sorted(schematics[product].inputs))
-                        if product in schematics
-                        else None,
-                        structures=f"{FACTORIES_PER_TEMPLATE[template_key]} фабрик",
-                        structures_detail=_structures_detail(
-                            template_key, assignment.candidate.planet_type
-                        ),
-                        type_id=_type_ids().get(product),
-                        template_key=template_key,
-                        template_count=template_count,
-                        planet_type=assignment.candidate.planet_type,
-                        planet_radius_km=assignment.candidate.radius_km,
-                        cpu_percent=load.cpu_percent,
-                        pg_percent=load.pg_percent,
-                        **_breakdown(load),
-                    )
-                )
-
-    # 4. Добыча: шаблоны miner_00 на планетах с нужным сырьём.
-    # request.purchase_p1 явного if здесь не требует: в этом режиме
-    # expand_demand() вообще не кладёт P1 в demand.factories (весь P1 —
-    # в demand.purchased_p1), значит цикл ниже просто не находит, что
-    # размещать — тот же эффект, что и явное отключение блока.
-    per_miner = FACTORIES_PER_TEMPLATE["miner_00"]
-    for product, factory_count in sorted(demand.factories.items()):
-        if _tier_of(product, recipes) != "P1":
-            continue
-        recipe = recipes.get(product)
-        raw_name = recipe.source if recipe else None
-        templates_needed = int(
-            math.ceil(factory_count / per_miner * max(request.extraction_margin, 1.0))
-        )
-        placed = 0
-
-        candidates = planets.planets_with_resource(raw_name, request.constellations) if raw_name else None
-        if candidates is None or candidates.empty:
-            result.warn("extraction_none", resource=raw_name, product=product)
-            continue
-
-        skill_shortfall = False
-        # Планеты перебираются по кругу: одна планета несёт колонии
-        # нескольких персонажей, поэтому число планет с нужным сырьём
-        # не ограничивает добычу — ограничивают только персонажи.
-        #
-        # Порядок при этом СГРУППИРОВАН ПО СИСТЕМАМ. Плотность остаётся
-        # главным критерием — она определяет, какая система идёт раньше, —
-        # но внутри системы планеты идут подряд. Иначе колонии одного
-        # персонажа рассыпаются по всему региону, и урожай приходится
-        # собирать за шесть перелётов вместо одного.
-        planet_rows = _group_by_system(candidates, system_priority)
-        colony_round = 0
-        while placed < templates_needed:
-            progressed_this_round = False
-            for _, row in planet_rows:
-                if placed >= templates_needed:
-                    break
-                radius = float(row.get(RADIUS_COLUMN) or 0.0)
-                system_name = str(row.get("System", ""))
-
-                # Сначала выясняем, какая прокачка нужна ИМЕННО НА ЭТОЙ планете:
-                # на крупной шаблон может не влезть при CCU IV и влезть при CCU V.
-                # Определять до выбора персонажа важно ещё и потому, что иначе
-                # неудачная попытка расходовала бы его слот впустую.
-                required_ccu = min_ccu_level_that_fits("miner_00", radius)
-                if required_ccu is None:
-                    if colony_round == 0:
-                        result.warnings.append(
-                            f"{row.get('System')} {row.get('Planet')}: добывающий шаблон "
-                            f"не помещается ни при каком уровне Command Center Upgrades "
-                            f"(радиус {radius:,.0f} км).".replace(",", "\u00a0")
-                        )
-                    continue
-
-                # Берём наименее прокачанного из подходящих: персонажи с CCU V
-                # ценнее на переработке, где только они ставят два шаблона.
-                character = pool.take(
-                    min_ccu=required_ccu,
-                    prefer_least_skilled=True,
-                    planet=(system_name, str(row.get("Planet", ""))),
-                    prefer_system=system_name,
-                )
-                if character is None:
-                    skill_shortfall = True
-                    continue
-
-                load = calculate_colony_load(
-                    "miner_00", character.command_center_upgrades_level, radius
-                )
-
-                row_counter += 1
-                placed += 1
-                progressed_this_round = True
-                result.rows.append(
-                    PlanRow(
-                        id=f"row-{row_counter}",
-                        char_id=character.character_id,
-                        character=character.name,
-                        role="Добыча",
-                        planet=str(row.get("Planet", "")),
-                        system=str(row.get("System", "")),
-                        constellation=str(row.get("Constellation", "")),
-                        cc_type=f"1x {row.get('Type')} Command Center",
-                        res_out=product,
-                        res_in=raw_name,
-                        structures=f"{per_miner} фабрик",
-                        structures_detail=_structures_detail(
-                            "miner_00", str(row.get("Type", ""))
-                        ),
-                        type_id=_type_ids().get(product),
-                        template_key="miner_00",
-                        template_count=1,
-                        planet_type=str(row.get("Type", "")),
-                        planet_radius_km=radius,
-                        cpu_percent=load.cpu_percent,
-                        pg_percent=load.pg_percent,
-                        **_breakdown(load),
-                    )
-                )
-
-            # Ни одной колонии за полный круг — дальше повторять бессмысленно:
-            # либо кончились персонажи, либо шаблон никуда не помещается.
-            if not progressed_this_round:
-                break
-            colony_round += 1
-
-        if placed < templates_needed:
-            result.staffing_gaps.append(
-                StaffingGap(
-                    role="Добыча",
-                    planets_needed=templates_needed,
-                    planets_placed=placed,
-                    min_ccu_level=MINER_MIN_CCU,
-                    details=f"{product} (сырьё «{raw_name}»)",
-                )
-            )
-            result.warn(
-                "extraction_deficit",
-                product=product, needed=templates_needed, placed=placed,
-                reason="skill" if skill_shortfall else "fit",
-            )
 
     # not request.purchase_p1: излишек добычи бессмысленен, когда добычи
     # нет вовсе — весь P1 в этом режиме закупается, не добывается.
