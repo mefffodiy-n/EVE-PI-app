@@ -77,17 +77,14 @@ def calculate():
     lang = "en" if str(payload.get("lang", "ru")).lower().startswith("en") else "ru"
 
     if not constellations:
-        return json_error("Не выбрано ни одной констелляции")
+        return json_error("no_constellations")
     if not factory_sys:
-        return json_error("Не выбрана домашняя система")
+        return json_error("no_home_system")
     if not targets:
-        return json_error("Не выбрано ни одного целевого продукта")
+        return json_error("no_targets")
     if len(targets) > MAX_TARGET_PRODUCTS:
         # Ограничение защищает от запроса, который займёт воркер надолго.
-        return json_error(
-            f"Слишком много целевых продуктов: {len(targets)}. "
-            f"Максимум {MAX_TARGET_PRODUCTS} за один расчёт."
-        )
+        return json_error("too_many_targets", count=len(targets), limit=MAX_TARGET_PRODUCTS)
 
     from api.session import current_account_id
 
@@ -163,14 +160,14 @@ def advice():
         lines_per_target = 1
     lines_per_target = max(1, min(lines_per_target, 50))
     if not targets:
-        return json_error("Не выбрано ни одного целевого продукта")
+        return json_error("no_targets")
 
     from api.session import current_account_id
     from domain.characters import load_characters
 
     characters = load_characters(current_account_id())
     if not characters:
-        return json_error("Нет персонажей — вместимость считать не от чего", 503)
+        return json_error("no_characters", 503)
 
     # Цены нужны только для сортировки подсказок по выгоде. Их
     # отсутствие не мешает посчитать вместимость, и модуль об этом скажет.
@@ -265,7 +262,7 @@ def plan_profitability():
 
     rows = payload["rows"]
     if not all(isinstance(r, dict) for r in rows):
-        return json_error("Каждая строка плана должна быть объектом")
+        return json_error("plan_rows_not_objects")
 
     targets = [str(t) for t in payload["target_products"]]
     # Необязательные поля (режим purchase_p1, 18.09.2026; пропускная
@@ -313,7 +310,7 @@ def colonies_profitability():
 
     colonies = payload["colonies"]
     if not all(isinstance(c, dict) for c in colonies):
-        return json_error("Каждая колония должна быть объектом")
+        return json_error("colonies_not_objects")
 
     result = evaluate_colonies_profitability(colonies, _load_prices(), planets=_load_planets_book())
     return json_ok(**result.to_dict())
@@ -355,7 +352,7 @@ def save_plan():
             revenue_share=payload.get("revenue_share") or {},
         )
     except PlanStorageError as exc:
-        return json_error(str(exc))
+        return json_error(exc)
 
     return json_ok(plan=plan.summary())
 
@@ -372,7 +369,7 @@ def get_plan(plan_id: str):
     try:
         plan = load(plan_id, current_account_id())
     except PlanStorageError as exc:
-        return json_error(str(exc), 404)
+        return json_error(exc, 404)
     return json_ok(plan=plan.to_dict())
 
 
@@ -384,9 +381,9 @@ def remove_plan(plan_id: str):
     try:
         removed = delete(plan_id, current_account_id())
     except PlanStorageError as exc:
-        return json_error(str(exc))
+        return json_error(exc)
     if not removed:
-        return json_error("План не найден", 404)
+        return json_error("plan_not_found_short", 404)
     return json_ok(deleted=plan_id)
 
 
@@ -408,12 +405,12 @@ def compare_plans():
     left = flask_request.args.get("left")
     right = flask_request.args.get("right")
     if not left or not right:
-        return json_error("Нужны оба идентификатора: left и right")
+        return json_error("compare_ids_required")
 
     try:
         return json_ok(**compare(left, right, current_account_id()))
     except PlanStorageError as exc:
-        return json_error(str(exc), 404)
+        return json_error(exc, 404)
 
 
 @bp.get("/cache-stats")

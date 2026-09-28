@@ -154,6 +154,7 @@ infra/            конфиг окружения и доступ к БД (об�
 migrations/       Alembic: миграции схемы (env.py берёт URL из infra.config)
 
 api/              Flask, только чтение готовых данных
+  errors.py       каталог ошибок API RU/EN: код + параметры (правило 9)
   __init__.py     фабрика приложения, отдача web/, обработка ошибок
   cache.py        LRU-кэш, ETag, разбор тела запроса
   blueprints/     reference, plans, market, export, meta (+ /colonies), auth (правило 3),

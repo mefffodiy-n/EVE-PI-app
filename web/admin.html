@@ -206,6 +206,16 @@ let currentRegionId = null;
 let allRegions = [];
 let lang = 'ru';
 
+const _origFetch = window.fetch.bind(window);
+window.fetch = (url, opts = {}) => {
+  if (String(url).startsWith(API)) {
+    const h = new Headers(opts.headers || {});
+    if (!h.has('Accept-Language')) h.set('Accept-Language', lang);
+    opts = {...opts, headers: h};
+  }
+  return _origFetch(url, opts);
+};
+
 const store = {
   get(k, fallback){ try{ return localStorage.getItem(k) ?? fallback; }catch(e){ return fallback; } },
   set(k, v){ try{ localStorage.setItem(k, v); }catch(e){} },

@@ -69,11 +69,7 @@ def login_url():
             missing.append("PI_ESI_CLIENT_ID")
         if not config.TOKEN_ENCRYPTION_KEY:
             missing.append("PI_TOKEN_KEY")
-        return json_error(
-            "Вход через EVE SSO не настроен: не задано " + ", ".join(missing) + ". "
-            "Зарегистрируйте приложение на developers.eveonline.com.",
-            503,
-        )
+        return json_error("sso_not_configured", 503, missing=", ".join(missing))
 
     _sweep()
     state = new_state()
@@ -304,7 +300,7 @@ def group_characters():
 
     account_id = current_account_id()
     if account_id is None:
-        return json_error("Нет персонажей этого визита — сначала войдите через EVE SSO", 400)
+        return json_error("no_visit_characters", 400)
 
     with session_scope() as session:
         members = session.scalars(
@@ -312,9 +308,7 @@ def group_characters():
         ).all()
         member_ids = sorted(c.character_id for c in members)
         if primary_id not in member_ids:
-            return json_error(
-                "Указанный персонаж не входит в число вошедших в этом визите", 400
-            )
+            return json_error("character_not_in_visit", 400)
 
         # Конфликт — это ДВЕ РАЗНЫЕ уже существующие группы среди этих
         # персонажей (например, каждый заведён «основным» отдельно на
@@ -327,10 +321,7 @@ def group_characters():
             c.primary_character_id for c in members if c.primary_character_id is not None
         }
         if len(existing_groups) > 1:
-            return json_error(
-                "Часть этих персонажей уже состоит в разных постоянных группах — "
-                "сначала отвяжите их и войдите заново", 409
-            )
+            return json_error("groups_conflict", 409)
 
         for c in members:
             c.primary_character_id = primary_id
@@ -372,14 +363,14 @@ def unlink(character_id: int):
 
     account_id = current_account_id()
     if account_id is None:
-        return json_error("Персонаж не найден", 404)
+        return json_error("character_not_found", 404)
 
     with session_scope() as session:
         character = session.get(Character, character_id)
         if character is None or character.account_id != account_id:
-            return json_error("Персонаж не найден", 404)
+            return json_error("character_not_found", 404)
         if character.source != "esi":
-            return json_error("Этого персонажа нельзя отвязать")
+            return json_error("character_not_unlinkable")
 
         revoked = False
         if config.ESI_CLIENT_SECRET:

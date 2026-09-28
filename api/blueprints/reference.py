@@ -235,7 +235,7 @@ def systems():
 
     constellations = [str(c) for c in payload["constellations"]]
     if not constellations:
-        return json_error("Список констелляций пуст")
+        return json_error("constellations_empty")
 
     book = load_planets()
     result = book.systems_in(constellations)
@@ -264,7 +264,7 @@ def system_planets():
 
     system = (flask_request.args.get("system") or "").strip()
     if not system:
-        return json_error("Не указана система")
+        return json_error("system_missing")
 
     frame = load_planets().factory_candidates(system)
 
@@ -292,5 +292,5 @@ def thresholds(ccu_level: int):
     шаблон требует планет не крупнее такого-то радиуса.
     """
     if not 0 <= ccu_level <= 5:
-        return json_error("Уровень Command Center Upgrades должен быть от 0 до 5")
+        return json_error("ccu_out_of_range")
     return json_ok(ccu_level=ccu_level, thresholds=describe_thresholds(ccu_level))

@@ -43,6 +43,8 @@ from typing import Any, Callable
 
 from flask import jsonify, request
 
+from api.errors import Err, render_error, request_lang
+
 
 class LruResultCache:
     """
@@ -140,8 +142,17 @@ def json_ok(**payload) -> Any:
     return jsonify(status="success", **payload)
 
 
-def json_error(message: str, code: int = 400):
-    return jsonify(status="error", message=message), code
+def json_error(error: Any, status: int = 400, **params: Any):
+    """
+    Ответ с ошибкой. `error` — код из api/errors.py (плюс параметры) либо
+    объект с `.code`/`.params` (Err, PlanStorageError); текст собирается
+    на языке запроса (правило 9).
+    """
+    if isinstance(error, str):
+        code = error
+    else:
+        code, params = error.code, {**getattr(error, "params", {}), **params}
+    return jsonify(status="error", message=render_error(code, request_lang(), **params)), status
 
 
 def with_etag(view: Callable) -> Callable:
@@ -165,7 +176,7 @@ def with_etag(view: Callable) -> Callable:
     return wrapper
 
 
-def parse_json_body(required: dict[str, type]) -> tuple[dict | None, str | None]:
+def parse_json_body(required: dict[str, type]) -> tuple[dict | None, Err | None]:
     """
     Разобрать и проверить тело JSON-запроса.
 
@@ -173,18 +184,18 @@ def parse_json_body(required: dict[str, type]) -> tuple[dict | None, str | None]
     вручную и минимально: единственная задача — не пустить в domain-слой
     мусор, а не строить полноценную схему валидации.
 
-    Возвращает (данные, None) либо (None, текст ошибки).
+    Возвращает (данные, None) либо (None, Err) — её принимает json_error.
     """
     payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
-        return None, "Ожидается JSON-объект в теле запроса"
+        return None, Err("body_not_object")
 
     for field, expected in required.items():
         if field not in payload:
-            return None, f"Отсутствует обязательное поле '{field}'"
+            return None, Err("field_missing", field=field)
         if not isinstance(payload[field], expected):
-            return None, (
-                f"Поле '{field}' должно быть типа {expected.__name__}, "
-                f"получено {type(payload[field]).__name__}"
+            return None, Err(
+                "field_type", field=field, expected=expected.__name__,
+                actual=type(payload[field]).__name__,
             )
     return payload, None
