@@ -1,0 +1,6 @@
+[run]
+source = domain, infra, api
+
+[report]
+show_missing = False
+fail_under = 85
