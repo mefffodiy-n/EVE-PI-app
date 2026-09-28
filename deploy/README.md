@@ -238,6 +238,12 @@ python и рабочему каталогу поправьте под себя.
 pg_restore --no-owner --clean --if-exists -d pidirector pi-backup-*/pidirector.dump
 ```
 
+Раз в неделю планировщик запускает `python -m scripts.verify_backup`: последняя
+копия проверяется на пустой БД (SQLite — целостность, MariaDB —
+восстановление во временную БД `<имя>_restorecheck`, при отсутствии права
+CREATE DATABASE — структура дампа, Postgres — оглавление `pg_restore`).
+Результат — в журнале `verify_backup`, сбой виден в `/api/meta`.
+
 ## 6. nginx
 
 `deploy/nginx.conf.sample` — проксирует `/` на waitress, статику `web/`

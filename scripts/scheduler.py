@@ -96,6 +96,11 @@ def _backup() -> int:
     return run()
 
 
+def _verify_backup() -> int:
+    from scripts.verify_backup import main as run
+    return run()
+
+
 def _refresh_sde() -> int:
     from scripts.refresh_sde import main as run
     return run()
@@ -116,6 +121,8 @@ JOBS = [
         "сбор нужен на случай перезапуска программы"),
     Job("Резервная копия", "backup", _backup, 1440,
         "раз в сутки: база и снимки кэша, старые чистятся"),
+    Job("Проверка копии", "verify_backup", _verify_backup, 10080,
+        "раз в неделю: последняя копия должна разворачиваться на пустой БД"),
     Job("Скелет планет из SDE", "refresh_sde", _refresh_sde, 43200,
         "полный список регионов/систем/планет; CCP не переносит регионы/"
         "системы/планеты между билдами, раз в месяц с запасом хватает "
