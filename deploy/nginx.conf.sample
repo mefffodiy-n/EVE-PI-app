@@ -3,6 +3,16 @@
 #
 # Приложение (waitress) слушает только 127.0.0.1 — снаружи виден лишь nginx.
 
+# Ограничение частоты запросов на IP (B2). Зоны — на уровне http, то есть
+# снаружи server{}: этот файл лежит в conf.d / sites-available, а они
+# подключаются внутри http{}. Тяжёлые эндпоинты — расчёт плана и
+# экспорт: один запрос считает секунды, и на однопоточном waitress
+# лавина таких запросов с одного адреса выедает всех воркеров.
+limit_req_zone $binary_remote_addr zone=pi_heavy:10m rate=3r/s;
+limit_req_zone $binary_remote_addr zone=pi_api:10m   rate=20r/s;
+limit_req_zone $binary_remote_addr zone=pi_auth:10m  rate=2r/s;
+limit_req_status 429;
+
 server {
     listen 80;
     server_name pi.example.com;
@@ -36,7 +46,41 @@ server {
         root /path/to/EVE-PI-app/web;
     }
 
-    # API и всё остальное — на waitress.
+    # Тяжёлые эндпоинты. burst — запас на нормальную работу интерфейса
+    # (смена языка перезапрашивает несколько панелей сразу).
+    location ~ ^/api/(calculate|advice|export|plan-profitability|colonies-profitability)$ {
+        limit_req zone=pi_heavy burst=15 nodelay;
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 60s;
+    }
+
+    # Вход через EVE SSO и управление персонажами.
+    location /api/auth/ {
+        limit_req zone=pi_auth burst=10 nodelay;
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 60s;
+    }
+
+    # Остальной API.
+    location /api/ {
+        limit_req zone=pi_api burst=60 nodelay;
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 60s;
+    }
+
+    # Всё остальное (статика web/, отдаваемая waitress) — на waitress.
     location / {
         proxy_pass http://127.0.0.1:8000;
         proxy_set_header Host              $host;
