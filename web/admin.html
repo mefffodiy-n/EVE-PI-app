@@ -26,11 +26,13 @@
   --void:#0a0805; --hull:#12100a; --seam:#2c2416; --hover:#1c1810;
   --inset:#0d0b07; --dim:#8b7f66; --read:#ddd2bb; --bright:#fbf4e6;
   --amber:#e8a33d; --amber-hi:#ffca74; --flux:#5ba8c9; --alarm:#d6553f; --calm:#5aa87a;
+  --glow:rgba(232,163,61,.18); --bevel-shadow:var(--seam);
 }
 body.light {
   --void:#f4f1ea; --hull:#faf8f3; --seam:#d8cdb4; --hover:#ece3d0;
   --inset:#efe8d9; --dim:#6b6459; --read:#2a2620; --bright:#14110c;
   --amber:#d4870f; --amber-hi:#a8690c; --flux:#1d6fa8; --alarm:#b03e36; --calm:#2c7358;
+  --glow:rgba(212,135,15,.14); --bevel-shadow:rgba(0,0,0,.45);
 }
 .theme-switching *, .theme-switching *::before, .theme-switching *::after { transition:none !important; }
 * { box-sizing:border-box; }
@@ -41,11 +43,36 @@ body { margin:0; background:var(--void); color:var(--read); min-width:480px;
 
 .topbar { position:sticky; top:0; z-index:20; display:flex; align-items:center; gap:10px;
           padding:8px 16px; border-bottom:1px solid var(--seam); background:var(--hull); flex-wrap:wrap; }
-.brand { display:flex; align-items:center; gap:10px; margin-right:auto; }
-.brand-avatar { width:26px; height:26px; border-radius:50%; }
-.brand-text { display:flex; flex-direction:column; line-height:1.1; }
-.brand-title { font-weight:700; font-size:14px; color:var(--bright); }
-.brand-text small { color:var(--dim); font-weight:600; font-size:9px; letter-spacing:.1em; text-transform:uppercase; }
+/* Тот же анимированный бренд-блок, что в топбаре index.html (Фаза 8,
+   20.09.2026) — пульсирующее свечение аватара, перелив по буквам
+   заголовка, объём буквы через text-shadow (--bevel-shadow отдельно
+   для каждой темы, см. :root/body.light выше — иначе на тёмном --void
+   тень скоса сливается с фоном). Скопировано буквально, чтобы шапка
+   admin-панели выглядела частью того же приложения, не другого стиля
+   (28.09.2026, по прямому запросу пользователя). */
+.brand { display:flex; align-items:center; gap:11px; margin-right:auto; }
+.brand-avatar { width:30px; height:30px; border-radius:50%; flex:0 0 auto;
+                animation:brand-pulse 3.2s ease-in-out infinite; }
+@keyframes brand-pulse {
+  0%, 100% { filter:drop-shadow(0 0 5px var(--glow)); }
+  50%      { filter:drop-shadow(0 0 11px var(--amber-hi)); }
+}
+.brand-text { display:flex; flex-direction:column; line-height:1.15; gap:2px; }
+.brand-title { font-family:'Inter',sans-serif; font-weight:700; font-size:16px; letter-spacing:.02em;
+               text-shadow:-1px -1px 0 var(--amber-hi), 1px 1px 1px var(--bevel-shadow), 0 0 12px var(--glow);
+               background:linear-gradient(90deg, var(--bright) 42%, var(--amber-hi) 50%, var(--bright) 58%);
+               background-size:420% 100%; -webkit-background-clip:text; background-clip:text;
+               color:transparent; animation:brand-shimmer 9s ease-in-out infinite; }
+@keyframes brand-shimmer {
+  0%   { background-position:100% 0; }
+  50%  { background-position:0% 0; }
+  100% { background-position:100% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .brand-avatar { animation:none; filter:drop-shadow(0 0 6px var(--glow)); }
+  .brand-title { animation:none; background-position:50% 0; }
+}
+.brand-text small { color:var(--dim); font-weight:700; font-size:9px; letter-spacing:.1em; text-transform:uppercase; }
 .tbtn { background:none; border:1px solid var(--seam); color:var(--read); padding:5px 12px;
         cursor:pointer; font-size:12px; font-family:inherit; }
 .tbtn:hover { border-color:var(--flux); color:var(--flux); }
@@ -125,7 +152,7 @@ input[type=text] { width:110px; }
 <div class="wrap">
 <div id="messages"></div>
 
-<div class="step-card">
+<div class="step-card" id="regionsSection">
   <div class="step-head">
     <span class="step-title" data-i18n="regionsTitle">Регионы</span>
     <span class="step-count" id="regionsCount"></span>
@@ -151,6 +178,7 @@ input[type=text] { width:110px; }
 
 <div class="step-card" id="regionDetail">
   <div class="step-head">
+    <button class="mini" onclick="backToRegions()" data-i18n="backToRegions">← К списку регионов</button>
     <span class="step-title" id="regionTitle"></span>
   </div>
   <div class="step-body">
@@ -189,6 +217,7 @@ const T = {
     regionsTitle:'Регионы', searchPh:'Поиск по названию…',
     statusAll:'Все статусы', statusReady:'ready', statusNoData:'no_data',
     colRegion:'Регион', colStatus:'Статус', colPlanets:'Планет', open:'Открыть',
+    backToRegions:'← К списку регионов',
     downloadTemplate:'Скачать CSV-шаблон', uploadTemplate:'Загрузить CSV',
     markReady:'Готово — сделать ready',
     colSystem:'Система', colNumber:'№', colType:'Тип', colRadius:'Радиус, км',
@@ -202,6 +231,7 @@ const T = {
     regionsTitle:'Regions', searchPh:'Search by name…',
     statusAll:'All statuses', statusReady:'ready', statusNoData:'no_data',
     colRegion:'Region', colStatus:'Status', colPlanets:'Planets', open:'Open',
+    backToRegions:'← Back to regions',
     downloadTemplate:'Download CSV template', uploadTemplate:'Upload CSV',
     markReady:'Done — mark ready',
     colSystem:'System', colNumber:'#', colType:'Type', colRadius:'Radius, km',
@@ -270,12 +300,24 @@ function renderRegions(){
     </tr>`).join('');
 }
 
+/* Список регионов и детали одного региона показываются по очереди, не
+   вместе (28.09.2026, по прямому запросу пользователя): список может
+   быть длинным (102 строки), и он не нужен, пока открыт конкретный
+   регион — строка поиска тоже часть карточки регионов, поэтому прячется
+   вместе с таблицей, а не остаётся сиротой над деталями. */
 async function openRegion(id, name){
   currentRegionId = id;
+  document.getElementById('regionsSection').style.display = 'none';
   document.getElementById('regionDetail').style.display = 'block';
   document.getElementById('regionTitle').textContent = name;
-  document.getElementById('regionDetail').scrollIntoView({behavior:'smooth', block:'start'});
+  window.scrollTo({top: 0, behavior:'smooth'});
   await loadPlanets();
+}
+
+function backToRegions(){
+  document.getElementById('regionDetail').style.display = 'none';
+  document.getElementById('regionsSection').style.display = 'block';
+  currentRegionId = null;
 }
 
 async function loadPlanets(){
