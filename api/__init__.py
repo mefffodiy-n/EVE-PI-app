@@ -77,6 +77,7 @@ def create_app(config: dict | None = None) -> Flask:
 
     _register_error_handlers(app)
     _register_dev_cors(app)
+    _register_security_headers(app)
     _register_web(app)
     return app
 
@@ -108,6 +109,49 @@ def _configure_session(app: Flask) -> None:
     # Secure-cookie (только по HTTPS) везде, кроме локальной разработки —
     # там сервер обычно поднят на голом http://localhost.
     app.config["SESSION_COOKIE_SECURE"] = not config.IS_DEV
+
+
+def _register_security_headers(app: Flask) -> None:
+    """
+    Заголовки безопасности на каждый ответ.
+
+    CSP допускает 'unsafe-inline' для script/style: разметка и app.js
+    используют inline-обработчики (onclick=...) и admin.html — inline
+    <script>/<style>. Убрать их — отдельный большой рефакторинг; пока
+    CSP закрывает главное: чужие домены для скриптов/стилей/шрифтов,
+    фреймы, <base>, отправку форм наружу. Внешнее допущено одно —
+    картинки images.evetech.net.
+    """
+    from flask import request
+
+    csp = "; ".join(
+        (
+            "default-src 'self'",
+            "script-src 'self' 'unsafe-inline'",
+            "style-src 'self' 'unsafe-inline'",
+            "img-src 'self' data: https://images.evetech.net",
+            "font-src 'self'",
+            "connect-src 'self'",
+            "object-src 'none'",
+            "base-uri 'self'",
+            "form-action 'self'",
+            "frame-ancestors 'none'",
+        )
+    )
+
+    @app.after_request
+    def add_headers(resp):
+        resp.headers.setdefault("Content-Security-Policy", csp)
+        resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+        resp.headers.setdefault("X-Frame-Options", "DENY")
+        resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        # HSTS только по HTTPS (за nginx — по X-Forwarded-Proto): на голом
+        # http://localhost заголовок закрепил бы браузер за https.
+        if request.is_secure or request.headers.get("X-Forwarded-Proto") == "https":
+            resp.headers.setdefault(
+                "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
+            )
+        return resp
 
 
 def _register_dev_cors(app: Flask) -> None:

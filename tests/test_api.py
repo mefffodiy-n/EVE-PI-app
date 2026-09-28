@@ -1408,3 +1408,18 @@ class TestErrorFormat:
 # LruResultCache/cache_key — чистая Python-логика без Flask/HTTP,
 # перенесены в tests/test_cache.py (28.09.2026, консолидация: этот
 # файл — для HTTP-слоя, см. его собственный докстринг вверху).
+
+
+class TestSecurityHeaders:
+    def test_headers_on_api_and_static(self, client):
+        for path in ("/api/meta", "/"):
+            h = client.get(path).headers
+            assert h["X-Content-Type-Options"] == "nosniff"
+            assert h["X-Frame-Options"] == "DENY"
+            assert "frame-ancestors 'none'" in h["Content-Security-Policy"]
+            assert "https://images.evetech.net" in h["Content-Security-Policy"]
+
+    def test_hsts_only_over_https(self, client):
+        assert "Strict-Transport-Security" not in client.get("/api/meta").headers
+        r = client.get("/api/meta", headers={"X-Forwarded-Proto": "https"})
+        assert "max-age=" in r.headers["Strict-Transport-Security"]
