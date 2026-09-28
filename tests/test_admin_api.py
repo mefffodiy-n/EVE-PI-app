@@ -70,6 +70,19 @@ class TestAccessControl:
         assert response.status_code == 200
         assert response.get_json()["status"] == "success"
 
+    def test_ping_reflects_access_for_frontend_button(self, client):
+        """
+        28.09.2026, по прямому запросу пользователя: web/index.html
+        дёргает этот маршрут один раз при загрузке, чтобы решить,
+        показывать ли кнопку «Admin-панель» рядом с «Добавить
+        персонажа» — не 500/сеть, а обычный 200/404.
+        """
+        assert client.get("/api/admin/ping").status_code == 404
+
+        _add_character(500001, "acct-admin")
+        _login_as(client, "acct-admin")
+        assert client.get("/api/admin/ping").status_code == 200
+
     def test_empty_allowlist_locks_everyone_out(self, client, monkeypatch):
         """PI_ADMIN_CHARACTER_IDS не задан — раздел не заведён никем."""
         monkeypatch.setattr(config, "ADMIN_CHARACTER_IDS", frozenset())
