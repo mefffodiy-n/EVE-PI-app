@@ -733,66 +733,89 @@ def _place_processing_tier(
     # `planets_missing = max(0, planets_needed - planets_placed)`
     # всегда получался нулём, даже когда P4 реально не хватило
     # персонажей на своё же значение planets_needed.
+    def take_for(assignment):
+        """Персонаж под одну площадку: двойной шаблон, при неудаче — одиночный."""
+        character = pool.take(
+            require_ccu5=assignment.template_count == 2,
+            # min_ccu (найдено пользователем): для
+            # переработки эта проверка вообще отсутствовала —
+            # персонаж с CCU 0-1 мог получить колонию, которая
+            # по игре ему физически не помещается (тот же пробел,
+            # что уже закрыт для добычи — min_ccu_level_that_fits
+            # ("miner_00", radius) чуть ниже). Растёт с радиусом
+            # площадки, поэтому берётся из САМОГО назначения
+            # (select_factory_sites() уже посчитал его для этой
+            # конкретной планеты), не константа тира.
+            min_ccu=assignment.min_ccu_level,
+            # Одиночный шаблон не нуждается в CCU V — как и у
+            # добычи (см. take() docstring), тратить на него
+            # прокачанного персонажа расточительно: только CCU V
+            # умеет ставить двойной шаблон, а его на плане может
+            # не хватить (найдено пользователем —
+            # без этого одиночные колонии одного тира выбирали
+            # CCU5-персонажей раньше двойных колоний другого
+            # тира, обработанного позже в этом же цикле).
+            prefer_least_skilled=assignment.template_count == 1,
+            planet=(assignment.candidate.system, assignment.candidate.planet),
+        )
+        template_key = assignment.template_key
+        template_count = assignment.template_count
+        fallback_min_ccu = None
+        if character is None and assignment.template_count == 2:
+            # Найдено пользователем на реальном плане
+            # (2 подходящих планеты в системе, много двойных
+            # назначений): max_double_templates выше ограничивает
+            # ОБЩЕЕ число свободных CCU5-слотов, но не то, что
+            # одному и тому же человеку нельзя дать ВТОРУЮ колонию
+            # на ТОЙ ЖЕ планете (pool.take(planet=...) уже
+            # исключает его сам). Если РАЗНЫХ CCU5-персонажей
+            # меньше, чем планет × назначений, эта планета не
+            # получит второго — но одиночный шаблон здесь всё
+            # равно физически помещается и годится любому
+            # подходящему персонажу. Пробуем его, прежде чем
+            # честно сдаться.
+            fallback_min_ccu = min_ccu_level_that_fits(
+                single_key, assignment.candidate.radius_km,
+                planet_type=assignment.candidate.planet_type,
+            ) or 0
+            character = pool.take(
+                min_ccu=fallback_min_ccu,
+                prefer_least_skilled=True,
+                planet=(assignment.candidate.system, assignment.candidate.planet),
+            )
+            if character is not None:
+                template_key = single_key
+                template_count = 1
+        return character, template_key, template_count, fallback_min_ccu
+
     placed_in_tier = 0
     for assignment in selection.assignments:
         for _ in range(assignment.template_count):
             if not queue:
                 break
             product = queue.pop(0)
-            character = pool.take(
-                require_ccu5=assignment.template_count == 2,
-                # min_ccu (найдено пользователем): для
-                # переработки эта проверка вообще отсутствовала —
-                # персонаж с CCU 0-1 мог получить колонию, которая
-                # по игре ему физически не помещается (тот же пробел,
-                # что уже закрыт для добычи — min_ccu_level_that_fits
-                # ("miner_00", radius) чуть ниже). Растёт с радиусом
-                # площадки, поэтому берётся из САМОГО назначения
-                # (select_factory_sites() уже посчитал его для этой
-                # конкретной планеты), не константа тира.
-                min_ccu=assignment.min_ccu_level,
-                # Одиночный шаблон не нуждается в CCU V — как и у
-                # добычи (см. take() docstring), тратить на него
-                # прокачанного персонажа расточительно: только CCU V
-                # умеет ставить двойной шаблон, а его на плане может
-                # не хватить (найдено пользователем —
-                # без этого одиночные колонии одного тира выбирали
-                # CCU5-персонажей раньше двойных колоний другого
-                # тира, обработанного позже в этом же цикле).
-                prefer_least_skilled=assignment.template_count == 1,
-                planet=(assignment.candidate.system, assignment.candidate.planet),
-            )
-            template_key = assignment.template_key
-            template_count = assignment.template_count
-            fallback_min_ccu = None
-            if character is None and assignment.template_count == 2:
-                # Найдено пользователем на реальном плане
-                # (2 подходящих планеты в системе, много двойных
-                # назначений): max_double_templates выше ограничивает
-                # ОБЩЕЕ число свободных CCU5-слотов, но не то, что
-                # одному и тому же человеку нельзя дать ВТОРУЮ колонию
-                # на ТОЙ ЖЕ планете (pool.take(planet=...) уже
-                # исключает его сам). Если РАЗНЫХ CCU5-персонажей
-                # меньше, чем планет × назначений, эта планета не
-                # получит второго — но одиночный шаблон здесь всё
-                # равно физически помещается и годится любому
-                # подходящему персонажу. Пробуем его, прежде чем
-                # честно сдаться.
-                fallback_min_ccu = min_ccu_level_that_fits(
-                    single_key, assignment.candidate.radius_km,
-                    planet_type=assignment.candidate.planet_type,
-                ) or 0
-                character = pool.take(
-                    min_ccu=fallback_min_ccu,
-                    prefer_least_skilled=True,
-                    planet=(assignment.candidate.system, assignment.candidate.planet),
-                )
-                if character is not None:
-                    template_key = single_key
-                    template_count = 1
-
+            site = assignment
+            character, template_key, template_count, fallback_min_ccu = take_for(assignment)
             if character is None:
-                needed_level = fallback_min_ccu if fallback_min_ccu is not None else assignment.min_ccu_level
+                # Персонаж не может держать вторую колонию на той же планете,
+                # поэтому на одной планете колоний не больше, чем персонажей.
+                # Площадки подобраны до персонажей и этого не знают: когда на
+                # выбранной планете свободные исполнители кончились, ищем ту же
+                # роль на другой подходящей планете выбора, а не теряем колонию
+                # (найдено пользователем: «занято 89 из 90»).
+                seen = {(assignment.candidate.system, assignment.candidate.planet)}
+                for alt in selection.assignments:
+                    key = (alt.candidate.system, alt.candidate.planet)
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    got = take_for(alt)
+                    if got[0] is not None:
+                        site = alt
+                        character, template_key, template_count, fallback_min_ccu = got
+                        break
+            if character is None:
+                needed_level = fallback_min_ccu if fallback_min_ccu is not None else site.min_ccu_level
                 result.staffing_gaps.append(
                     StaffingGap(
                         role="Переработка",
@@ -810,8 +833,8 @@ def _place_processing_tier(
             load = calculate_colony_load(
                 template_key,
                 character.command_center_upgrades_level,
-                assignment.candidate.radius_km,
-                planet_type=assignment.candidate.planet_type,
+                site.candidate.radius_km,
+                planet_type=site.candidate.planet_type,
             )
             result.rows.append(
                 PlanRow(
@@ -819,23 +842,23 @@ def _place_processing_tier(
                     char_id=character.character_id,
                     character=character.name,
                     role=f"Переработка {tier_key.replace('_', '/')}",
-                    planet=assignment.candidate.planet,
-                    system=assignment.candidate.system,
+                    planet=site.candidate.planet,
+                    system=site.candidate.system,
                     constellation="",
-                    cc_type=f"1x {assignment.candidate.planet_type} Command Center",
+                    cc_type=f"1x {site.candidate.planet_type} Command Center",
                     res_out=product,
                     res_in=", ".join(sorted(schematics[product].inputs))
                     if product in schematics
                     else None,
                     structures=f"{FACTORIES_PER_TEMPLATE[template_key]} фабрик",
                     structures_detail=_structures_detail(
-                        template_key, assignment.candidate.planet_type
+                        template_key, site.candidate.planet_type
                     ),
                     type_id=_type_ids().get(product),
                     template_key=template_key,
                     template_count=template_count,
-                    planet_type=assignment.candidate.planet_type,
-                    planet_radius_km=assignment.candidate.radius_km,
+                    planet_type=site.candidate.planet_type,
+                    planet_radius_km=site.candidate.radius_km,
                     cpu_percent=load.cpu_percent,
                     pg_percent=load.pg_percent,
                     **_breakdown(load),

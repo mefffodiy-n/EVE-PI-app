@@ -699,3 +699,26 @@ class TestMessagesI18n:
 
         for code, entry in _CATALOG.items():
             assert entry.get("ru") and entry.get("en"), code
+
+
+class TestLostColonyOnFullPlanet:
+    """
+    29.09.2026, найдено пользователем: «колоний занято 89 из 90». Площадки
+    подбираются до персонажей; персонаж не может держать вторую колонию на
+    той же планете, поэтому когда на выбранной планете свободные исполнители
+    кончались, колония терялась, хотя на другой подходящей планете места
+    хватало.
+    """
+
+    def test_colony_moves_to_another_planet_instead_of_being_lost(self):
+        book = PlanetBook(pd.DataFrame([
+            {"Constellation": "ALPHA", "System": "HOME", "Planet": str(k), "Type": "Barren",
+             RADIUS_COLUMN: 4000 + k * 100, "Carbon Compounds": 0, "Noble Metals": 0}
+            for k in (1, 2)
+        ]))
+        crew = [CharacterSlot(i, f"C{i}", 5, 1) for i in range(1, 4)]
+        result = _plan(book, crew, purchase_p1=True, lines_per_target=6)
+        assert len(result.rows) == 6
+        assert not result.staffing_gaps
+        pairs = [(r.char_id, r.system, r.planet) for r in result.rows]
+        assert len(pairs) == len(set(pairs))
