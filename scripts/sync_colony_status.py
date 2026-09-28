@@ -60,7 +60,7 @@ def _roman_to_int(text: str) -> int:
 def planet_index(planet_name: str, system_name: str) -> int:
     """
     Номер планеты из её имени: «Tanoo IV» при системе «Tanoo» → 4.
-    Совпадает с колонкой Planet в planet_industry.csv, по которой
+    Совпадает с `Planet.planet_number` в справочнике планет, по которому
     фронтенд сопоставляет колонию со строкой плана.
     """
     if system_name and planet_name.startswith(system_name):
@@ -166,8 +166,9 @@ def real_colony_load(
     НАСТОЯЩИХ данных, а не оценка: состав структур и число линков ESI
     отдаёт напрямую в ответе на этот же запрос, число голов экстрактора —
     из extractor_details тех же пинов, а радиус планеты (единственное,
-    чего ESI не даёт) берём из data/planet_industry.csv — того же файла,
-    что использует сам расчётный план (domain/planets.py).
+    чего ESI не даёт) берём через `domain.planets.load_planets()` — тот
+    же справочник (с 21.09.2026 — БД `regions`/`planets`, Фаза 1
+    мультирегиональности), что использует сам расчётный план.
 
     Отдаёт и проценты, и абсолютные числа (cpu_used/cpu_capacity и т.п.,
     tf/MW) — панель колонии в игре показывает оба, см. скриншот

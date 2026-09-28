@@ -226,7 +226,7 @@ def calculate_real_colony_load(
     не обязан совпадать ни с одним из 68 шаблонов. Все аргументы —
     настоящие данные (см. scripts/sync_colony_status.py::real_colony_load()):
     structures/link_count/extractor_head_count/ccu_level — из самой ESI,
-    planet_radius_km — из data/planet_industry.csv (domain/planets.py).
+    planet_radius_km — из справочника планет (domain/planets.py).
 
     Command Center Upgrades сюда приходит уровнем командного центра
     КОЛОНИИ (upgrade_level из ESI), а не максимальным скиллом персонажа:

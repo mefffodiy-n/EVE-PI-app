@@ -523,6 +523,40 @@ class TestPlansIsolation:
         with_char_again = client.post("/api/calculate", json=payload).get_json()
         assert "Нет персонажей" not in (with_char_again.get("warning") or "")
 
+    def test_calculate_cache_expires_after_ttl(self, client, seeded_characters, monkeypatch):
+        """
+        НАЙДЕНО 28.09.2026 (внешняя рецензия кода): `plan_cache.clear()`
+        не вызывалась НИГДЕ — план, посчитанный на старых скиллах
+        персонажа, отдавался бы из кэша сколь угодно долго после
+        `sync_character_skills`. Исправлено TTL (`api/cache.py::
+        PLAN_CACHE_TTL_SECONDS`) — здесь проверяется, что вторая
+        идентичная просьба ПОСЛЕ истечения TTL реально пересчитывается
+        (`misses` растёт дважды), а не берётся из кэша (`hits`).
+        """
+        import time
+
+        import api.cache as cache_module
+
+        clock = [1000.0]
+        monkeypatch.setattr(time, "monotonic", lambda: clock[0])
+        cache_module.plan_cache.clear()
+
+        payload = {
+            "constellations": ["ALPHA"], "factory_sys": "HOME",
+            "target_products": ["Biocells"],
+        }
+        # hits/misses — счётчики на весь процесс, не сбрасываются
+        # clear() и растут от других тестов в этом же прогоне — сравниваем
+        # прирост, не абсолютные числа.
+        before = client.get("/api/cache-stats").get_json()["plan_cache"]
+        client.post("/api/calculate", json=payload)
+        clock[0] += cache_module.PLAN_CACHE_TTL_SECONDS + 1
+        client.post("/api/calculate", json=payload)
+        after = client.get("/api/cache-stats").get_json()["plan_cache"]
+
+        assert after["hits"] - before["hits"] == 0
+        assert after["misses"] - before["misses"] == 2
+
 
 class TestExport:
     def test_export_rejects_empty_plan(self, client):
@@ -1368,23 +1402,6 @@ class TestErrorFormat:
         assert response.status_code == 404
         assert response.get_json()["status"] == "error"
 
-
-class TestCache:
-    def test_lru_cache_evicts_and_counts(self):
-        from api.cache import LruResultCache
-
-        cache = LruResultCache(maxsize=2)
-        cache.get_or_compute("a", lambda: 1)
-        cache.get_or_compute("b", lambda: 2)
-        cache.get_or_compute("a", lambda: 99)      # попадание, значение не пересчитывается
-        cache.get_or_compute("c", lambda: 3)       # вытесняет "b" как самый давний
-
-        assert cache.stats()["size"] == 2
-        assert cache.hits == 1
-        assert cache.get_or_compute("a", lambda: 99) == 1
-
-    def test_cache_key_is_order_independent_for_same_data(self):
-        from api.cache import cache_key
-
-        assert cache_key(["a", "b"], "x") == cache_key(["a", "b"], "x")
-        assert cache_key(["a", "b"], "x") != cache_key(["b", "a"], "x")
+# LruResultCache/cache_key — чистая Python-логика без Flask/HTTP,
+# перенесены в tests/test_cache.py (28.09.2026, консолидация: этот
+# файл — для HTTP-слоя, см. его собственный докстринг вверху).

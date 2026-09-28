@@ -36,8 +36,13 @@ def check_data_files() -> bool:
     for name, required, hint in [
         ("recipes.json", True, "перенесите из старого репозитория"),
         ("pi_reference.json", True, "входит в скелет проекта"),
-        ("planet_industry.csv", True, "скопируйте из корня старого репозитория, "
-                                      "переименовав без пробела"),
+        # Не required с 21.09.2026 (Фаза 1 мультирегиональности): расчёт
+        # читает справочник планет из БД (regions/planets), не из этого
+        # файла — он остаётся только источником истории для разового
+        # scripts/migrate_planets_csv_to_db.py, само наличие данных
+        # проверяется ниже, в check_planets().
+        ("planet_industry.csv", False, "нужен только для разового переноса "
+                                       "в БД, scripts.migrate_planets_csv_to_db"),
         ("schematics.json", False, "создайте: python -m scripts.extract_schematics --write"),
     ]:
         path = ROOT / "data" / name
@@ -127,9 +132,9 @@ def check_planets() -> bool:
 
 def check_planet_resources() -> bool:
     """
-    Сверить planet_industry.csv с раскладкой сырья по типам планет.
+    Сверить справочник планет (БД) с раскладкой сырья по типам планет.
 
-    Источник раскладки — eve-webtools.com. Если в CSV у планеты указана
+    Источник раскладки — eve-webtools.com. Если у планеты указана
     плотность сырья, которого на этом типе планет не бывает, это ошибка
     в данных, и план по ней будет неверным.
     """
