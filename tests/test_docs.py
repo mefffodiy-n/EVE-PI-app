@@ -21,6 +21,8 @@ from pathlib import Path
 
 import pytest
 
+from infra.frontend import read_frontend_source
+
 from domain.features import FEATURES
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -40,7 +42,7 @@ def _frontend_text() -> str:
         path = ROOT / name
         if not path.is_file():
             continue
-        text = path.read_text(encoding="utf-8")
+        text = read_frontend_source(path.parent)
         seen.append(name)
         if "const DOC={" in text:
             return text

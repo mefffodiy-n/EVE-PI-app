@@ -38,6 +38,8 @@ from pathlib import Path
 import esprima
 import pytest
 
+from infra.frontend import read_frontend_source
+
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND_CANDIDATES = ("web/index.html", "web/app.html")
 
@@ -53,7 +55,7 @@ def _frontend() -> tuple[str, str]:
         path = ROOT / name
         if not path.is_file():
             continue
-        text = path.read_text(encoding="utf-8")
+        text = read_frontend_source(path.parent)
         seen.append(name)
         if "<style>" in text and "const DOC={" in text:
             return name, text

@@ -1,0 +1,1091 @@
+/* Шрифты — самостоятельный хостинг, не Google Fonts (docs/ROADMAP.md, Фаза 9,
+   16.09.2026, разбор github.com/Alexmidrus/EveGAS_calc): раньше здесь был
+   <link> на fonts.googleapis.com — внешний CDN-запрос на каждый визит.
+   Файлы (те же 4 юникод-диапазона на каждое семейство — latin, latin-ext,
+   cyrillic, cyrillic-ext; переменный вес 100-900/100-800 одним файлом на
+   диапазон, не по файлу на насечку) сняты с самого Google Fonts (тот же
+   источник, что был у <link>) и лежат в web/fonts/, отдаются тем же
+   web_files() маршрутом, что и остальной web/. IBM Plex Sans/Mono и Saira
+   Condensed заменены на Inter/JetBrains Mono целиком — Saira Condensed
+   нигде не остаётся, решение полной замены визуального характера
+   редизайна Фазы 8 принято пользователем осознанно, не только ради
+   самохостинга. */
+@font-face { font-family:'Inter'; font-style:normal; font-weight:100 900; font-display:swap;
+  src:url('fonts/inter-latin.woff2') format('woff2');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family:'Inter'; font-style:normal; font-weight:100 900; font-display:swap;
+  src:url('fonts/inter-latin-ext.woff2') format('woff2');
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family:'Inter'; font-style:normal; font-weight:100 900; font-display:swap;
+  src:url('fonts/inter-cyrillic.woff2') format('woff2');
+  unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116; }
+@font-face { font-family:'Inter'; font-style:normal; font-weight:100 900; font-display:swap;
+  src:url('fonts/inter-cyrillic-ext.woff2') format('woff2');
+  unicode-range:U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F; }
+@font-face { font-family:'JetBrains Mono'; font-style:normal; font-weight:100 800; font-display:swap;
+  src:url('fonts/jetbrains-mono-latin.woff2') format('woff2');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family:'JetBrains Mono'; font-style:normal; font-weight:100 800; font-display:swap;
+  src:url('fonts/jetbrains-mono-latin-ext.woff2') format('woff2');
+  unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF; }
+@font-face { font-family:'JetBrains Mono'; font-style:normal; font-weight:100 800; font-display:swap;
+  src:url('fonts/jetbrains-mono-cyrillic.woff2') format('woff2');
+  unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116; }
+@font-face { font-family:'JetBrains Mono'; font-style:normal; font-weight:100 800; font-display:swap;
+  src:url('fonts/jetbrains-mono-cyrillic-ext.woff2') format('woff2');
+  unicode-range:U+0460-052F,U+1C80-1C8A,U+20B4,U+2DE0-2DFF,U+A640-A69F,U+FE2E-FE2F; }
+/* ═══ Общие токены ═══════════════════════════════════════════════════
+   Две вкладки говорят на разных визуальных языках намеренно:
+   дашборд повторяет игровое окно Planetary Industry, чтобы взгляд
+   переносился между игрой и планировщиком без переучивания;
+   настройки — плотная таблица решений, где важны числа, а не иконки. */
+:root {
+  /* Фаза 8 (docs/ROADMAP.md) — палитра из макета Claude Design: тёплая
+     «кузнечная» тема вместо прежней сине-серой. Имена переменных не
+     менялись (--amber остался --amber, хоть в макете он называется
+     --gold) — так вся палитра меняется одним диффом здесь, без правки
+     каждого места использования по всему файлу. */
+  --void:#0a0805; --hull:#12100a; --seam:#2c2416;
+  /* Подсветка при наведении и активном состоянии. Была захардкожена
+     тёмным литералом в :hover/.on — в светлой теме получался чёрный
+     фон под курсором и чёрные кнопки вида. */
+  --hover:#1c1810;
+  /* Утопленные поверхности: панели колонии, полоски-метры, диски орбов,
+     ячейки входов. Были тёмными литералами — в светлой теме панель
+     колонии оставалась чёрной. */
+  --inset:#0d0b07; --orb-track:#2c2416;
+  --dim:#8b7f66; --read:#ddd2bb; --bright:#fbf4e6;
+  --amber:#e8a33d; --amber-hi:#ffca74; --flux:#5ba8c9; --forge:#f0871e; --alarm:#d6553f; --calm:#5aa87a;
+  /* Цвета тиров продукции: сырьё холоднее, готовое изделие теплее.
+     Ряд читается как шкала передела, а не как случайный набор. */
+  --t-p1:#5c8fb8; --t-p2:#4f9d8c; --t-p3:#a07cc4; --t-p4:#d4923c;
+  --t-p1-bg:rgba(92,143,184,.14); --t-p2-bg:rgba(79,157,140,.14);
+  --t-p3-bg:rgba(160,124,196,.14); --t-p4-bg:rgba(212,146,60,.14);
+  --accent-bg:rgba(232,163,61,.07); --glow:rgba(232,163,61,.18);
+  /* Цвета колец повторяют игровые: синий — инфраструктура,
+     бирюзовый — экстрактор, оранжевый — производство. */
+  --ring-infra:#3a9fd8; --ring-extract:#2fb89a; --ring-basic:#c8763a; --ring-adv:#d8a63c;
+  /* Тень скоса для объёма букв (.brand-title, 20.09.2026) — не просто
+     rgba(0,0,0,..): на почти чёрном фоне тёмной темы (--void) чёрная
+     тень сливается с фоном и объём не читается (найдено пользователем
+     по скриншоту — светлая тема выглядела заметно объёмнее). --seam
+     здесь заметно СВЕТЛЕЕ --void (тот же контраст, на котором уже
+     держатся все границы панелей в тёмной теме), поэтому как тень
+     смещённой грани она видна на фоне, а не тонет в нём. */
+  --bevel-shadow:var(--seam);
+}
+/* Светлая тема. Меняются только переменные — правил дублировать
+   не нужно. */
+/* Светлая тема тёплая, а не серая: холодный белый в плотной таблице
+   утомляет и делает акценты крикливыми. Тёплая подложка приглушает
+   контраст, и те же цвета читаются спокойнее.
+   Значение --amber взято не из собственного CSS макета (там
+   body.light задаёт --gold:#9a6b12) — на практике этот тон оказался
+   заметно темнее и тусклее, чем в реально отрисованном макете (сверено
+   пользователем по скриншоту): расхождение внутри самого макета между
+   объявленными переменными и тем, что фактически на экране. Взяли
+   более яркое значение вручную, ориентируясь на скриншот. */
+body.light {
+  --void:#f4f1ea; --hull:#faf8f3; --seam:#d8cdb4;
+  --hover:#ece3d0;
+  --inset:#efe8d9; --orb-track:#d8cdb4;
+  --dim:#6b6459; --read:#2a2620; --bright:#14110c;
+  --amber:#d4870f; --amber-hi:#a8690c; --flux:#1d6fa8; --forge:#a05f1c; --alarm:#b03e36; --calm:#2c7358;
+  --accent-bg:rgba(212,135,15,.08); --glow:rgba(212,135,15,.14);
+  --ring-infra:#1d7fb8; --ring-extract:#1a8c72; --ring-basic:#a85c26; --ring-adv:#a87d20;
+  --t-p1:#2f6a92; --t-p2:#1f7a68; --t-p3:#7048a0; --t-p4:#a06a12;
+  --t-p1-bg:rgba(47,106,146,.10); --t-p2-bg:rgba(31,122,104,.10);
+  --t-p3-bg:rgba(112,72,160,.10); --t-p4-bg:rgba(160,106,18,.10);
+  /* Здесь фон уже светлый — обычная полупрозрачная чёрная тень отлично
+     читается (в отличие от тёмной темы, см. :root выше), --seam
+     светлой темы (#d8cdb4) для этой роли не подошёл бы вовсе. */
+  --bevel-shadow:rgba(0,0,0,.45);
+}
+
+/* Смена темы переключает переменные на body, из-за чего браузер
+   пересчитывает стиль всего поддерева. Каждый элемент с transition
+   на цвете запустил бы свою анимацию — на длинном плане это сотни
+   одновременных анимаций. На время переключения переходы глушим. */
+.theme-switching *, .theme-switching *::before, .theme-switching *::after {
+  transition:none !important; animation:none !important;
+}
+
+* { box-sizing:border-box; }
+/* 500px — минимальная поддерживаемая ширина окна: приложение не
+   адаптируется под мобильные экраны (решение пользователя), ниже этой
+   ширины страница целиком прокручивается по горизонтали, а не пытается
+   сжаться дальше — так честнее, чем ломать вёрстку в узкой полосе. */
+html { min-width:500px; }
+body { margin:0; background:var(--void); color:var(--read); min-width:500px;
+       font-family:'Inter',system-ui,sans-serif; font-size:13px; line-height:1.45; }
+.num { font-family:'JetBrains Mono',monospace; font-variant-numeric:tabular-nums; }
+button { font-family:inherit; }
+
+/* ═══ Шапка приложения ═══════════════════════════════════════════ */
+/* Панель переносится на вторую строку, а не прокручивается: скрытая
+   за краем кнопка — это кнопка, которой нет. На узких экранах часть
+   индикаторов убирается (см. медиазапросы внизу) — они справочные,
+   в отличие от кнопок. */
+/* Панель закреплена сверху: индикаторы и кнопки нужны в любой момент
+   прокрутки, а план бывает длиной в десятки колоний. Переносится на
+   вторую строку, а не прокручивается: скрытая за краем кнопка — это
+   кнопка, которой нет. */
+.topbar { position:sticky; top:0; z-index:60;
+          display:flex; align-items:center; gap:4px 6px; padding:6px 14px; min-height:46px;
+          border-bottom:1px solid var(--seam); background:var(--hull); flex-wrap:wrap; }
+.topbar > * { flex:0 0 auto; }
+/* Шаг 4 (docs/ROADMAP.md): лого-аватар + заголовок/подпись в столбик, как в
+   макете Claude Design — вместо однострочного «PI Director текст». */
+.brand { display:flex; align-items:center; gap:11px; margin-right:20px; }
+/* Аватар уже был со статичным свечением (drop-shadow, --glow) — здесь
+   оно "дышит": плавная пульсация яркости/радиуса, как индикатор
+   работающего реактора, а не мигающая лампочка (медленно, малая
+   амплитуда). Цвета берутся из --glow/--amber-hi, которые уже разные
+   для тёмной/светлой темы — отдельного правила на тему не нужно
+   (20.09.2026, по прямому запросу пользователя — эффекты для блока
+   названия приложения, проверено в обеих темах). */
+.brand-avatar { width:30px; height:30px; border-radius:50%; flex:0 0 auto;
+                animation:brand-pulse 3.2s ease-in-out infinite; }
+@keyframes brand-pulse {
+  0%, 100% { filter:drop-shadow(0 0 5px var(--glow)); }
+  50%      { filter:drop-shadow(0 0 11px var(--amber-hi)); }
+}
+.brand-text { display:flex; flex-direction:column; line-height:1.15; gap:2px; }
+/* Смешанный регистр («PI Director», не «PI DIRECTOR») — по референсу
+   стиля «GasLens BY EVECRAFT» (20.09.2026, найдено пользователем по
+   скриншоту): капсом идёт только подзаголовок-тег бренда (.brand
+   small ниже), заголовок — как набран. Статичное (не пульсирующее)
+   тёплое свечение текста — читаемость важнее в заголовке, чем на
+   декоративном аватаре, поэтому анимация только у одного элемента
+   блока, не у обоих одновременно (иначе рябит). */
+/* Градиентный "перелив" по тексту — узкий блик, бегущий вдоль букв от
+   первой до последней и обратно за один цикл, не мягкая заливка всего
+   слова (20.09.2026, по прямому запросу пользователя — уточнение
+   после первой, слишком широкой версии). background-size значительно
+   шире контейнера (420%) — при таком отношении яркая полоса
+   пропорционально узкая и заметно ПРОХОДИТ через буквы одну за другой,
+   а не подсвечивает середину слова целиком. Keyframe 0%→50%→100%
+   двигает background-position через весь диапазон (0%..100%) и
+   обратно — ровно "от первой до последней и обратно" за 9с (замедлено
+   по прямому запросу пользователя с исходных 5.2с), не
+   рывком в одну сторону. text-shadow остаётся поверх — держит
+   свечение независимо от заливки текста (background-clip на shadow
+   не влияет). */
+/* Объём букв (20.09.2026, по прямому запросу пользователя) — скос, не
+   просто более тёмная копия текста: светлая грань сверху-слева
+   (--amber-hi, будто ловит свет) + тень снизу-справа (--bevel-shadow,
+   см. :root/body.light выше — просто rgba(0,0,0,..) в тёмной теме
+   сливался с почти чёрным --void, объём не читался вовсе; найдено
+   пользователем по скриншоту при сравнении тем). Ambient-свечение
+   (--glow) осталось третьим слоем поверх — глубина и лёгкое сияние не
+   взаимоисключают друг друга, text-shadow принимает сколько угодно
+   слоёв через запятую. */
+.brand-title { font-family:'Inter',sans-serif; font-weight:700; font-size:16px;
+               letter-spacing:.02em;
+               text-shadow:-1px -1px 0 var(--amber-hi), 1px 1px 1px var(--bevel-shadow), 0 0 12px var(--glow);
+               background:linear-gradient(90deg, var(--bright) 42%, var(--amber-hi) 50%, var(--bright) 58%);
+               background-size:420% 100%; -webkit-background-clip:text; background-clip:text;
+               color:transparent; animation:brand-shimmer 9s ease-in-out infinite; }
+@keyframes brand-shimmer {
+  0%   { background-position:100% 0; }
+  50%  { background-position:0% 0; }
+  100% { background-position:100% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .brand-avatar { animation:none; filter:drop-shadow(0 0 6px var(--glow)); }
+  .brand-title { animation:none; background-position:50% 0; }
+}
+.brand small { color:var(--dim); font-weight:700; font-size:10px; letter-spacing:.1em;
+               text-transform:uppercase; }
+.tab { white-space:nowrap; background:none; border:none; border-bottom:2px solid transparent; color:var(--dim);
+       padding:12px 14px; cursor:pointer; font-size:13px;
+       font-family:'Inter',sans-serif; font-weight:600; letter-spacing:.14em; text-transform:uppercase; }
+.tab:hover { color:var(--read); }
+.tab.on { color:var(--bright); border-bottom-color:var(--amber); }
+.topbar .right { margin-left:auto; display:flex; gap:6px; align-items:center; }
+
+/* Полоски статуса: разделены рамками, как приборные показания.
+   Каждая отвечает на один вопрос и не требует пояснений. */
+.chip { display:flex; align-items:center; gap:7px; padding:5px 11px;
+        border:1px solid var(--seam); color:var(--dim); font-size:12px;
+        font-family:'JetBrains Mono',monospace; white-space:nowrap; }
+.chip b { color:var(--read); font-weight:500; }
+.chip .dot { width:7px; height:7px; border-radius:50%; background:var(--calm); }
+.chip .dot.off { background:var(--dim); }
+.chip .dot.stale { background:var(--amber); }
+
+.hbtn { background:none; border:1px solid var(--seam); color:var(--read);
+        padding:5px 12px; cursor:pointer; font-size:12px; }
+.hbtn:hover { border-color:var(--flux); color:var(--flux); }
+.langs { display:flex; border:1px solid var(--seam); }
+.langs button { background:none; border:none; color:var(--dim); padding:5px 10px;
+                cursor:pointer; font-size:12px; font-family:'JetBrains Mono',monospace; }
+.langs button.on { background:var(--seam); color:var(--bright); }
+.icon-btn { width:30px; height:28px; display:grid; place-items:center; background:none;
+            border:1px solid var(--seam); color:var(--dim); cursor:pointer; }
+.icon-btn:hover { color:var(--amber); border-color:var(--amber); }
+.icon-btn svg { width:15px; height:15px; }
+.sso { background:none; border:1px solid var(--seam); color:var(--flux);
+       padding:5px 14px; cursor:pointer; font-size:12px; }
+.sso:hover { background:rgba(79,156,214,.1); }
+
+.page { display:none; }
+.page.on { display:block; }
+
+/* ═══ Панель инструментов дашборда ═══════════════════════════════ */
+/* Панель вида прилипает под шапкой: переключатели и экспорт тоже нужны
+   при прокрутке. Отступ вычисляется скриптом — высота шапки зависит от
+   того, перенеслась ли она на вторую строку. */
+.tools { position:sticky; top:var(--topbar-h,46px); z-index:55; background:var(--void);
+         display:flex; align-items:center; gap:2px; padding:8px 14px; flex-wrap:wrap;
+         border-bottom:1px solid var(--seam); }
+/* jumpTo() (см. JS) целится в верх этих блоков — без отступа заголовок
+   оказывался под обеими липкими панелями (.topbar + .tools), см. их
+   измерение в measureTopbar()/measureTools(). */
+#pocoProfit, #dashBody, #coloniesProfit, #colonies, #shopping { scroll-margin-top: calc(var(--topbar-h,46px) + var(--tools-h,44px)); }
+.tool { width:30px; height:26px; display:grid; place-items:center; cursor:pointer;
+        background:none; border:1px solid transparent; color:var(--dim); border-radius:3px; }
+.tool:hover { color:var(--read); background:var(--hover); }
+/* Активный вид дашборда — золотой акцент (как в макете, vbtn()),
+   а не нейтральный bright+seam из-под старой темы. */
+.tool.on { color:var(--amber); border-color:var(--amber); background:var(--hover); }
+.tool svg { width:15px; height:15px; }
+.counts { margin-left:auto; color:var(--dim); font-size:12px; }
+.counts b { color:var(--read); font-weight:500; }
+.counts .idle { color:var(--amber); }
+
+.menu { position:relative; }
+.menu-pop { position:absolute; top:30px; left:0; z-index:20; min-width:230px;
+            background:var(--inset); border:1px solid var(--seam); padding:4px 0; display:none; }
+.menu.open .menu-pop { display:block; }
+.menu-pop button { display:flex; gap:8px; width:100%; text-align:left; background:none;
+                   border:none; color:var(--read); padding:6px 12px; cursor:pointer; font-size:13px; }
+.menu-pop button:hover { background:var(--hover); }
+.menu-pop button .mark { width:12px; color:var(--amber); }
+
+/* ═══ Круг колонии: планета, кольцо, время, портрет ══════════════ */
+.orb { position:relative; width:var(--orb,58px); height:var(--orb,58px); flex:0 0 auto; cursor:pointer; }
+.orb .disc { position:absolute; inset:5px; border-radius:50%; overflow:hidden;
+             background:var(--inset); display:grid; place-items:center; }
+/* У факта из игры («Мои колонии в игре», см. orb()) кольцо — не CPU/PG
+   (тех честно нет), а заполненность причала; отступ чуть меньше, чем у
+   плана, — тоньше кольцо, крупнее текстура планеты, как в игровом обзоре. */
+.orb.real .disc { inset:3px; }
+.orb .disc img { width:100%; height:100%; object-fit:cover; }
+.orb .cargo { position:absolute; inset:0; margin:auto; width:52%; height:52%;
+              filter:drop-shadow(0 1px 2px rgba(0,0,0,.8)); }
+/* «Требует внимания» (программа кончилась или причал забит) — вместо
+   иконки ресурса красный знак запрета. Это UI-состояние, не тип предмета
+   из игры, поэтому рисуется как SVG, а не берётся с images.evetech.net. */
+.orb .cargo.alert { fill:none; stroke:var(--alarm); stroke-width:1.6;
+                     filter:drop-shadow(0 1px 2px rgba(0,0,0,.8)); }
+.orb svg.ring { position:absolute; inset:0; transform:rotate(-90deg); }
+.orb .ring circle { fill:none; stroke-width:2.5; }
+.orb .ring .track { stroke:var(--orb-track); }
+/* Причал забит — кольцо мигает тревожным красным вместо ровного синего
+   (тот же смысл, что .badge.hot у истекающего таймера: сама по себе
+   заполненность не мигает, только полная). */
+.orb .ring.full circle:not(.track) { animation:ring-blink 1.1s ease-in-out infinite; }
+@keyframes ring-blink { 0%,100%{opacity:1} 50%{opacity:.25} }
+/* Стрелки направлений медленно проступают поверх планеты — так в игре
+   обозначается, что по колонии можно кликнуть. Чисто декоративный
+   элемент, никаких данных не несёт. */
+.orb .arrows { position:absolute; inset:12%; opacity:0; pointer-events:none;
+               animation:breathe 5s ease-in-out infinite; }
+.orb .arrows svg { width:100%; height:100%; fill:none; stroke:var(--read); stroke-width:1.4; }
+@keyframes breathe { 0%,100%{opacity:0} 45%,55%{opacity:.55} }
+.orb:hover .arrows { opacity:.75; animation:none; }
+
+/* Внутреннее кольцо — ход производственного цикла. */
+.orb .ring .cycle { stroke:var(--bright); stroke-width:2; }
+.orb .ring .cycle.none { stroke:var(--orb-track); stroke-dasharray:2 4; }
+/* Фабрика простаивает (цикл кончился, новый не начался) — то же белое
+   кольцо, что и в работе, но целиком и мигает, а не крутится дугой. */
+.orb .ring .cycle.idle { animation:cycle-blink 1.1s ease-in-out infinite; }
+@keyframes cycle-blink { 0%,100%{opacity:1} 50%{opacity:.2} }
+.orb.busy .outer { filter:drop-shadow(0 0 3px currentColor); }
+
+.orb .badge { position:absolute; top:-3px; left:-2px; z-index:3;
+              background:var(--inset); border:1px solid var(--seam); border-radius:3px;
+              padding:0 4px; font-size:10px; line-height:14px;
+              font-family:'JetBrains Mono',monospace; color:var(--amber); }
+.orb .badge.hot { color:var(--alarm); border-color:var(--alarm); }
+/* Дефицит добычи (isColonyDeficient) — отдельная категория от «требует
+   внимания» (.attn/noEntry): не гасит иконку ресурса, только маленькая
+   янтарная точка в свободном углу — колония всё ещё работает, просто
+   ниже порога DEFICIT_UNITS_PER_HOUR. */
+.orb .def-mark { position:absolute; top:-2px; right:-2px; z-index:4;
+                  width:10px; height:10px; border-radius:50%;
+                  background:var(--amber); border:1px solid var(--inset); }
+/* Портрет персонажа — images.evetech.net, публичный CDN CCP, без токена
+   (тот же принцип, что ICON() для иконок типов). Инициалы лежат под
+   картинкой всегда: у dev-заглушек портрета в игре не существует,
+   картинка получает 404 и снимает себя через onerror, снизу остаются
+   инициалы — тот самый пустой серый круг, который раньше был
+   единственным видом (Фаза 3 подключила реальных персонажей). */
+.orb .pilot { position:absolute; right:-2px; bottom:-2px; width:40%; height:40%;
+              border-radius:50%; border:1px solid var(--seam); background:var(--seam);
+              display:grid; place-items:center; font-size:9px; font-weight:600;
+              color:var(--dim); letter-spacing:-.02em; overflow:hidden; }
+.orb .pilot img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+
+/* Подсказка при наведении — то же самое, что в игровом обзоре колоний:
+   что добывается/производится, заполненность причала, планета. Центр
+   подсказки — сама .orb (50%), --tip-shift донастраивает её вбок, когда
+   центрирование вывело бы подсказку за край экрана (см. fixTipOverflow
+   в JS, docs/ROADMAP.md, Фаза 9/10, 16.09.2026 — крайние левые круги в
+   сетке «Мои колонии» обрезались о левый край, пользователь нашёл). */
+.orb .tip { position:absolute; left:50%; bottom:calc(100% + 8px);
+            transform:translateX(calc(-50% + var(--tip-shift,0px))) translateY(4px);
+            width:170px; background:var(--hull); border:1px solid var(--seam); border-radius:4px;
+            padding:8px 10px; font-size:11px; color:var(--read); text-align:left; z-index:30;
+            opacity:0; visibility:hidden; pointer-events:none; transition:opacity .12s, transform .12s;
+            box-shadow:0 4px 16px rgba(0,0,0,.35); }
+.orb:hover .tip, .orb:focus-within .tip { opacity:1; visibility:visible;
+            transform:translateX(calc(-50% + var(--tip-shift,0px))) translateY(0); }
+.tip-head { color:var(--alarm); font-weight:600; text-transform:uppercase; font-size:10px;
+            letter-spacing:.04em; margin-bottom:6px; }
+.tip-row { display:flex; gap:6px; align-items:center; margin-bottom:6px; }
+.tip-row img { width:20px; height:20px; flex:0 0 auto; }
+.tip-label { color:var(--dim); font-size:10px; text-transform:uppercase; letter-spacing:.03em; }
+.tip-bar { height:4px; background:var(--orb-track); border-radius:2px; overflow:hidden; margin:3px 0; }
+.tip-bar i { display:block; height:100%; background:var(--ring-infra); }
+.tip-meta { color:var(--dim); font-family:'JetBrains Mono',monospace; font-size:10px; }
+.tip-planet { margin-top:4px; color:var(--bright); font-weight:500; }
+
+/* Свободный слот планеты у персонажа (вид «Список по персонажам») —
+   planet_slots из /api/characters (Interplanetary Consolidation + 1,
+   та же формула, что и в самом расчёте, см. CLAUDE.md) минус реально
+   построенные колонии. Пунктирный круг того же размера, что и .orb,
+   без содержимого, только на характерах, для которых реально известны
+   planet_slots — иначе честно ничего не дорисовываем. */
+.orb-slot { width:52px; height:52px; border-radius:50%; border:1px dashed var(--seam);
+            display:grid; place-items:center; color:var(--dim); font-size:20px; flex:0 0 auto; }
+
+/* ═══ Вид «Детали»: строка на колонию ═══════════════════════════ */
+.colony { border-bottom:1px solid var(--seam); padding:12px 14px;
+          content-visibility:auto; contain-intrinsic-size:auto 190px; }
+.colony:hover { background:var(--hover); }
+.colony-head { display:flex; align-items:center; gap:10px; }
+.pilot-lg { width:30px; height:30px; border-radius:50%; background:var(--seam); flex:0 0 auto;
+            display:grid; place-items:center; font-size:11px; font-weight:600; color:var(--dim);
+            position:relative; overflow:hidden; }
+.pilot-lg img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+.pilot-name { color:var(--bright); font-weight:500; }
+.pilot-name .skills { color:var(--dim); font-weight:400; font-size:11px;
+  font-family:'JetBrains Mono',monospace; margin-left:8px; }
+.sub .synced { color:var(--calm); border:1px solid var(--calm); border-radius:3px;
+  padding:0 5px; font-size:10px; text-transform:uppercase; letter-spacing:.04em;
+  white-space:nowrap; }
+.extractor-left { font-family:'JetBrains Mono',monospace; color:var(--calm); }
+.extractor-left.soon { color:var(--amber); }
+.extractor-left.over { color:var(--alarm); font-weight:600; }
+.sub { color:var(--dim); font-size:12px; display:flex; gap:8px; align-items:center; margin-top:1px; }
+.sysbadge { border-radius:3px; padding:1px 6px;
+            font-family:'JetBrains Mono',monospace; font-size:11px; }
+.sec { font-family:'JetBrains Mono',monospace; font-size:11px; padding:1px 5px; border-radius:3px; }
+.colony-head .tail { margin-left:auto; text-align:right; }
+/* Шаг 6 (docs/ROADMAP.md): подпись хвостовой метки — Saira Condensed
+   заглавными, как заголовки разделов из Шага 3, вместо обычного текста. */
+.tail .lbl { color:var(--dim); font-size:10px; font-family:'Inter',sans-serif;
+             letter-spacing:.12em; text-transform:uppercase; }
+.tail .val { font-family:'JetBrains Mono',monospace; color:var(--read); }
+.tail .val.hot { color:var(--alarm); }
+.details-btn { margin-left:12px; background:none; border:1px solid var(--seam); color:var(--amber);
+               padding:5px 12px; cursor:pointer; font-size:11px; border-radius:2px;
+               font-family:'Inter',sans-serif; font-weight:600; letter-spacing:.1em; text-transform:uppercase; }
+.details-btn:hover { background:var(--accent-bg); border-color:var(--amber); }
+.strip { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; padding-left:2px; }
+
+/* ═══ Вид «Список»: строка на персонажа ═════════════════════════ */
+/* Без content-visibility:auto — оно тянет за собой paint containment
+   (элемент обрезает всё, что выходит за его рамку, даже когда виден),
+   и подсказка .orb .tip, которая должна всплывать НАД строкой, обрезалась
+   бы по границе .pilot-row. Строк на персонажа немного (по одной на
+   персонажа с колониями в игре), в отличие от карточек «Деталей» —
+   экономия на рендере не так важна, как рабочая подсказка. */
+.pilot-row { display:flex; align-items:center; gap:12px; padding:10px 14px;
+             border-bottom:1px solid var(--seam); }
+.pilot-row .who { width:52px; flex:0 0 auto; }
+.pilot-row .orbs { display:flex; gap:10px; flex-wrap:wrap; }
+
+/* ═══ Вид «Сетка» ═══════════════════════════════════════════════ */
+.grid { display:flex; flex-wrap:wrap; gap:12px; padding:14px; }
+
+/* ═══ Панель колонии ════════════════════════════════════════════ */
+/* Детали колонии — не боковая панель, а замена содержимого страницы,
+   как в игре. Кнопка «Назад» возвращает к списку. */
+.colony-page { display:none; }
+.colony-page.on { display:block; }
+.cp-head { display:flex; align-items:center; gap:12px; padding:14px 16px; }
+/* Шаг 7 (docs/ROADMAP.md): «Назад» золотым, как «Войти через EVE SSO»
+   из Шага 4 — рамка и текст амброй, по ховеру заливка сплошным золотом. */
+.cp-head .back { margin-left:auto; background:none; border:1px solid var(--amber);
+                 color:var(--amber); padding:6px 16px; cursor:pointer; font-size:11px;
+                 font-family:'Inter',sans-serif; font-weight:600; letter-spacing:.12em; text-transform:uppercase; }
+.cp-head .back:hover { background:var(--amber); color:var(--void); }
+
+/* Круг структуры стоит СЛЕВА, вне панели строки — как в игре. */
+.unit { display:flex; gap:14px; align-items:flex-start; padding:0 16px 8px; }
+.unit .panel { flex:1; min-width:0; background:var(--inset); border:1px solid var(--seam);
+               padding:8px 12px; }
+.unit .title { color:var(--read); display:flex; align-items:center; gap:7px; }
+.unit .title .code { color:var(--dim); }
+.unit .cols2 { display:grid; grid-template-columns:1fr 1fr; gap:4px 24px; margin-top:6px; max-width:640px; }
+.unit .lbl { color:var(--dim); font-size:11px; }
+.unit .meta { color:var(--dim); font-size:12px; }
+.unit .val { font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--read); }
+.state-ok { color:var(--calm); } .state-wait { color:var(--dim); }
+.inputs { display:flex; gap:4px; margin-top:3px; }
+.inputs span { width:26px; height:26px; background:var(--inset); border:1px solid var(--seam);
+               display:grid; place-items:center; }
+/* Фон был захардкожен под старый (до Фазы 8) синий flux и разошёлся
+   с текущим значением переменной в тёмной теме — тот же баг, что
+   у .sysbadge (Шаг 6), тот же t-p1-bg как исправление. */
+.inputs span.have { background:var(--t-p1-bg); border-color:var(--flux); }
+.inputs img { width:20px; height:20px; object-fit:contain; }
+.meter { height:4px; background:var(--inset); margin:5px 0 3px; max-width:280px; }
+.meter i { display:block; height:100%; }
+.meter i.cpu { background:var(--ring-extract); }
+.meter i.pg { background:var(--alarm); }
+.meter i.pg.ok { background:var(--ring-infra); }
+
+/* ═══ Настройки (плотная панель решений) ════════════════════════ */
+.answers { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+           border-bottom:1px solid var(--seam); background:var(--hull); }
+.answer { padding:11px 14px; border-right:1px solid var(--seam); }
+.answer:last-child { border-right:none; }
+.answer .label { color:var(--dim); font-size:10px; letter-spacing:.18em; text-transform:uppercase;
+                 font-family:'Inter',sans-serif; font-weight:600; }
+.answer .value { font-family:'JetBrains Mono',monospace; font-variant-numeric:tabular-nums;
+                 font-size:25px; color:var(--bright); line-height:1.15; margin-top:2px; }
+.answer .value.warn { color:var(--amber); }
+.answer .unit-s { font-size:13px; color:var(--dim); margin-left:5px; font-family:'Inter',sans-serif; }
+.answer .note { color:var(--dim); font-size:12px; }
+/* Шаг 9 (docs/ROADMAP.md, решение пользователя): рейка .rail заменена
+   сеткой из трёх равных карточек-шагов по макету Claude Design —
+   вместо фиксированной левой колонки 270px. Сама сетка адаптивна
+   по своей природе (auto-fit), поэтому прежний медиа-запрос
+   .split{grid-template-columns:1fr} на 980px не нужен: карточки сами
+   переносятся в один столбец, когда не помещаются по 300px. */
+.split { display:flex; flex-direction:column; gap:16px; padding:16px; }
+.brief-head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; }
+.brief-head h2 { margin:0; font-family:'Inter',sans-serif; font-size:15px; font-weight:600;
+                 letter-spacing:.22em; text-transform:uppercase; color:var(--bright); }
+.brief-head .sub { color:var(--dim); font-size:12px; }
+/* stretch (не start): карточки 01/02/03 должны быть одной высоты и
+   доставать до низа независимо от объёма содержимого — карточка
+   «Где добываем» (02) обычно самая длинная из-за списка созвездий. */
+.steps-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:14px; align-items:stretch; }
+.step-card { display:flex; flex-direction:column; }
+.step-body { flex:1; }
+.step-card { background:var(--hull); border:1px solid var(--seam); }
+.step-head { display:flex; align-items:center; gap:10px; padding:11px 14px; border-bottom:1px solid var(--seam); }
+.step-num { width:22px; height:22px; display:grid; place-items:center; border:1px solid var(--amber);
+            color:var(--amber); font-family:'JetBrains Mono',monospace; font-size:11px; flex:0 0 auto; }
+.step-title { font-family:'Inter',sans-serif; font-weight:600; font-size:12px;
+              letter-spacing:.18em; text-transform:uppercase; color:var(--bright); }
+.step-count { margin-left:auto; color:var(--amber); font-size:11px; font-family:'JetBrains Mono',monospace; flex:0 0 auto; }
+.step-body { padding:12px 14px; display:flex; flex-direction:column; min-height:0; }
+/* Визуально гасит блок «Созвездия»/«Запас на истощение» под чекбоксом
+   «Покупать P1 на бирже» (togglePurchaseP1(), 18.09.2026) — выбор в нём
+   в этом режиме не читается расчётом (planner.py::PlanRequest.purchase_p1
+   отключает добычу целиком), не стоит делать вид, что он на что-то влияет. */
+.disabled-section { opacity:.4; pointer-events:none; }
+.step-subhead { font-family:'Inter',sans-serif; font-weight:600; font-size:10px;
+                letter-spacing:.18em; text-transform:uppercase; color:var(--dim);
+                margin:16px 0 8px; padding-top:13px; border-top:1px solid var(--seam); }
+/* Карточки 01/03 короче 02 по содержимому, но вытянуты до её высоты
+   (align-items:stretch выше) — список продуктов и список персонажей
+   растягиваются вместе с карточкой, а не остаются прижатыми к верху
+   с пустотой снизу. min-height:0 обязателен — иначе flex-элемент не
+   сжимается ниже содержимого и overflow-y:auto перестаёт работать. */
+/* max-height здесь остаётся из базового правила (.picker-list/.crew)
+   как безопасное значение по умолчанию — без него список из 53
+   продуктов посчитал бы себе «естественную» (нескроллящуюся) высоту
+   при определении высоты строки грида, и вся строка раздулась бы до
+   неё (реальная раскрутка при проверке: ~1800px). fitStepFills() (JS,
+   ниже) после отрисовки задаёт карточкам явную высоту через style.height
+   и только тогда снимает max-height инлайном — раскрутки уже не
+   происходит, потому что высота предка на этот момент не auto. */
+.field-fill { flex:1; display:flex; flex-direction:column; min-height:0; }
+.field-fill .picker { flex:1; display:flex; flex-direction:column; min-height:0; }
+.field-fill .picker-list { flex:1; min-height:0; }
+.step-body .crew { flex:1; min-height:0; }
+/* Шаг 9, правка: в макете кнопка «Построить план» и «Сохранённые
+   планы» — одна золотая панель, а не два отдельных блока друг под
+   другом. Сохранённые планы (.saved-row) у нас заметно крупнее
+   макетных чипов (чекбокс сравнения, метрики, кнопки «Открыть»/
+   «Удалить») — не переношу их в один ряд с кнопкой построчно, а даю
+   списку flex-basis:100%, чтобы он с переносом вставал под первую
+   строку внутри той же рамки: одна панель, а не два блока. */
+.action-bar { display:flex; align-items:center; gap:10px 12px; flex-wrap:wrap; padding:13px 16px;
+              background:var(--hull); border:1px solid var(--amber);
+              background-image:linear-gradient(90deg,var(--accent-bg),transparent 60%); }
+.action-bar .save-inline { display:flex; gap:6px; align-items:center; margin-left:auto; flex-wrap:wrap; }
+/* Поле и кнопка сохранения плана раньше выглядели как второстепенный
+   .mini-виджет (тусклая рамка var(--seam)) рядом с крупной кнопкой
+   «Построить план» — из-за этого терялись на панели (18.09.2026,
+   найдено пользователем по скриншоту). Рамка цвета акцента и кнопка
+   того же стиля, что и остальные явные действия — не залитая, чтобы
+   не спорить с «Построить план» за главное внимание, но заметно ярче
+   .mini по умолчанию. */
+.action-bar .save-inline input { background:var(--void); border:1px solid var(--amber); color:var(--read);
+                                  padding:8px 10px; font-size:13px; width:180px; font-family:inherit; }
+.action-bar .save-inline input:focus { outline:none; border-color:var(--amber-hi); }
+/* .mini, не голый button (20.09.2026, найдено пользователем по
+   скриншоту): бывший селектор `.save-inline button` задевал и
+   help-tag() — иконка-«?» получала тот же padding:7px 16px и
+   растягивалась в овал вместо кружка. */
+.action-bar .save-inline .mini { border-color:var(--amber); color:var(--amber);
+                                  padding:7px 16px; font-size:12px; font-weight:600; }
+.action-bar .save-inline .mini:hover { background:var(--accent-bg); }
+.action-bar #savedList { flex-basis:100%; }
+.action-bar #savedList:empty, .action-bar #cmpResult:empty { display:none; }
+.field { margin-bottom:11px; }
+.field label { display:block; font-size:12px; color:var(--dim); margin-bottom:3px; }
+.field select, .field input { width:100%; background:var(--void); border:1px solid var(--seam);
+    color:var(--read); padding:6px 8px; font-family:'JetBrains Mono',monospace; font-size:12px; }
+.field select:focus, .field input:focus { outline:none; border-color:var(--amber); }
+/* Пропущено при Шаге 9: кнопка осталась прозрачной с синей (--flux)
+   рамкой из-под старой рейки — в макете это сплошная золотая заливка,
+   основной CTA страницы, а не рамка на всю ширину колонки (ширина
+   колонки была фиксированной 270px у прежней .rail, теперь кнопка
+   в одной строке с полем сохранения — width:100% её раздувал бы). */
+.run { padding:10px 26px; cursor:pointer; background:var(--amber);
+       border:1px solid var(--amber); color:var(--void); font-size:13px; font-weight:700;
+       font-family:'Inter',sans-serif; letter-spacing:.14em; text-transform:uppercase;
+       white-space:nowrap; flex:0 0 auto; }
+.run:hover { background:var(--amber-hi); border-color:var(--amber-hi); }
+.crew { max-height:210px; overflow-y:auto; }
+.crew div { display:flex; gap:8px; align-items:center; padding:4px 0; font-size:12px; }
+.crew .lv { margin-left:auto; color:var(--dim); font-family:'JetBrains Mono',monospace; font-size:11px; }
+/* Ширина метки «основной»/кнопки «Сделать основным» отличается по
+   тексту — без фиксированной колонки аватар и имя у каждой строки
+   сдвигались на свою величину (18.09.2026, найдено пользователем по
+   скриншоту). Один и тот же слот, даже пустой (dev-персонажи/группа
+   из одного человека), держит начало аватара на одном месте у всех строк. */
+.crew-primary-slot { flex:0 0 112px; display:flex; }
+
+table { width:100%; border-collapse:collapse; }
+thead .group th { text-align:left; padding:9px 10px 3px; font-size:11px; font-weight:600;
+    letter-spacing:.16em; text-transform:uppercase; color:var(--dim);
+    font-family:'Inter',sans-serif;
+    border-bottom:1px solid var(--seam); border-left:1px solid var(--seam); }
+thead .group th small { display:block; font-weight:400; letter-spacing:0; text-transform:none;
+    color:var(--dim); font-size:11px; font-family:'Inter',sans-serif; }
+thead .cols th { text-align:left; padding:5px 10px; font-size:11px; font-weight:500;
+    letter-spacing:.05em; text-transform:uppercase; color:var(--dim);
+    border-bottom:1px solid var(--seam); }
+thead .cols th.r { text-align:right; }
+tbody tr { border-bottom:1px solid var(--seam); content-visibility:auto; contain-intrinsic-size:auto 38px; }
+tbody tr:hover { background:var(--hover); }
+td { padding:6px 10px; }
+td.r { text-align:right; }
+.idx { color:var(--dim); width:28px; text-align:right; }
+.stack { display:flex; height:5px; background:var(--inset); width:140px; position:relative; }
+.stack::after { content:''; position:absolute; left:90%; top:-2px; bottom:-2px; width:1px; background:var(--seam); }
+.stack i { display:block; height:100%; }
+.s-str { background:var(--t-p1); } .s-hed { background:var(--t-p3); } .s-lnk { background:var(--amber); }
+.parts { font-size:11px; color:var(--dim); margin-top:3px; font-family:'JetBrains Mono',monospace; }
+.pct { font-family:'JetBrains Mono',monospace; font-variant-numeric:tabular-nums; }
+.pct.hot { color:var(--alarm); } .pct.warm { color:var(--amber); }
+
+.msg { padding:5px 10px; margin-bottom:3px; font-size:12px; border-left:2px solid var(--amber);
+       background:rgba(212,160,74,.06); }
+.msg.bad { border-left-color:var(--alarm); background:rgba(207,96,88,.06); }
+/* Заголовок сворачиваемого списка замечаний терялся — тусклый цвет,
+   мелкий шрифт, без рамки/фона, ничем не отличался от обычного текста
+   (18.09.2026, найдено пользователем по скриншоту). Тот же акцентный
+   стиль, что и у самих .msg-строк — заметно даже свёрнутым. */
+details.msgs > summary { cursor:pointer; font-size:13px; font-weight:600; color:var(--read);
+                          padding:7px 10px; margin-bottom:3px; list-style:none;
+                          border-left:2px solid var(--amber); background:rgba(212,160,74,.1); }
+details.msgs > summary::before { content:'▸ '; color:var(--amber); }
+details.msgs[open] > summary::before { content:'▾ '; }
+.empty { padding:56px 14px; color:var(--dim); text-align:center; }
+
+@media (prefers-reduced-motion:reduce) { * { transition:none !important; animation:none !important; } }
+
+/* ── Адаптивность ─────────────────────────────────────────────
+   Порядок жертв: сначала уходят справочные индикаторы, потом
+   второстепенные колонки таблицы, и только в последнюю очередь
+   меняется структура. Кнопки не прячутся никогда. */
+
+/* Чипы-индикаторы и подпись бренда прячутся не по фиксированным
+   порогам ширины (были — держались, пока не оказалось, что содержимое
+   чипов разной длины: число игроков, перевод на EN, а с Saira Condensed
+   шага 8 вкладки и кнопки стали шире прежнего — переносы находились
+   заново при каждой такой правке, см. fitTopbar() в JS ниже). Вместо
+   этого JS меряет, перенеслась ли .topbar на вторую строку по факту,
+   и прячет по одному в порядке важности, пока не перестанет. Класс
+   .js-hidden — то же, что использовали фиксированные правила, просто
+   выставляется скриптом, а не медиа-запросом. Кнопки по-прежнему не
+   прячутся никогда — этот механизм их не трогает. */
+.js-hidden { display:none !important; }
+
+/* Модалки на узком ноутбуке — не связано с переносом шапки. */
+@media (max-width:1150px) {
+  .modal-body .rows, .modal-body dl { grid-template-columns:1fr; }
+  .modal-body .rows > div:nth-child(odd) { padding-bottom:0; border-bottom:none; }
+}
+
+/* Планшет: таблица результатов прокручивается горизонтально внутри
+   своей области — сетка карточек-шагов (.steps-grid) в этом медиа-
+   запросе не нуждается, она и так адаптивна (auto-fit). */
+@media (max-width:980px) {
+  .crew { max-height:150px; }
+  main { overflow-x:auto; }
+  table { min-width:840px; }
+}
+
+/* Телефон: круги мельче, полоса структур переносится,
+   строка колонии выстраивается в столбец. */
+@media (max-width:680px) {
+  body { font-size:12px; }
+  .topbar { padding:6px 8px; gap:3px; }
+  .brand { margin-right:2px; gap:7px; }
+  /* Лого-аватар и заголовок Шага 4 при полном размере (30px, 16px
+     заглавными с трекингом) занимают заметно больше места, чем прежний
+     однострочный «PI Director» — на узких ширинах их тоже сжимаем, а
+     не только вкладки. */
+  .brand-avatar { width:22px; height:22px; }
+  .brand-title { font-size:12px; letter-spacing:.01em; }
+  .brand small { font-size:9px; letter-spacing:.06em; }
+  /* Чисто визуальное уплотнение — не прячет вкладки (правило «кнопки и
+     вкладки не прячутся никогда» см. у #moreBtn), только сокращает
+     трекинг и отступы Saira Condensed из Шага 3, который на такой
+     ширине занимает больше места, чем на десктопе. Запас в несколько
+     лишних пикселей — не впритык, чтобы не зависеть от округления
+     суб-пиксельных ширин в конкретном браузере. */
+  .tab { padding:9px 4px; letter-spacing:.02em; font-size:12px; }
+  /* .topbar .sso (2 класса), а не голое .sso — иначе более позднее по
+     каскаду безусловное правило .sso{padding:5px 14px} (та же
+     специфичность, но позже в файле) перебивало бы этот отступ на любой
+     ширине, и сужение окна визуально ничего бы не меняло. */
+  .topbar .sso { padding:4px 6px; font-size:10px; letter-spacing:.04em; }
+  .answers { grid-template-columns:1fr 1fr; }
+  .answer { border-right:none; border-bottom:1px solid var(--seam); }
+  .colony { padding:10px; }
+  .colony-head { flex-wrap:wrap; }
+  .colony-head .tail { margin-left:0; text-align:left; width:100%; }
+  .details-btn { margin-left:0; }
+  .strip { gap:6px; }
+  .grid { gap:8px; padding:10px; }
+  .unit { flex-direction:column; gap:8px; padding:0 10px 8px; }
+  .unit .cols2 { grid-template-columns:1fr; }
+  .pilot-row .who { width:auto; }
+  .modal { padding:0; }
+  .modal-box { max-height:100vh; width:100%; }
+}
+
+/* ── Верхняя панель: индикаторы и кнопки ─────────────────────── */
+.topbar .info { display:flex; gap:6px; align-items:center; margin-left:18px; flex:0 0 auto; }
+.topbar .right { margin-left:auto; display:flex; gap:6px; align-items:center; flex:0 0 auto; }
+/* Кнопка «Ещё» — только на мобильной ширине (медиа-запрос ниже), где
+   fitTopbar() (JS) к этому моменту уже спрятал все чипы-индикаторы по
+   одному (правило «кнопки не прячутся никогда» на них не
+   распространяется — это диагностика, не действие). Открывает те же
+   чипы выпадающим списком, а не дублирует их значения отдельной
+   разметкой: один источник правды, один JS-рендер
+   (renderMeta/renderJobsChip). Правило до медиа-запроса — иначе более
+   позднее по каскаду и той же специфичности «display:none» отсюда
+   перебивало бы «показать на мобильном» из-за порядка, а не смысла. */
+#moreBtn { display:none; }
+/* Кнопка «Ещё» показывается не по ширине экрана, а по факту: fitTopbar()
+   (JS) отмечает .topbar классом has-hidden, когда что-то реально спрятано
+   (чипы или, при совсем плотной панели, кнопки Справка/О проекте —
+   см. TOPBAR_HIDE_PRIORITY). Кнопки Справка/О проекте на это время JS
+   физически переносит внутрь #infoChips, чтобы попасть в тот же
+   выпадающий список — иначе спрятанное было бы недоступно совсем. */
+.topbar.has-hidden #moreBtn { display:inline-grid; }
+/* Раскрытый список — всегда одна и та же попап-панель, независимо от
+   ширины: то же самое переполнение может случиться и на ноутбучной
+   ширине, если чипы+кнопки в сумме не влезли. */
+#infoChips.open {
+  position:absolute; top:100%; right:8px; margin-top:6px;
+  flex-direction:column; align-items:stretch; gap:6px; padding:10px;
+  background:var(--hull); border:1px solid var(--seam); z-index:70;
+  box-shadow:0 10px 26px rgba(0,0,0,.45);
+}
+/* Каждый спрятанный элемент отмечен fitTopbar() через .js-hidden — здесь
+   возвращаем видимость только внутри открытого списка; специфичность
+   (id+2 класса) перебивает .js-hidden (1 класс). */
+#infoChips.open .chip { display:inline-flex !important; justify-content:space-between; }
+#infoChips.open .tbtn { display:block !important; width:100%; text-align:left; }
+#infoChips.open #themeBtn { display:grid !important; align-self:flex-start; }
+#infoChips.open #langGroup { display:inline-flex !important; align-self:flex-start; }
+
+@media (max-width:460px) {
+  .answers { grid-template-columns:1fr; }
+}
+.chip { display:inline-flex; align-items:center; gap:7px; padding:4px 10px;
+        border:1px solid var(--seam); background:var(--void); font-size:12px;
+        color:var(--dim); white-space:nowrap; }
+.chip b { color:var(--read); font-weight:500; font-family:'JetBrains Mono',monospace; }
+.chip .dot { width:7px; height:7px; border-radius:50%; background:var(--dim); flex:0 0 auto; }
+.chip .dot.live { background:var(--calm); box-shadow:0 0 6px var(--calm); }
+.chip .dot.stale { background:var(--amber); }
+.chip .dot.failing { background:var(--alarm); }
+.tbtn { background:none; border:1px solid var(--seam); color:var(--read); padding:5px 12px;
+        cursor:pointer; font-size:12px; white-space:nowrap; }
+.tbtn:hover { border-color:var(--amber); color:var(--amber); }
+.lang { display:inline-flex; border:1px solid var(--seam); }
+.lang button { background:none; border:none; color:var(--dim); padding:5px 9px; cursor:pointer;
+               font-size:12px; font-family:'JetBrains Mono',monospace; }
+/* Активный язык — золотая заливка (как в макете, lng()), а не
+   нейтральный seam+bright из-под старой темы. */
+.lang button.on { background:var(--amber); color:var(--void); }
+.icon-btn { background:none; border:1px solid var(--seam); color:var(--dim); width:30px; height:28px;
+            display:inline-grid; place-items:center; cursor:pointer; }
+.icon-btn:hover { color:var(--amber); border-color:var(--amber); }
+.icon-btn svg { width:15px; height:15px; }
+/* Шаг 4 (docs/ROADMAP.md): кнопка входа новым стилем — золотая рамка и
+   градиентная подложка вместо синей заливки по ховеру. */
+.sso { background:linear-gradient(180deg,var(--accent-bg),transparent);
+       border:1px solid var(--amber); color:var(--amber); padding:5px 14px;
+       cursor:pointer; font-size:11px; white-space:nowrap;
+       font-family:'Inter',sans-serif; font-weight:600; letter-spacing:.12em; text-transform:uppercase; }
+.sso:hover { background:var(--amber); color:var(--void); }
+
+/* ── Всплывающие окна ────────────────────────────────────────── */
+.modal { position:fixed; inset:0; background:rgba(4,6,10,.7); display:none;
+         z-index:100; align-items:center; justify-content:center; padding:24px; }
+.modal.on { display:flex; }
+/* Шаг 8 (docs/ROADMAP.md): рамка модалки золотая, уголок увеличенного
+   размера (2px/14px против обычных 1px/9px у .hud-corner) — модалка
+   единственное место с таким акцентом, поэтому не отдельный модификатор
+   класса, а точечное переопределение по месту использования. */
+.modal-box { background:var(--hull); border:1px solid var(--amber); width:min(880px,100%);
+             max-height:86vh; display:flex; flex-direction:column; box-shadow:0 24px 70px rgba(0,0,0,.5); }
+.modal-box.hud-corner::before, .modal-box.hud-corner::after { width:14px; height:14px; border-width:2px; }
+.modal-head { display:flex; align-items:center; gap:12px; padding:14px 18px; border-bottom:1px solid var(--seam);
+              background:linear-gradient(90deg,var(--accent-bg),transparent); }
+.modal-head .brand-avatar { width:22px; height:22px; }
+.modal-head h2 { margin:0; font-size:13px; letter-spacing:.18em; text-transform:uppercase;
+                 color:var(--bright); font-family:'Inter',sans-serif; font-weight:600; }
+.modal-head .x { margin-left:auto; background:none; border:1px solid var(--seam); color:var(--dim);
+                 width:28px; height:28px; cursor:pointer; font-size:15px; line-height:1; }
+.modal-head .x:hover { color:var(--amber); border-color:var(--amber); }
+.modal-body { overflow-y:auto; padding:18px; }
+.modal-body h3 { font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--amber);
+                 font-family:'Inter',sans-serif; font-weight:600; margin:22px 0 8px; }
+.modal-body h3:first-child, .modal-body .modal-toc:first-child + h3 { margin-top:0; }
+.modal-body p { margin:0 0 10px; max-width:74ch; }
+.modal-body ol, .modal-body ul { margin:0 0 10px; padding-left:22px; max-width:74ch; }
+.modal-body li { margin-bottom:6px; }
+.modal-body dl { display:grid; grid-template-columns:170px 1fr; gap:8px 18px; margin:0; }
+.modal-body dt { color:var(--read); font-weight:500; }
+.modal-body dd { margin:0; color:var(--dim); }
+.modal-body a { color:var(--amber); }
+.modal-body .rows { display:grid; grid-template-columns:220px 1fr; }
+.modal-body .rows > div { padding:8px 0; border-bottom:1px solid var(--seam); }
+.modal-body .rows > div:nth-child(odd) { color:var(--read); font-weight:500; padding-right:16px; }
+.modal-body .rows > div:nth-child(even) { color:var(--dim); }
+/* Оглавление справки (собирается в openModal() из отрисованных <h3 id>)
+   — узкие ссылки в 2 колонки, чтобы длинный список заголовков не
+   растягивал модалку по высоте больше, чем сам текст под ним. */
+.modal-toc { display:grid; grid-template-columns:1fr 1fr; gap:2px 18px;
+             margin:0 0 18px; padding-bottom:14px; border-bottom:1px solid var(--seam); }
+.modal-toc a, .modal-toc a:visited { color:var(--dim); font-size:12px; text-decoration:none; padding:2px 0; }
+.modal-toc a:hover { color:var(--amber); }
+@media (max-width:520px){ .modal-toc { grid-template-columns:1fr; } }
+
+/* ── Списки множественного выбора ─────────────────────────────
+   Обычный <select multiple> для этой задачи плох: выбор делается
+   ctrl+кликом, случайный клик сбрасывает всё, иконок нет и не видно,
+   что уже отмечено. Заменён на список флажков. */
+.picker { border:1px solid var(--seam); background:var(--void); }
+.picker-bar { display:flex; gap:6px; align-items:center; padding:6px 8px;
+              border-bottom:1px solid var(--seam); }
+.picker-bar input[type=search] { flex:1; min-width:0; background:var(--hull);
+  border:1px solid var(--seam); color:var(--read); padding:4px 7px; font-size:12px;
+  font-family:'Inter',sans-serif; }
+.picker-bar input[type=search]:focus { outline:none; border-color:var(--amber); }
+.mini { background:none; border:1px solid var(--seam); color:var(--dim); padding:3px 8px;
+        cursor:pointer; font-size:11px; white-space:nowrap; }
+.mini:hover { color:var(--amber); border-color:var(--amber); }
+.mini.active { color:var(--amber); border-color:var(--amber); background:color-mix(in srgb, var(--amber) 12%, transparent); }
+/* Контекстный якорь на справку (helpTag()) — маленький кружок рядом с
+   заголовком панели/полем, не растягивает строку заголовка. */
+.help-tag { display:inline-grid; place-items:center; width:16px; height:16px;
+            border-radius:50%; border:1px solid var(--seam); background:none;
+            color:var(--dim); font-size:10px; line-height:1; cursor:pointer;
+            padding:0; margin-left:4px; vertical-align:middle; }
+.help-tag:hover { color:var(--amber); border-color:var(--amber); }
+.tier-filter { display:flex; gap:6px; margin-bottom:6px; }
+/* Персонажу нужно перезайти через EVE SSO — токен протух/отозван,
+   колонии и скиллы больше не обновляются (см. needs_reconnect,
+   api/blueprints/meta.py). Тревожный цвет — не просто ещё одно
+   действие в списке, а сигнал, что данные по этому персонажу стоят. */
+.mini.reconnect { border-color:var(--alarm); color:var(--alarm); }
+.mini.reconnect:hover { background:var(--alarm); color:var(--void); }
+/* Экспорт в Excel сливался с соседними кнопками-прыжками (.mini —
+   тот же тусклый цвет/рамка у всех), найдено пользователем по
+   скриншоту 20.09.2026 — акцентная рамка+цвет выделяют единственное
+   на этой панели действие, которое СОЗДАЁТ файл, а не просто
+   прокручивает страницу. */
+.mini.export { border-color:var(--amber); color:var(--amber); }
+.mini.export:hover { background:var(--amber); color:var(--void); }
+/* Общий акцентный модификатор .mini — рамка/цвет var(--amber), заливка
+   на hover. Впервые для «Добавить персонажа» (21.09.2026, единственное
+   действие в карточке «Персонажи», реально расширяющее пул, не просто
+   фильтр/сортировка, — тот же приём, что и у «Экспорт»); переиспользован
+   для «Admin-панель» (28.09.2026, по прямому запросу пользователя —
+   тот же визуальный вес, что и у соседней кнопки). */
+.mini.accent { border-color:var(--amber); color:var(--amber); }
+.mini.accent:hover { background:var(--amber); color:var(--void); }
+.picker-list { max-height:220px; overflow-y:auto; }
+.picker-list label { display:flex; align-items:center; gap:8px; padding:4px 8px;
+                     cursor:pointer; font-size:12px; }
+.picker-list label:hover { background:var(--hull); }
+/* Правило .field input задаёт width:100% для полей формы и распространяется
+   на флажки внутри списка — они растягиваются на всю строку и выталкивают
+   подпись за её пределы. Сбрасываем ширину явно. */
+.picker-list input[type=checkbox] { width:auto; min-width:0; margin:0;
+                                    accent-color:var(--amber); flex:0 0 auto; }
+.picker-list img { width:20px; height:20px; object-fit:contain; flex:0 0 auto; }
+.picker-list .tier { margin-left:auto; color:var(--dim); font-size:10px;
+                     font-family:'JetBrains Mono',monospace; }
+.picker-list .cnt { margin-left:auto; color:var(--dim); font-size:11px;
+                    font-family:'JetBrains Mono',monospace; }
+.picker-list .group-title { padding:5px 8px; font-size:10px; letter-spacing:.08em;
+  text-transform:uppercase; color:var(--dim); background:var(--hull);
+  border-top:1px solid var(--seam); }
+.chosen { display:flex; flex-wrap:wrap; gap:4px; padding:6px 8px; border-top:1px solid var(--seam); }
+/* Выбранные элементы — золотые, как в макете (background:accent-bg,
+   border/color:gold), а не нейтральная серая рамка: должны читаться
+   как «активный выбор», а не как ещё один служебный ярлык. */
+.chosen span { background:var(--accent-bg); border:1px solid var(--amber); color:var(--amber);
+               padding:2px 7px; font-size:11px; display:inline-flex; align-items:center; gap:5px; }
+.chosen b { cursor:pointer; color:inherit; opacity:.7; font-weight:400; }
+.chosen b:hover { color:var(--alarm); opacity:1; }
+.chosen .none { color:var(--dim); border:none; background:none; padding:2px 0; }
+/* Подсказка про персонажей — как «ничего не выбрано» у .chosen: отдельным
+   блоком под списком, а не последней строкой внутри него (иначе она
+   прокручивалась бы вместе со списком и то появлялась, то пряталась). */
+.crew-hint { padding:6px 8px; border-top:1px solid var(--seam); color:var(--dim); font-size:11px; }
+
+/* Шаг 5 (docs/ROADMAP.md): декоративный HUD-уголок из макета Claude Design —
+   тонкая золотая скоба сверху-слева и снизу-справа поверх рамки
+   карточки. Только оформление (::before/::after), разметка не меняется
+   — класс вешается на уже существующие карточки со своей рамкой/фоном:
+   .shop-item, .unit .panel, .modal-box. */
+.hud-corner { position:relative; }
+.hud-corner::before, .hud-corner::after {
+  content:''; position:absolute; width:9px; height:9px; pointer-events:none;
+}
+.hud-corner::before { left:-1px; top:-1px; border-left:1px solid var(--amber); border-top:1px solid var(--amber); }
+.hud-corner::after { right:-1px; bottom:-1px; border-right:1px solid var(--amber); border-bottom:1px solid var(--amber); }
+
+/* ── Список закупки командных центров ────────────────────────── */
+.shop { border-top:1px solid var(--seam); padding:14px; }
+.shop h3 { font-size:12px; letter-spacing:.18em; text-transform:uppercase; color:var(--amber);
+           font-family:'Inter',sans-serif; font-weight:600; margin:0 0 10px; }
+.shop-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:10px; }
+.shop-item { display:flex; align-items:center; gap:10px; padding:9px 11px;
+             border:1px solid var(--seam); background:var(--hull); }
+.shop-item img { width:30px; height:30px; object-fit:contain; flex:0 0 auto; }
+.shop-item .n { font-size:12px; color:var(--read); }
+.shop-item .q { margin-left:auto; font-family:'JetBrains Mono',monospace;
+                font-size:16px; color:var(--bright); }
+.shop-total { margin-top:10px; color:var(--dim); font-size:12px; }
+
+/* ── Реальные колонии из игры ────────────────────────────────── */
+/* Те же карточки .colony/.colony-head/.strip, что и у колоний плана
+   (см. выше) — то, о чём просил пользователь: факт из игры должен
+   выглядеть как план, а не отдельным списком строк. */
+.colonies { border-top:1px solid var(--seam); }
+.colonies h3 { font-size:12px; letter-spacing:.18em; text-transform:uppercase; color:var(--amber);
+  font-family:'Inter',sans-serif; font-weight:600;
+  margin:0; padding:14px 14px 4px; display:flex; justify-content:space-between; align-items:baseline; }
+.colonies h3 .colsum { text-transform:none; letter-spacing:normal; font-weight:400; }
+.colonies .colony:last-child { border-bottom:none; }
+.tail .val.soon { color:var(--amber); }
+.tail .val.over { color:var(--alarm); font-weight:600; }
+
+/* ── Оценка выгоды ────────────────────────────────────────────── */
+.profit { padding:14px; border-top:1px solid var(--seam); }
+.profit-head { display:flex; align-items:baseline; gap:12px; margin-bottom:10px; flex-wrap:wrap; }
+.profit-head h3 { font-size:13px; letter-spacing:.18em; text-transform:uppercase;
+                  color:var(--bright); font-family:'Inter',sans-serif; font-weight:600; margin:0; }
+.profit-head .age { font-size:11px; color:var(--dim); }
+.profit-head .age.stale { color:var(--amber); }
+.profit td.name { color:var(--read); }
+.profit .tierbadge { font-size:10px; color:var(--dim); font-family:'JetBrains Mono',monospace;
+                     margin-left:6px; }
+.profit tr.best td { background:rgba(212,160,74,.06); }
+.profit tr.best td:first-child { box-shadow:inset 2px 0 0 var(--amber); }
+.profit tr.noprice td { color:var(--dim); }
+.profit-note { margin-top:8px; color:var(--dim); font-size:11px; max-width:82ch; }
+@media (max-width:680px){ .profit { overflow-x:auto; } .profit table { min-width:640px; } }
+
+/* ── Прибыльность плана с учётом POCO (docs/ROADMAP.md, Фаза 9,
+   16.09.2026) — та же визуальная семья, что и .profit выше, отдельный
+   класс только потому, что раскладка внутри другая (сводка чисел, не
+   таблица рядов). Внутренние ячейки называются .net (не .profit) —
+   .profit уже занят классом СНАРУЖИ (блок «Что выгоднее производить»,
+   padding+border-top), и элемент с обоими классами (`.figure.profit`)
+   наследовал их же селектором `.profit`, из-за чего ячейка «Чистая
+   прибыль» получала лишние padding/border-top и съезжала строкой ниже
+   остальных (обнаружено пользователем 16.09.2026 по скриншоту). */
+.poco-profit { padding:14px; border-top:1px solid var(--seam); }
+/* auto-fit, не фиксированные 3 колонки (18.09.2026, найдено пользователем
+   по скриншоту): с добавлением плитки «Закупка P1 / мес» (режим
+   purchase_p1) четвёртая плитка «Чистая прибыль» при фиксированных 3
+   колонках уезжала на отдельную строку, хотя места в ряду хватало —
+   auto-fit сам подбирает число колонок по ширине контейнера. */
+.poco-profit .figures { display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
+                         gap:8px 22px; margin-top:6px; }
+.poco-profit .figure .lbl { font-size:10px; letter-spacing:.1em; text-transform:uppercase;
+                             color:var(--dim); }
+.poco-profit .figure .val { font-family:'JetBrains Mono',monospace; font-size:16px;
+                             color:var(--read); margin-top:2px; }
+/* Чистая прибыль — акцентным цветом в обеих темах (та же переменная,
+   что у кнопок и лучшей строки в «Что выгоднее производить»). */
+.poco-profit .figure.net .val { color:var(--amber); }
+.poco-profit .figure .val.dim { color:var(--dim); font-size:13px; }
+.poco-profit-note { margin-top:8px; color:var(--dim); font-size:11px; max-width:82ch; }
+@media (max-width:520px){ .poco-profit .figures { grid-template-columns:repeat(2,minmax(120px,1fr)); } }
+/* Разбивка выручки/список закупки/примечания — карточки той же
+   визуальной семьи, что и шаги «Что производим»/«Где добываем»/«Где
+   перерабатываем» (.step-card.hud-corner), не отдельный стиль
+   (20.09.2026, по прямому запросу пользователя: "по аналогии с верхней
+   частью страницы настроек"). auto-fit — 2 или 3 карточки в ряд по
+   ширине, перенос в один столбец на узком экране, без media-запроса. */
+.poco-row { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:14px; margin-top:12px; }
+.poco-row .step-body { padding-top:10px; }
+.poco-row .purchase-list-table { margin-top:0; }
+.poco-row .poco-profit-note { margin-top:6px; }
+.poco-row .poco-profit-note:first-child { margin-top:0; }
+
+/* ── Список закупки сырья P1 (19.09.2026) ──────────────────────── */
+.purchase-list-table { width:100%; border-collapse:collapse; margin-top:6px; font-size:12px; }
+.purchase-list-table th { text-align:left; color:var(--dim); font-size:10px; letter-spacing:.08em;
+                           text-transform:uppercase; padding:4px 8px; border-bottom:1px solid var(--seam); }
+.purchase-list-table th.r, .purchase-list-table td.r { text-align:right; }
+.purchase-list-table td { padding:4px 8px; color:var(--read); }
+.purchase-list-table tr.purchase-list-total td { border-top:1px solid var(--seam); font-weight:600;
+                                                  color:var(--amber); padding-top:6px; }
+
+/* ── Сохранённые планы ────────────────────────────────────────── */
+.saved { border-top:1px solid var(--seam); padding:12px 14px; }
+.saved h3 { font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--dim);
+            font-family:'Inter',sans-serif; font-weight:600; margin:0 0 8px; }
+/* Рейка узкая, поэтому строка переносится: кнопки уходят под название,
+   а не сплющивают его до переноса по буквам. */
+.saved-row { display:flex; align-items:center; gap:8px; padding:6px 8px; flex-wrap:wrap;
+             border:1px solid var(--seam); background:var(--hull); margin-bottom:5px; }
+.saved-row .body { flex:1 1 auto; min-width:0; }
+.saved-row .nm { color:var(--read); white-space:nowrap; overflow:hidden;
+                 text-overflow:ellipsis; }
+.saved-row .meta { color:var(--dim); font-size:11px; font-family:'JetBrains Mono',monospace; }
+.saved-row .acts { margin-left:auto; display:flex; gap:5px; flex:0 0 auto; }
+.saved-row.current { box-shadow:inset 2px 0 0 var(--amber); }
+.cmp { margin-top:8px; padding:8px 10px; border:1px solid var(--seam); background:var(--void);
+       font-size:12px; }
+.cmp b { color:var(--bright); font-family:'JetBrains Mono',monospace; }
+.cmp .up { color:var(--alarm); } .cmp .down { color:var(--calm); }
+.cmp ul { margin:6px 0 0; padding-left:18px; color:var(--dim); }
+
+/* ── Пороговые радиусы и выбор при предупреждении ─────────────── */
+.thresholds { font-size:11px; color:var(--dim); line-height:1.6; margin-top:4px; }
+.thresholds b { color:var(--read); font-family:'JetBrains Mono',monospace; font-weight:500; }
+.thresholds .fit { color:var(--calm); } .thresholds .nofit { color:var(--amber); }
+
+.decision { border:1px solid var(--amber); background:rgba(212,160,74,.07);
+            padding:12px 14px; margin:0 14px 10px; }
+.decision h4 { margin:0 0 6px; font-size:13px; color:var(--bright); font-weight:600; }
+.decision p { margin:0 0 10px; font-size:12px; color:var(--read); max-width:74ch; }
+.decision .acts { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+.decision .hint { font-size:11px; color:var(--dim); }
+
+/* ── Кнопка темы ──────────────────────────────────────────────
+   Значок показывает, КУДА переключимся: в светлой теме месяц
+   («станет темно»), в тёмной — солнце. Показывать текущее состояние
+   бессмысленно: оно и так видно по всему экрану. */
+.icon-btn .ic-moon { display:none; }
+body.light .icon-btn .ic-sun { display:none; }
+body.light .icon-btn .ic-moon { display:block; }
+.icon-btn { color:var(--amber); border-color:var(--seam); }
+.icon-btn:hover { background:var(--accent-bg); border-color:var(--amber); }
+
+/* ── Плашки тиров ─────────────────────────────────────────────
+   Цвет кодирует передел: холодный у сырья, тёплый у готового
+   изделия. Плашка, а не просто цвет текста: в плотной таблице
+   подложка читается быстрее, чем оттенок букв. */
+.tier { display:inline-block; padding:1px 6px; border-radius:3px; font-size:10px;
+        font-family:'JetBrains Mono',monospace; font-weight:600; letter-spacing:.03em;
+        vertical-align:middle; }
+.tier.P1 { color:var(--t-p1); background:var(--t-p1-bg); }
+.tier.P2 { color:var(--t-p2); background:var(--t-p2-bg); }
+.tier.P3 { color:var(--t-p3); background:var(--t-p3-bg); }
+.tier.P4 { color:var(--t-p4); background:var(--t-p4-bg); }
+
+/* Роль колонии — тоже плашка, а не точка: добыча и переработка
+   различаются с одного взгляда даже в плотном списке. */
+.rolebadge { display:inline-block; padding:1px 7px; border-radius:3px; font-size:11px;
+             font-weight:500; }
+.rolebadge.mine { color:var(--ring-extract); background:rgba(47,184,154,.13); }
+.rolebadge.proc { color:var(--forge); background:rgba(200,130,60,.13); }
+body.light .rolebadge.mine { background:rgba(26,140,114,.11); }
+body.light .rolebadge.proc { background:rgba(160,95,28,.11); }
+
+/* Надзаголовки групп колонок — акцентным цветом: они объясняют,
+   зачем смотреть в колонки, и должны выделяться из шапки. Шаг 10
+   (docs/ROADMAP.md, решение пользователя: группировка уже была в разметке —
+   colspan «Колония»/«Производство»/«Нагрузка» — трогать структуру не
+   нужно, только цвет, как в макете Claude Design: --amber вместо
+   --flux). */
+thead .group th { color:var(--amber); }
+thead .group th small { color:var(--dim); }
+
+/* Значения в карточках метрик окрашиваются по смыслу. */
+.answer .value.good { color:var(--calm); }
+.answer .value.bad  { color:var(--alarm); }
+.answer.accent { background:var(--accent-bg); }
+
+/* Строка-победитель в таблице выгоды — как в образце: подложка
+   и полоса слева, число янтарём. */
+.profit tr.best td:last-child { color:var(--amber); font-weight:600; }
+
+/* Названия систем моноширинным: они читаются как коды, а не слова.
+   Фон был захардкожен под старый (до Фазы 8) синий flux и не совпадал
+   с текущим значением переменной в тёмной теме (в светлой совпал
+   случайно) — используем t-p1-bg, как и в макете Claude Design. */
+.sysbadge { color:var(--flux); background:var(--t-p1-bg); }
+
+/* ── Подсказка по вместимости пула ────────────────────────────── */
+.advice { border:1px solid var(--seam); padding:12px 14px; margin:0 14px 10px;
+          background:var(--hull); }
+.advice.deficit { border-color:var(--alarm); background:rgba(207,96,88,.06); }
+.advice.surplus { border-color:var(--calm); background:rgba(74,157,127,.06); }
+.advice h4 { margin:0 0 4px; font-size:13px; font-weight:600; color:var(--bright); }
+.advice .lead { font-size:12px; color:var(--read); margin:0 0 10px; max-width:76ch; }
+.advice .lead b { font-family:'JetBrains Mono',monospace; color:var(--bright); }
+.sugg { display:grid; grid-template-columns:1fr auto auto auto; gap:6px 14px;
+        align-items:center; font-size:12px; }
+.sugg > div { padding:5px 0; border-top:1px solid var(--seam); }
+.sugg .nm { color:var(--read); }
+.sugg .num { font-family:'JetBrains Mono',monospace; color:var(--dim); text-align:right; }
+.sugg .num.isk { color:var(--bright); }
+/* Пропущено при Шаге 2 (перекраска палитры) — оставалось синим
+   (--flux) вместо золотого, хотя весь остальной акцентный цвет
+   в приложении уже перешёл на --amber. */
+.sugg button { background:none; border:1px solid var(--amber); color:var(--amber);
+               padding:3px 10px; cursor:pointer; font-size:11px; }
+.sugg button:hover { background:var(--accent-bg); }
+/* Подсказка «продублировать выбранную цепочку» (18.09.2026) — та же
+   кнопка, что у sugg, но своя строка без табличной сетки: тут только
+   текст и одна кнопка, не четыре колонки чисел. */
+.sugg-dup { display:flex; justify-content:space-between; align-items:center;
+            gap:14px; font-size:12px; color:var(--read); padding:5px 0;
+            border-top:1px solid var(--seam); }
+.sugg-dup button { background:none; border:1px solid var(--amber); color:var(--amber);
+                    padding:3px 10px; cursor:pointer; font-size:11px; flex:0 0 auto; }
+.sugg-dup button:hover { background:var(--accent-bg); }
+.advice .foot { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:10px; }
+.advice .foot .hint { font-size:11px; color:var(--dim); }
+.rolebadge.excess { color:var(--amber); background:rgba(212,160,74,.15); }
+.rolebadge.direct { color:var(--t-p2); background:var(--t-p2-bg); }
+body.light .rolebadge.excess { background:rgba(154,107,18,.12); }
