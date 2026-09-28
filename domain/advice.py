@@ -29,7 +29,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from domain.plan_messages import render as render_message
-from domain.profit import ChainEconomics, colonies_for, evaluate
+from domain.profit import ChainEconomics, colonies_for, colonies_for_targets, evaluate
 from domain.recipes import RecipeBook, load_recipes
 from domain.throughput import Schematic, load_schematics
 
@@ -117,8 +117,8 @@ class Advice:
     # Сколько ЕЩЁ раз можно продублировать ВЕСЬ выбранный набор продуктов
     # целиком (по прямому запросу пользователя) — 0, если
     # места нет вовсе или verdict не surplus. Не гарантия точного числа
-    # (см. _chain_size_for_targets()), а консервативная оценка, как и у
-    # additions/alternatives.
+    # (кандидаты оцениваются поодиночке, без общих полуфабрикатов) — консервативная
+    # оценка, как и у additions/alternatives.
     extra_lines_available: int = 0
     notes: list[str] = field(default_factory=list)       # рендер по-русски, для тестов
     note_data: list[dict] = field(default_factory=list)  # {code, ...} для перевода
@@ -175,30 +175,6 @@ def pool_capacity(characters: list) -> PoolCapacity:
 
 def _chain_size(product: str, schematics, recipes, purchase_p1: bool = False) -> tuple[int, int]:
     processing, mining, _ = colonies_for(product, schematics, recipes, purchase_p1=purchase_p1)
-    return processing, mining
-
-
-def _chain_size_for_targets(
-    target_products: list[str], schematics, recipes, purchase_p1: bool = False,
-) -> tuple[int, int]:
-    """
-    Сумма `_chain_size()` по всем выбранным продуктам — размер ОДНОЙ
-    линии всего набора (по прямому запросу пользователя:
-    «продублировать выбранную цепочку столько раз, сколько позволят
-    персонажи», не подбирать второй-третий отдельный продукт).
-
-    Продукт без данных для расчёта — молча пропускается (advise() уже
-    честно предупредил о нём отдельно через advice_no_production_data,
-    здесь дублировать нечего).
-    """
-    processing = mining = 0
-    for product in target_products:
-        try:
-            p, m = _chain_size(product, schematics, recipes, purchase_p1=purchase_p1)
-        except KeyError:
-            continue
-        processing += p
-        mining += m
     return processing, mining
 
 
@@ -321,15 +297,21 @@ def advise(
         advice.note("advice_no_targets")
         return advice
 
-    needed_processing = needed_mining = 0
+    known: list[str] = []
     for product in target_products:
         try:
-            processing, mining = _chain_size(product, schematics, recipes, purchase_p1=purchase_p1)
+            _chain_size(product, schematics, recipes, purchase_p1=purchase_p1)
         except KeyError:
             advice.note("advice_no_production_data", product=product)
             continue
-        needed_processing += processing * lines_per_target
-        needed_mining += mining * lines_per_target
+        known.append(product)
+
+    def needed_for(lines: int) -> tuple[int, int]:
+        return colonies_for_targets(
+            {p: lines for p in known}, schematics, recipes, purchase_p1=purchase_p1
+        )
+
+    needed_processing, needed_mining = needed_for(lines_per_target)
 
     advice.needed_colonies = needed_processing + needed_mining
     advice.needed_mining = needed_mining
@@ -348,14 +330,28 @@ def advise(
     if fits:
         spare = capacity.total_slots - advice.needed_colonies
         advice.spare_slots = spare
-        # Запас меньше самой компактной цепочки — это не избыток,
-        # а нормальный остаток. Предлагать нечего.
-        if spare >= 4:
+        # Порог показа — не константа, а реальный минимум: подсказки нужны,
+        # пока в запас помещается хоть одна цепочка или ещё одна линия
+        # набора (найдено пользователем: при запасе 1 колония окно
+        # закрывалось, хотя Microfiber Shielding на 1 колонию помещался).
+        additions = _candidates(
+            prices, capacity, schematics, recipes,
+            exclude=set(target_products), max_colonies=spare, purchase_p1=purchase_p1,
+        ) if spare > 0 else []
+
+        extra_lines = 0
+        if known and spare > 0:
+            # Линии добавляются по одной, пока общий расчёт (как в
+            # build_plan) ещё помещается в пул.
+            while extra_lines < 100:
+                p, m = needed_for(lines_per_target + extra_lines + 1)
+                if not _fits(p, m, capacity):
+                    break
+                extra_lines += 1
+
+        if additions or extra_lines:
             advice.status = "surplus"
-            advice.additions = _candidates(
-                prices, capacity, schematics, recipes,
-                exclude=set(target_products), max_colonies=spare, purchase_p1=purchase_p1,
-            )
+            advice.additions = additions
             higher = [s for s in advice.additions
                       if TIER_ORDER.get(s.tier, 0) > max(
                           TIER_ORDER.get(r.tier, 0)
@@ -363,28 +359,7 @@ def advise(
             if higher:
                 advice.note("advice_higher_tier_available")
 
-            # Сколько ЕЩЁ раз влезет весь выбранный набор целиком —
-            # приоритетнее «взять другой продукт» (пользователь сам об
-            # этом попросил вместо ручного подбора второго-третьего
-            # продукта). Считается на размере ОДНОЙ линии (без текущего
-            # lines_per_target), а сравнивается с уже уменьшенным на
-            # needed_processing/needed_mining остатком — так число
-            # получается «сколько ЕЩЁ», а не «сколько всего».
-            one_line_processing, one_line_mining = _chain_size_for_targets(
-                target_products, schematics, recipes, purchase_p1=purchase_p1
-            )
-            one_line_total = one_line_processing + one_line_mining
-            if one_line_total > 0:
-                by_total = spare // one_line_total
-                by_mining = (
-                    (capacity.mining_capable_slots - needed_mining) // one_line_mining
-                    if one_line_mining else by_total
-                )
-                by_processing = (
-                    (capacity.processing_capable_slots - needed_processing) // one_line_processing
-                    if one_line_processing else by_total
-                )
-                advice.extra_lines_available = max(0, min(by_total, by_mining, by_processing))
+            advice.extra_lines_available = extra_lines
         return advice
 
     advice.status = "deficit"

@@ -155,6 +155,51 @@ def colonies_for(
     return processing, mining, units_per_hour
 
 
+def colonies_for_targets(
+    lines: dict[str, int],
+    schematics: dict[str, Schematic] | None = None,
+    recipes: RecipeBook | None = None,
+    purchase_p1: bool = False,
+) -> tuple[int, int]:
+    """
+    Колоний (переработка, добыча) на ОБЩИЙ набор продуктов {имя: число линий}.
+
+    В отличие от суммы `colonies_for()` по продуктам считает один общий
+    `expand_demand()`, как `build_plan()`: общие полуфабрикаты и P1
+    не дублируются, округление колоний идёт по набору целиком.
+    Найдено пользователем: подсказка обещала 90 занятых колоний, план
+    занял 89. Продукт без данных — KeyError, как у `colonies_for()`.
+    """
+    schematics = load_schematics() if schematics is None else schematics
+    recipes = load_recipes() if recipes is None else recipes
+
+    targets: dict[str, float] = {}
+    for product, count in lines.items():
+        recipe = recipes.get(product)
+        schematic = schematics.get(product)
+        if recipe is None or schematic is None:
+            raise KeyError(f"Нет данных для продукта {product}")
+        factories = FACTORIES_PER_TEMPLATE.get(recipe.tier)
+        if factories is None:
+            raise KeyError(f"Продукт {product} не является целевым (тир {recipe.tier})")
+        targets[product] = schematic.output_per_hour * factories * count
+
+    if not targets:
+        return 0, 0
+    demand = expand_demand(
+        targets, schematics=schematics, recipes=recipes, purchase_p1=purchase_p1
+    )
+    processing = mining = 0
+    for name, n_factories in demand.factories.items():
+        recipe = recipes.get(name)
+        tier = recipe.tier if recipe else None
+        if tier == "P1":
+            mining += math.ceil(n_factories / FACTORIES_PER_MINER)
+        elif tier in FACTORIES_PER_TEMPLATE:
+            processing += math.ceil(n_factories / FACTORIES_PER_TEMPLATE[tier])
+    return processing, mining
+
+
 def evaluate(
     product: str,
     prices: dict[str, float],
