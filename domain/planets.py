@@ -68,6 +68,35 @@ POCO_RATE_COLUMN = "POCO Tax Rate [%]"
 # ей нужен отдельный запрос без этого фильтра, не правка этой функции.
 READY_STATUS = "ready"
 
+# Полный список ресурсов CSV-матрицы (`data/planet_industry.csv`,
+# перенесённой в БД Фазой 1) — 30 колонок R0/P1 (плотность сырья на
+# планете) и 24 колонки «прямое R0→P2» (правая часть матрицы, см.
+# `domain/direct_p2.py`). Раньше существовали только как фактические
+# колонки уже загруженного CSV/БД — Фазе 3 (admin-панель, 28.09.2026)
+# нужен именно СПИСОК названий, не колонки существующих данных: CSV-
+# шаблон для НОВОГО (`no_data`, ещё пустого) региона обязан показать
+# все 54 заголовка даже при нулевых данных, иначе admin не будет знать,
+# какие ресурсы вообще нужно вписать.
+R0_RESOURCE_NAMES: tuple[str, ...] = (
+    "Aqueous Liquids", "Water", "Autotrophs", "Industrial Fibers",
+    "Base Metals", "Reactive Metals", "Carbon Compounds", "Biofuels",
+    "Complex Organisms", "Proteins", "Felsic Magma", "Silicon",
+    "Heavy Metals", "Toxic Metals", "Ionic Solutions", "Electrolytes",
+    "Microorganisms", "Bacteria", "Noble Gas", "Oxygen", "Noble Metals",
+    "Precious Metals", "Non-CS Crystals", "Chiral Structures",
+    "Planktic Colonies", "Biomass", "Reactive Gas", "Oxidizing Compound",
+    "Suspended Plasma", "Plasmoids",
+)
+P2_DIRECT_RESOURCE_NAMES: tuple[str, ...] = (
+    "Biocells", "Construction Blocks", "Consumer Electronics", "Coolant",
+    "Enriched Uranium", "Fertilizer", "Genetically Enhanced Livestock",
+    "Livestock", "Mechanical Parts", "Microfiber Shielding",
+    "Miniature Electronics", "Nanites", "Oxides", "Polyaramids",
+    "Polytextiles", "Rocket Fuel", "Silicate Glass", "Superconductors",
+    "Supertensile Plastics", "Synthetic Oil", "Test Cultures",
+    "Transmitter", "Viral Agent", "Water-Cooled CPU",
+)
+
 # Дата, на которую сделана выгрузка data/planet_industry.csv — не поле
 # из самого файла (в нём такой метки нет), а дата последнего изменения
 # файла в репозитории (`git log -1 -- data/planet_industry.csv`),
@@ -626,6 +655,64 @@ def _build_planet_book() -> PlanetBook:
         # но с базовыми колонками, чтобы методы PlanetBook (обращающиеся
         # к ним по имени) вернули честные пустые результаты, а не упали
         # на KeyError.
+        df = pd.DataFrame(columns=[
+            "Region", "Constellation", "System", "Planet", "Type",
+            RADIUS_COLUMN, POCO_RATE_COLUMN, "POCO Owner",
+        ])
+    else:
+        df = _expand_densities(rows)
+    return PlanetBook(df)
+
+
+def load_region_for_admin(region_id: int) -> PlanetBook:
+    """
+    `PlanetBook` ОДНОГО региона по id, БЕЗ фильтра `status == 'ready'`
+    (Фаза 3 мультирегиональности, 28.09.2026) — admin-панели нужно
+    видеть именно `no_data`-регионы, которые `load_planets()`
+    сознательно прячет (см. её докстринг). Не кэшируется: правки в
+    admin-панели должны быть видны немедленно, TTL здесь только мешал
+    бы («сохранил — не увидел на той же странице»), а трафик — один
+    пользователь, не сотни запросов в минуту, ради которых заведён кэш
+    `load_planets()` (правило 5).
+
+    Пустой список планет (region_id не существует или у региона пока
+    нет ни одной строки) — пустой `PlanetBook`, не исключение, тот же
+    принцип честного пробела, что и у `load_planets()`.
+    """
+    from sqlalchemy import select
+    from sqlalchemy.exc import OperationalError
+
+    from infra.db import session_scope
+    from infra.models import Planet as PlanetRow
+    from infra.models import Region as RegionRow
+
+    try:
+        with session_scope() as session:
+            query = (
+                select(PlanetRow, RegionRow.name)
+                .join(RegionRow, PlanetRow.region_id == RegionRow.id)
+                .where(RegionRow.id == region_id)
+                .order_by(PlanetRow.system, PlanetRow.planet_number)
+            )
+            rows = [
+                {
+                    "Region": region_name,
+                    "Constellation": planet.constellation,
+                    "System": planet.system,
+                    "Planet": float(planet.planet_number),
+                    "Type": planet.planet_type,
+                    RADIUS_COLUMN: planet.radius_km,
+                    POCO_RATE_COLUMN: planet.poco_tax_rate,
+                    "POCO Owner": planet.poco_owner,
+                    "r0_densities": planet.r0_densities,
+                    "p2_direct_densities": planet.p2_direct_densities,
+                }
+                for planet, region_name in session.execute(query)
+            ]
+    except OperationalError:
+        rows = []
+
+    if not rows:
         df = pd.DataFrame(columns=[
             "Region", "Constellation", "System", "Planet", "Type",
             RADIUS_COLUMN, POCO_RATE_COLUMN, "POCO Owner",

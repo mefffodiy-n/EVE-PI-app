@@ -9,9 +9,12 @@
 официального SDE CCP по расписанию. Плотность сырья при этом по-прежнему
 есть только для региона **Fountain** (перенесена из `data/
 planet_industry.csv` скриптом `scripts/migrate_planets_csv_to_db.py`, см.
-`deploy/README.md` раздел 1) — реальный расчёт плана для других регионов
-New Eden недоступен, пока для них нет такой же плотности (см.
-`docs/ROADMAP.md`, Фаза 10 — мультирегиональность, Фазы 3-5 в очереди).
+`deploy/README.md` раздел 1). С Фазы 3 (28.09.2026) её можно дозаполнить
+и для других регионов вручную — `/admin.html` + `api/blueprints/admin.py`,
+доступ по allowlist `PI_ADMIN_CHARACTER_IDS` (`deploy/README.md`, раздел
+2) — реальный расчёт плана для региона недоступен, пока в нём для этого
+никто не заполнил плотность и не нажал «Готово» (см. `docs/ROADMAP.md`,
+Фаза 10 — мультирегиональность, Фазы 4-5 в очереди).
 
 Этот файл — то, что нужно знать, прежде чем что-то менять. Правила ниже не
 пожелания: часть из них проверяется тестами, и нарушение роняет сборку.
@@ -152,7 +155,8 @@ migrations/       Alembic: миграции схемы (env.py берёт URL и
 api/              Flask, только чтение готовых данных
   __init__.py     фабрика приложения, отдача web/, обработка ошибок
   cache.py        LRU-кэш, ETag, разбор тела запроса
-  blueprints/     reference, plans, market, export, meta (+ /colonies), auth (правило 3)
+  blueprints/     reference, plans, market, export, meta (+ /colonies), auth (правило 3),
+                  admin (/api/admin — allowlist PI_ADMIN_CHARACTER_IDS, Фаза 3)
 
 scripts/          всё, что ходит в сеть или готовит данные
   esi_client.py            единая точка обращений к ESI-API
@@ -190,7 +194,10 @@ data/             только чтение
   schematics.json           создаётся локально, в git не хранится
   pi_director.db            SQLite dev-БД, создаётся `alembic upgrade head`, не в git
 
-web/index.html    весь интерфейс одним файлом, без сборки
+web/index.html    весь пользовательский интерфейс одним файлом, без сборки
+web/admin.html    admin-панель плотности сырья (Фаза 3) — отдельная
+                  минимальная страница, не часть index.html; только RU
+                  (инструмент одного владельца, не под правило 9)
 alembic.ini       конфиг Alembic (URL берётся из infra.config, не отсюда)
 ```
 
