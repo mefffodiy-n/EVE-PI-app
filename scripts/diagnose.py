@@ -325,7 +325,9 @@ def check_frontend() -> bool:
     if not index.is_file():
         _line(BAD, "web/index.html не найден")
         return False
-    text = index.read_text(encoding="utf-8")
+    from infra.frontend import read_frontend_source
+
+    text = read_frontend_source(index.parent)
 
     # Проверяем СВОЙСТВО, а не имя переменной: адрес API должен зависеть
     # от того, откуда открыта страница. Прежняя версия искала конкретное
