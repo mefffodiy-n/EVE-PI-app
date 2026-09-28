@@ -156,7 +156,7 @@ def planet_number_to_roman(value: float | int | str | None) -> str:
     значение возвращается как есть (честно, не выдумывая цифру).
     """
     try:
-        number = int(round(float(value)))
+        number = int(round(float(value)))  # type: ignore[arg-type]  # None ловится ниже как TypeError
     except (TypeError, ValueError):
         return str(value) if value is not None else ""
     if number <= 0:

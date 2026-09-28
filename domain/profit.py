@@ -145,7 +145,8 @@ def colonies_for(
     processing = 0
     mining = 0
     for name, count in demand.factories.items():
-        tier = recipes.get(name).tier if recipes.get(name) else None
+        recipe = recipes.get(name)
+        tier = recipe.tier if recipe else None
         if tier == "P1":
             mining += math.ceil(count / FACTORIES_PER_MINER)
         elif tier in FACTORIES_PER_TEMPLATE:
@@ -169,6 +170,8 @@ def evaluate(
     recipes = load_recipes() if recipes is None else recipes
     processing, mining, units = colonies_for(product, schematics, recipes)
     recipe = recipes.get(product)
+    if recipe is None:
+        raise KeyError(product)
 
     price = prices.get(product)
     revenue = None if price is None else price * units

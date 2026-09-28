@@ -87,8 +87,9 @@ revenue_share[product]` (`domain/throughput.py`) — эта доля, посчи
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from domain.throughput import Schematic, load_schematics
 
@@ -107,7 +108,7 @@ def _factory_count(structures_detail: list[dict]) -> int:
 
 def _resolve_rate(
     system: str | None,
-    planet: object,
+    planet: Any,
     planets: "PlanetBook | None",
 ) -> float | None:
     """
@@ -140,7 +141,7 @@ def _row_flow(row: dict, schematics: dict[str, Schematic], duty_cycle: float = 1
     в ту же долю меньше потребляет и производит, а не только продаёт
     меньше при той же вместимости причала.
     """
-    schematic = schematics.get(row.get("res_out"))
+    schematic = schematics.get(row.get("res_out") or "")
     if schematic is None:
         return None
     factories = _factory_count(row.get("structures_detail") or [])
@@ -218,8 +219,8 @@ class PlanProfitability:
     monthly_export_tax: float | None
     monthly_import_tax: float | None
     monthly_net_profit: float | None
-    missing_prices: list[str]
-    missing_rates: list[str]
+    missing_prices: Collection[str]
+    missing_rates: Collection[str]
     # Стоимость P1, закупленного на бирже (purchase_p1) —
     # None в обычном режиме плана (свой P1, стоимость закупки не
     # применима), не 0 — это разные вещи (правило 1, честный пробел).
@@ -296,8 +297,8 @@ class ColonyProfitability:
     monthly_revenue: float | None
     monthly_tax: float | None
     monthly_net_profit: float | None
-    missing_prices: list[str]
-    missing_rates: list[str]
+    missing_prices: Collection[str]
+    missing_rates: Collection[str]
     missing_output: list[str]
 
     def to_dict(self) -> dict:
@@ -456,7 +457,7 @@ def evaluate_plan_profitability(
     any_purchase = False
 
     for row in rows:
-        duty_cycle = duty_cycles.get(row.get("res_out"), 1.0)
+        duty_cycle = duty_cycles.get(row.get("res_out") or "", 1.0)
         flow = _row_flow(row, schematics, duty_cycle=duty_cycle)
         if flow is None:
             continue

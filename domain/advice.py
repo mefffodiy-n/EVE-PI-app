@@ -358,8 +358,8 @@ def advise(
             )
             higher = [s for s in advice.additions
                       if TIER_ORDER.get(s.tier, 0) > max(
-                          TIER_ORDER.get(recipes.get(p).tier, 0)
-                          for p in target_products if recipes.get(p))]
+                          TIER_ORDER.get(r.tier, 0)
+                          for r in (recipes.get(p) for p in target_products) if r)]
             if higher:
                 advice.note("advice_higher_tier_available")
 
@@ -433,9 +433,9 @@ def surplus_mining_targets(
                 p1_products.add(name)
 
     raw_by_product = {
-        name: recipes.get(name).source
-        for name in p1_products
-        if recipes.get(name) and recipes.get(name).source
+        name: r.source
+        for name, r in ((n, recipes.get(n)) for n in p1_products)
+        if r and r.source
     }
     if not raw_by_product:
         return []
