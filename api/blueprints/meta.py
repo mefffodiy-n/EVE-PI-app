@@ -15,7 +15,7 @@ from pathlib import Path
 
 from flask import Blueprint
 
-from api.cache import json_ok, with_etag
+from api.cache import json_ok
 from version import DEVELOPER, VERSION
 
 bp = Blueprint("meta", __name__)

@@ -21,7 +21,7 @@ from pathlib import Path
 
 import pytest
 
-from domain.features import FEATURES, by_section
+from domain.features import FEATURES
 
 ROOT = Path(__file__).resolve().parent.parent
 FRONTEND_CANDIDATES = ("web/index.html", "web/app.html")

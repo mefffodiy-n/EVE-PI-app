@@ -177,7 +177,7 @@ def upload_region(region_id: int):
     роняют запрос — честно собираются в `unmatched`.
     """
     from infra.db import session_scope
-    from infra.models import Planet, Region
+    from infra.models import Planet
 
     if "file" not in request.files:
         return json_error("Нет файла ('file')")

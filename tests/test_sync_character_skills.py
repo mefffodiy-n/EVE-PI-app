@@ -7,7 +7,6 @@ scripts/sync_character_skills: подтягивание уровней PI-ски
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, timezone
 
 import pytest
 

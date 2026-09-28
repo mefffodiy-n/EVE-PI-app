@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from infra import config, crypto
+from infra import config
 from infra.crypto import TokenCryptoError, decrypt, encrypt, generate_key
 
 

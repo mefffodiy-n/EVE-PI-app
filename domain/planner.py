@@ -36,7 +36,6 @@ from functools import lru_cache
 from pathlib import Path
 
 from domain.capacity import (
-    UnsupportedSetup,
     calculate_colony_load,
     load_templates,
     min_ccu_level_that_fits,
