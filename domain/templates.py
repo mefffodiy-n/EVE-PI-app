@@ -23,7 +23,7 @@ https://github.com/DalShooth/EVE_PI_Templates):
     S  — что производит структура; null у storage/launchpad. Называется
          здесь schematic_id по аналогии с игровым полем, но это НЕ то
          же число, что ESI кладёт в `schematic_id` пина фабрики — здесь
-         это type_id продукта (проверено 11.09.2026: для Plasmoids тут
+         это type_id продукта (проверено: для Plasmoids тут
          2389 — её type_id, а у ESI schematic_id той же фабрики 122).
          Для сопоставления с настоящим ESI schematic_id — см.
          scripts/sync_colony_status.py::schematic_info().

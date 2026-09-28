@@ -36,7 +36,7 @@ def check_data_files() -> bool:
     for name, required, hint in [
         ("recipes.json", True, "перенесите из старого репозитория"),
         ("pi_reference.json", True, "входит в скелет проекта"),
-        # Не required с 21.09.2026 (Фаза 1 мультирегиональности): расчёт
+        # Не required (Фаза 1 мультирегиональности): расчёт
         # читает справочник планет из БД (regions/planets), не из этого
         # файла — он остаётся только источником истории для разового
         # scripts/migrate_planets_csv_to_db.py, само наличие данных

@@ -93,7 +93,7 @@ def _type_volumes() -> dict[str, float]:
     снимком с последней синхронизации: с течением времени объём в
     причале на самом деле меняется (сырьё обычно «тяжелее» готовой
     продукции на единицу), а показанный процент — нет (найдено
-    пользователем 17.09.2026). Без объёма на единицу фронту нечем
+    пользователем). Без объёма на единицу фронту нечем
     пересчитать used_m3 под спроецированное содержимое.
 
     Кэш файла (data/cache/type_volumes.json) РАСТЁТ во время работы
@@ -128,7 +128,7 @@ def _initial_payload() -> dict:
     processing_recipes = [r for r in load_recipes() if r.tier in PROCESSING_TIERS]
     products = sorted(r.name for r in processing_recipes)
     # Тир продукта — для кнопок-фильтров P2/P3/P4 над списком в карточке
-    # «Что производим» (17.09.2026, Фаза 11, по прямому запросу
+    # «Что производим» (Фаза 11, по прямому запросу
     # пользователя): раньше фронтенд получал только имена, без тира
     # сузить список можно было исключительно текстовым поиском.
     product_tiers = {r.name: r.tier for r in processing_recipes}
@@ -169,7 +169,7 @@ def _initial_payload() -> dict:
         book = load_planets()
         if book.dataframe.empty:
             # БД без переноса (свежий клон/сервер до `scripts.
-            # migrate_planets_csv_to_db`) — load_planets() с 21.09.2026
+            # migrate_planets_csv_to_db`) — load_planets() 
             # (Фаза 1 мультирегиональности) не падает на этом, а честно
             # отдаёт пустой PlanetBook (см. её докстринг); раньше здесь
             # ловился FileNotFoundError отсутствующего CSV — теперь
@@ -222,7 +222,7 @@ def systems():
     пулу персонажей, фронтенд считает так же, как для /api/thresholds).
     С ним в ответе появляется `recommended` — система с наибольшим
     числом Barren/Temperate планет маленького радиуса и налогом POCO 1%
-    (domain/factory_site.py::recommend_home_system(), 21.09.2026, по
+    (domain/factory_site.py::recommend_home_system(), по
     прямому запросу пользователя — раньше фронтенд молча выбирал первую
     по алфавиту). Без `ccu` или когда рекомендовать нечего —
     `recommended: null`, честно (правило 1).

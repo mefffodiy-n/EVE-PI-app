@@ -1,7 +1,7 @@
 """
 Разовый перенос справочника планет из `data/planet_industry.csv` в БД
-(таблицы `regions`/`planets`) — Фаза 1 мультирегиональности, 21.09.2026,
-план утверждён пользователем 17.09.2026 (docs/ROADMAP.md, Фаза 10).
+(таблицы `regions`/`planets`) — Фаза 1 мультирегиональности,
+план утверждён пользователем (docs/ROADMAP.md, Фаза 10).
 
 ЗАЧЕМ. `domain/planets.py::load_planets()` после этой фазы читает
 `regions`/`planets` вместо CSV, но сам публичный API `PlanetBook` не

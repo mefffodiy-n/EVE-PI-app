@@ -10,7 +10,7 @@ ORM-модели.
 Колонка `account_id` есть в обеих таблицах — разделяет данные разных
 пользователей приложения (`api/session.py`). Была заведена под
 multi-tenant Фазы 3 заранее (чтобы не делать ALTER позже) и до
-11.09.2026 оставалась незаполненной ни одним запросом — из-за этого
+оставалась незаполненной ни одним запросом — из-за этого
 разные вошедшие через SSO пользователи видели персонажей, колонии и
 планы друг друга. Теперь заполняется в `api/blueprints/auth.py::_store()`
 (персонаж) и `domain/plan_storage.py::save()` (план), и читается везде,
@@ -48,17 +48,17 @@ class Character(Base):
 
     # Владелец записи — account_id визита, вошедшего через SSO этим
     # персонажем (api/session.py, api/blueprints/auth.py::_store()).
-    # NULL — персонаж заведён до 11.09.2026 (когда колонка была
+    # NULL — персонаж заведён раньше (когда колонка была
     # зарезервирована, но ещё не читалась ни одним запросом) и пока не
     # входил заново: /api/characters честно его не покажет никому, пока
     # не перелогинится.
     account_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     # Постоянная привязка к группе «основной + альты» (docs/ROADMAP.md,
-    # Фаза 9, 16.09.2026) — НЕЗАВИСИМАЯ от account_id/cookie-сессии
+    # Фаза 9) — НЕЗАВИСИМАЯ от account_id/cookie-сессии
     # браузера, в отличие от него. Заполняется автоматически при первом
     # входе через SSO (api/blueprints/auth.py::_store(), Фаза 11, п.3,
-    # 17.09.2026): первый персонаж визита — основной сам себе, дальше
+    #): первый персонаж визита — основной сам себе, дальше
     # каждый следующий вход в том же визите подтягивается к нему сам, без
     # ручного вызова group_characters() (он остался только для ручной
     # поправки, если автоматика выбрала не того). NULL — персонаж source=
@@ -103,7 +103,7 @@ class Plan(Base):
     warnings: Mapped[list] = mapped_column(JSON, default=list)
     assumptions: Mapped[list] = mapped_column(JSON, default=list)
     # {продукт P1: единиц в час} из PlanResult.to_dict()["purchased_p1"]
-    # (режим purchase_p1, 20.09.2026) — без него открытие сохранённого
+    # (режим purchase_p1) — без него открытие сохранённого
     # плана на закупаемом P1 не могло показать список закупки сырья
     # (панель читает purchased_p1 из lastPlanResp, а сохранённый план
     # его не помнил вовсе). Nullable — планы, сохранённые до этой
@@ -112,13 +112,13 @@ class Plan(Base):
     # {duty_cycles, missing_volumes, revenue_share} — три поля из
     # PlanResult.to_dict(), которые /api/plan-profitability домножает на
     # выручку/налоги (партии-эстафетой между тирами и доля продукта при
-    # пересечении целевых цепочек, 20.09.2026). Одним JSON-полем, не
+    # пересечении целевых цепочек). Одним JSON-полем, не
     # тремя колонками — они всегда сохраняются/читаются вместе, это один
     # согласованный набор поправок к прогнозу, а не три независимых
     # факта о плане. Без него открытие сохранённого плана считало
     # прибыльность заново с нуля (духcycle=1.0 везде, revenue_share
     # пустой) — прогноз "тупел" до полной загрузки без поправок при
-    # каждом повторном открытии, найдено пользователем 21.09.2026.
+    # каждом повторном открытии, найдено пользователем.
     # Nullable — планы, сохранённые до этой колонки, честно возвращают
     # {} по каждому ключу (см. StoredPlan._from_row).
     profitability_inputs: Mapped[dict | None] = mapped_column(JSON, nullable=True)
@@ -136,7 +136,7 @@ class Credential(Base):
     character_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
 
     # Зашифрованы infra.crypto (Fernet). В открытом виде в БД не лежат.
-    # Text, не голый String без длины (20.09.2026, найдено при проверке
+    # Text, не голый String без длины (найдено при проверке
     # схемы на MariaDB): Postgres и SQLite разрешают VARCHAR без длины,
     # MySQL/MariaDB — нет, `alembic upgrade head` падал с "VARCHAR
     # requires a length on dialect mysql" уже на создании таблицы.
@@ -221,7 +221,7 @@ class Colony(Base):
     cpu_percent: Mapped[float | None] = mapped_column(nullable=True)
     pg_percent: Mapped[float | None] = mapped_column(nullable=True)
     # Абсолютные числа (tf/MW) рядом с процентами — панель колонии в игре
-    # показывает оба (см. скриншот пользователя 11.09.2026), не только %.
+    # показывает оба (см. скриншот пользователя), не только %.
     cpu_used: Mapped[float | None] = mapped_column(nullable=True)
     cpu_capacity: Mapped[float | None] = mapped_column(nullable=True)
     pg_used: Mapped[float | None] = mapped_column(nullable=True)
@@ -248,8 +248,8 @@ class Colony(Base):
 
 class Region(Base):
     """
-    Регион New Eden (Фаза 1 мультирегиональности, 21.09.2026,
-    docs/ROADMAP.md — план утверждён 17.09.2026). `id` — суррогатный
+    Регион New Eden (Фаза 1 мультирегиональности,
+    docs/ROADMAP.md — план утверждён). `id` — суррогатный
     autoincrement, не настоящий SDE region_id: сверка с реальными id при
     догрузке других регионов — задача Фазы 2 (`scripts/refresh_sde.py`,
     сверяет по `name`), не этой миграции, переносящей только Fountain.
@@ -271,7 +271,7 @@ class Region(Base):
 class Planet(Base):
     """
     Одна планета — замена `data/planet_industry.csv` (Фаза 1
-    мультирегиональности, 21.09.2026). `domain/planets.py::load_planets()`
+    мультирегиональности). `domain/planets.py::load_planets()`
     строит из этих строк тот же `PlanetBook`, что раньше строился из CSV
     (тот же публичный API, те же имена колонок в собранном DataFrame) —
     см. докстринг load_planets().
@@ -321,7 +321,7 @@ class ExtractionSample(Base):
     графика в панели колонии (Фаза 7, docs/ROADMAP.md — «порог просадки не
     выдумывать, вывести из истории самой колонии»). ESI сама историю не
     хранит, отдаёт только текущий снимок (qty_per_cycle/cycle_time) —
-    копим сами, с нуля, начиная с 11.09.2026.
+    копим сами, с нуля.
 
     pin_id — потому что на одной планете может быть несколько
     экстракторов (разное сырьё), считать их вместе было бы смешиванием
@@ -338,7 +338,7 @@ class ExtractionSample(Base):
     # напр. 1053137617427), в отличие от character_id/planet_id, которые
     # пока укладываются в 32 бита. SQLite не проверяет ширину (INTEGER —
     # только приближение типа), поэтому это молчало на dev — обнаружилось
-    # только на переносе данных в Postgres (15.09.2026):
+    # только на переносе данных в Postgres:
     # NumericValueOutOfRange на первой же реальной строке.
     pin_id: Mapped[int] = mapped_column(BigInteger)
 

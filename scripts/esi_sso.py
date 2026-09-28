@@ -193,7 +193,7 @@ def revoke(token: str, token_type_hint: str = "refresh_token") -> None:
 
     Доступно ТОЛЬКО когда PI_ESI_CLIENT_SECRET задан: revocation_endpoint
     ESI принимает исключительно client_secret_basic/_post/_jwt (сверено с
-    .well-known/oauth-authorization-server, 12.09.2026, правило 11) — без
+    .well-known/oauth-authorization-server, правило 11) — без
     секрета публичный PKCE-клиент вызвать его не может ни при каких
     условиях, поэтому это не запасной путь, а отдельная возможность,
     включаемая явно (см. api/blueprints/auth.py::unlink, где вызов

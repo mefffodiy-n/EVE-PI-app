@@ -59,14 +59,14 @@ class StoredPlan:
     warnings: list[str] = field(default_factory=list)
     assumptions: list[str] = field(default_factory=list)
     account_id: str | None = None
-    # {продукт P1: единиц в час} — режим purchase_p1 (20.09.2026), нужен
+    # {продукт P1: единиц в час} — режим purchase_p1, нужен
     # для списка закупки сырья при повторном открытии плана (см.
     # infra/models.py::Plan.purchased_p1). {} в обычном плане и в
     # планах, сохранённых до этой колонки — не None: и там, и там
     # закупки не показать, разница не имеет значения потребителю.
     purchased_p1: dict[str, float] = field(default_factory=dict)
     # Партии-эстафетой + доля продукта при пересечении целевых цепочек
-    # (21.09.2026, см. infra/models.py::Plan.profitability_inputs) — без
+    # (см. infra/models.py::Plan.profitability_inputs) — без
     # них /api/plan-profitability при повторном открытии плана считает
     # прибыльность заново с нуля (duty_cycle=1.0 везде, revenue_share
     # пустой), теряя все поправки прогноза. {} /[] в обычном плане и в
