@@ -834,12 +834,14 @@ details.msgs[open] > summary::before { content:'▾ '; }
    прокручивает страницу. */
 .mini.export { border-color:var(--amber); color:var(--amber); }
 .mini.export:hover { background:var(--amber); color:var(--void); }
-/* «Добавить персонажа» — единственное действие в карточке «Персонажи»,
-   которое реально расширяет пул (не просто фильтр/сортировка), должно
-   выделяться так же, как «Экспорт» (21.09.2026, по прямому запросу
-   пользователя). */
-.mini.add-character { border-color:var(--amber); color:var(--amber); }
-.mini.add-character:hover { background:var(--amber); color:var(--void); }
+/* Общий акцентный модификатор .mini — рамка/цвет var(--amber), заливка
+   на hover. Впервые для «Добавить персонажа» (21.09.2026, единственное
+   действие в карточке «Персонажи», реально расширяющее пул, не просто
+   фильтр/сортировка, — тот же приём, что и у «Экспорт»); переиспользован
+   для «Admin-панель» (28.09.2026, по прямому запросу пользователя —
+   тот же визуальный вес, что и у соседней кнопки). */
+.mini.accent { border-color:var(--amber); color:var(--amber); }
+.mini.accent:hover { background:var(--amber); color:var(--void); }
 .picker-list { max-height:220px; overflow-y:auto; }
 .picker-list label { display:flex; align-items:center; gap:8px; padding:4px 8px;
                      cursor:pointer; font-size:12px; }
@@ -1339,6 +1341,7 @@ let productTiers={}, activeTiers=new Set();
 const PRODUCT_TIER_ORDER=['P2','P3','P4'];
 let lang='ru', crew=[], meta={};
 let regions={}, systemCounts={}, allProducts=[], allConstellations=[];
+let isAdmin=false;  // /api/admin/ping — см. checkAdminAccess()
 let dataCounts=null;  // {bases, products} — для чипа data, перерисовывается при смене языка
 
 function renderDataChip(){
@@ -1367,7 +1370,7 @@ const T={
   details:'Детали',back:'Назад',reserveOk:'запас везде есть',
   noReserve:'без запаса',sortLoad:'По загрузке',sortReserve:'По остатку запаса',
   sortPilot:'По имени персонажа',sortSystem:'По системе',
-  cProc:'переработка',cMine:'добыча',addCharacter:'Добавить персонажа',
+  cProc:'переработка',cMine:'добыча',addCharacter:'Добавить персонажа',adminPanel:'Admin-панель',
   unlink:'Отвязать',unlinkHint:'Стереть токен на нашей стороне — планировщик перестанет видеть персонажа до повторного входа. Доступ на стороне CCP отдельно отзывается на eveonline.com/account/third_party_apps.',
   reconnect:'Перезайти',reconnectHint:'Доступ ESI для этого персонажа истёк или отозван (сменён пароль, отозвано приложение) — колонии и скиллы больше не обновляются. Перезайдите через EVE SSO этим же персонажем.',
   unlinkFail:'Не удалось отвязать персонажа',
@@ -1451,7 +1454,7 @@ const T={
   details:'Details',back:'Back',reserveOk:'headroom everywhere',
   noReserve:'no headroom',sortLoad:'By load',sortReserve:'By remaining headroom',
   sortPilot:'By character name',sortSystem:'By system',
-  cProc:'processing',cMine:'extraction',addCharacter:'Add character',
+  cProc:'processing',cMine:'extraction',addCharacter:'Add character',adminPanel:'Admin panel',
   unlink:'Unlink',unlinkHint:'Erases the token on our side — the planner stops seeing this character until you log in again. Access on the CCP side is revoked separately at eveonline.com/account/third_party_apps.',
   reconnect:'Reconnect',reconnectHint:'ESI access for this character has expired or been revoked (password changed, app access revoked) — colonies and skills are no longer updating. Log in again through EVE SSO with this same character.',
   unlinkFail:'Could not unlink the character',
@@ -4823,6 +4826,21 @@ async function loadCrew(){
   renderDash(); renderColonies();
 }
 
+/* Кнопка «Admin-панель» рядом с «Добавить персонажа» — только если
+   ТЕКУЩАЯ сессия проходит серверную проверку доступа (28.09.2026, по
+   прямому запросу пользователя). Один раз при загрузке страницы —
+   admin-доступ персонажа не меняется в рамках визита без полной
+   перезагрузки (вход другим персонажем идёт через SSO-редирект,
+   handleAuthRedirect(), а это всегда свежая загрузка страницы). 404 —
+   такой же обычный ответ, как и «нет доступа», не ошибка сети. */
+async function checkAdminAccess(){
+  try{
+    const r=await fetch(`${API}/admin/ping`);
+    isAdmin=r.status===200;
+  }catch(e){ isAdmin=false; }
+  renderCrew();
+}
+
 /* «Отвязать персонажа». Стирает нашу копию токена и открепляет персонажа
    от визита — планировщик и «Мои колонии» его больше не увидят, пока не
    войдёте им заново. Гарантировано всегда. Настоящий отзыв на стороне
@@ -5113,7 +5131,15 @@ function renderCrew(){
   if(ssoBtn) ssoBtn.style.display=hasLinked?'none':'';
   const hintBox=document.getElementById('crewHint');
   if(hintBox) hintBox.innerHTML=hasLinked
-    ? `<button class="mini add-character" onclick="startLogin()">${t('addCharacter')}</button>` : '';
+    ? `<button class="mini accent" onclick="startLogin()">${t('addCharacter')}</button>`
+      // Кнопка видна, только если ТЕКУЩАЯ сессия прошла /api/admin/ping
+      // (checkAdminAccess(), вызывается один раз при загрузке страницы) —
+      // персонаж есть в PI_ADMIN_CHARACTER_IDS (28.09.2026, по прямому
+      // запросу пользователя). Сам admin.html повторяет ту же проверку
+      // на сервере — эта кнопка только для удобства навигации, не замена
+      // серверной проверке доступа.
+      + (isAdmin ? `<button class="mini accent" onclick="location.href='/admin.html'">${t('adminPanel')}</button>` : '')
+    : '';
   if(!crew.length){
     box.innerHTML=`<div style="color:var(--dim);font-size:12px">${t('noData')}</div>`;
     fitStepFills();
@@ -5457,7 +5483,7 @@ lang=store.get('pi-lang','ru');
 
 measureTopbar(); measureTools();
 handleAuthRedirect();
-boot(); loadMeta(); loadCrew(); loadProfit(); loadColonies(); loadSaved(); applyLang();
+boot(); loadMeta(); loadCrew(); checkAdminAccess(); loadProfit(); loadColonies(); loadSaved(); applyLang();
 // Онлайн меняется медленно; снимок обновляет фоновый сборщик,
 // поэтому опрашиваем раз в минуту и только читаем готовое.
 setInterval(loadMeta, 60000);
