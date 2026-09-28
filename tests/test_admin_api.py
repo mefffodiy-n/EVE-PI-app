@@ -99,6 +99,25 @@ def admin_client(client):
     return client
 
 
+class TestCacheStatsAccess:
+    """/api/cache-stats раньше был открыт всем (рецензия, 29.09.2026)."""
+
+    def test_anonymous_gets_404(self, client):
+        assert client.get("/api/cache-stats").status_code == 404
+
+    def test_non_admin_gets_404(self, client):
+        _add_character(999999, "acct-plain")
+        _login_as(client, "acct-plain")
+        assert client.get("/api/cache-stats").status_code == 404
+
+    def test_admin_gets_stats(self, client):
+        _add_character(500001, "acct-admin")
+        _login_as(client, "acct-admin")
+        response = client.get("/api/cache-stats")
+        assert response.status_code == 200
+        assert "plan_cache" in response.get_json()
+
+
 class TestRegionsList:
     def test_lists_all_statuses_including_no_data(self, admin_client):
         _add_region("Fountain", "ready")

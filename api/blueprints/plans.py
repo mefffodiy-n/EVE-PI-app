@@ -26,6 +26,7 @@ from __future__ import annotations
 
 from flask import Blueprint
 
+from api.blueprints.admin import require_admin
 from api.cache import cache_key, json_error, json_ok, parse_json_body, plan_cache
 from domain.planets import load_planets
 from domain.planner import PlanRequest, PlanResult, build_plan
@@ -396,6 +397,7 @@ def compare_plans():
 
 
 @bp.get("/cache-stats")
+@require_admin
 def cache_stats():
-    """Диагностика эффективности кэша планов."""
+    """Диагностика эффективности кэша планов — только admin-персонажам, остальным 404."""
     return json_ok(plan_cache=plan_cache.stats())
