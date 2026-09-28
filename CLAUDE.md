@@ -223,7 +223,8 @@ github.com/Alexmidrus/EveGAS_calc).
 ## Запуск
 
 ```
-pip install -r requirements.lock.txt           # точные версии; requirements.txt — только границы
+pip install -r requirements.lock.txt           # рантайм, точные версии; requirements.txt — только границы
+pip install -r requirements-dev.lock.txt       # разработка/CI: pytest, ruff, mypy, pytest-cov (поверх рантайма)
 python -m scripts.extract_schematics --write   # создаёт data/schematics.json
 python -m alembic upgrade head                 # создаёт таблицы БД
 python -m scripts.migrate_planets_csv_to_db    # справочник планет (регион Fountain) в regions/planets

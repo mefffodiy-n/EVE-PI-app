@@ -1,0 +1,15 @@
+# Инструменты разработки и CI поверх рантайма (requirements.txt).
+# Границы намерения; точные версии — requirements-dev.lock.txt.
+-r requirements.txt
+
+pytest>=8.0
+pytest-cov>=5.0
+# Настоящий разбор JS-синтаксиса web/app.js в test_frontend_integrity.py:
+# 11.09.2026 фронтенд целиком сломался (SyntaxError в каждом браузере) от
+# обратных кавычек внутри текста справки — подсчётом скобок такое не
+# поймать, нужна настоящая грамматика. Node.js не используется, поэтому
+# чистый Python, не `node --check`.
+esprima>=4.0
+ruff>=0.6
+mypy>=1.10
+pandas-stubs>=2.2
