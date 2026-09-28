@@ -87,7 +87,6 @@ def callback():
     from scripts.esi_sso import (
         character_from_claims,
         exchange_code,
-        expires_at,
         verify_access_token,
     )
 

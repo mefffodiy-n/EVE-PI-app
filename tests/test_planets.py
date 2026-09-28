@@ -15,7 +15,6 @@ isolate_database) строками, эквивалентными реально�
 
 from __future__ import annotations
 
-import pytest
 
 from domain.planets import load_planets, planet_number_to_roman
 

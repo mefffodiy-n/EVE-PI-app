@@ -13,7 +13,7 @@ import urllib.parse
 
 import pytest
 
-from domain.profit import ChainEconomics, colonies_for, evaluate, rank
+from domain.profit import colonies_for, evaluate, rank
 from domain.recipes import load_recipes
 from domain.throughput import Schematic
 
