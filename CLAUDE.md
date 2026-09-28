@@ -173,6 +173,7 @@ scripts/          всё, что ходит в сеть или готовит д
   scheduler.py             запуск всех сборщиков одним процессом (с журналом)
   serve.py                 production-запуск через waitress (не run.py)
   backup.py                копия БД и снимков кэша, чистка старых
+  verify_backup.py         раз в неделю: последняя копия разворачивается на пустой БД
   extract_schematics.py    количества вход/выход из шаблонов
   seed_dev_characters.py   заглушки персонажей (нет ESI-токенов)
   diagnose.py              самодиагностика
