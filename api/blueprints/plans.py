@@ -30,7 +30,7 @@ from api.cache import cache_key, json_error, json_ok, parse_json_body, plan_cach
 from domain.planets import load_planets
 from domain.planner import PlanRequest, PlanResult, build_plan
 from domain.recipes import load_recipes
-from scripts.seed_dev_characters import load_characters
+from domain.characters import load_characters
 
 bp = Blueprint("plans", __name__)
 
@@ -166,7 +166,7 @@ def advice():
         return json_error("Не выбрано ни одного целевого продукта")
 
     from api.session import current_account_id
-    from scripts.seed_dev_characters import load_characters
+    from domain.characters import load_characters
 
     characters = load_characters(current_account_id())
     if not characters:
