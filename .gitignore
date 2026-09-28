@@ -45,3 +45,5 @@ data/backups/
 
 # Кэш ETag для запросов к ESI — служебный файл, не часть кода.
 data/cache/etags.json
+
+.coverage
