@@ -2,92 +2,289 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>PI Director — admin</title>
 <style>
-  :root { --void:#0b0d10; --panel:#12151a; --seam:#2a2f37; --dim:#8a8f98; --text:#e8e8ea; --amber:#e8a33d; }
-  body { background:var(--void); color:var(--text); font-family:'Segoe UI',Arial,sans-serif; font-size:13px; margin:0; padding:20px; }
-  h1 { font-size:16px; margin:0 0 16px; }
-  h2 { font-size:13px; margin:24px 0 8px; color:var(--dim); text-transform:uppercase; letter-spacing:.04em; }
-  table { border-collapse:collapse; width:100%; margin-bottom:16px; }
-  th, td { border:1px solid var(--seam); padding:4px 8px; text-align:left; font-size:12px; }
-  th { color:var(--dim); font-weight:normal; }
-  input, select, button { background:var(--panel); color:var(--text); border:1px solid var(--seam); padding:3px 6px; font-size:12px; }
-  button { cursor:pointer; }
-  button:hover { border-color:var(--amber); color:var(--amber); }
-  .status-ready { color:#6cbf6c; }
-  .status-no_data { color:var(--dim); }
-  .msg { padding:6px 10px; margin-bottom:10px; border:1px solid var(--seam); }
-  .msg.bad { border-color:#d15b5b; color:#d15b5b; }
-  .msg.ok { border-color:#6cbf6c; color:#6cbf6c; }
-  .row { display:flex; gap:8px; align-items:center; margin-bottom:8px; }
-  .density-cell input { width:70px; }
+@font-face { font-family:'Inter'; font-style:normal; font-weight:100 900; font-display:swap;
+  src:url('fonts/inter-latin.woff2') format('woff2');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family:'Inter'; font-style:normal; font-weight:100 900; font-display:swap;
+  src:url('fonts/inter-cyrillic.woff2') format('woff2');
+  unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116; }
+@font-face { font-family:'JetBrains Mono'; font-style:normal; font-weight:100 800; font-display:swap;
+  src:url('fonts/jetbrains-mono-latin.woff2') format('woff2');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD; }
+@font-face { font-family:'JetBrains Mono'; font-style:normal; font-weight:100 800; font-display:swap;
+  src:url('fonts/jetbrains-mono-cyrillic.woff2') format('woff2');
+  unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116; }
+
+/* Та же палитра токенов, что и у web/index.html (Фаза 8) — держится тут
+   отдельной копией (не общим файлом, весь проект без сборки, правило 4),
+   но переменные и их значения совпадают буквально, чтобы обе страницы
+   выглядели одним приложением, а не двумя разными инструментами. */
+:root {
+  --void:#0a0805; --hull:#12100a; --seam:#2c2416; --hover:#1c1810;
+  --inset:#0d0b07; --dim:#8b7f66; --read:#ddd2bb; --bright:#fbf4e6;
+  --amber:#e8a33d; --amber-hi:#ffca74; --flux:#5ba8c9; --alarm:#d6553f; --calm:#5aa87a;
+}
+body.light {
+  --void:#f4f1ea; --hull:#faf8f3; --seam:#d8cdb4; --hover:#ece3d0;
+  --inset:#efe8d9; --dim:#6b6459; --read:#2a2620; --bright:#14110c;
+  --amber:#d4870f; --amber-hi:#a8690c; --flux:#1d6fa8; --alarm:#b03e36; --calm:#2c7358;
+}
+.theme-switching *, .theme-switching *::before, .theme-switching *::after { transition:none !important; }
+* { box-sizing:border-box; }
+html { min-width:480px; }
+body { margin:0; background:var(--void); color:var(--read); min-width:480px;
+       font-family:'Inter',system-ui,sans-serif; font-size:13px; line-height:1.45; }
+.num { font-family:'JetBrains Mono',monospace; font-variant-numeric:tabular-nums; }
+
+.topbar { position:sticky; top:0; z-index:20; display:flex; align-items:center; gap:10px;
+          padding:8px 16px; border-bottom:1px solid var(--seam); background:var(--hull); flex-wrap:wrap; }
+.brand { display:flex; align-items:center; gap:10px; margin-right:auto; }
+.brand-avatar { width:26px; height:26px; border-radius:50%; }
+.brand-text { display:flex; flex-direction:column; line-height:1.1; }
+.brand-title { font-weight:700; font-size:14px; color:var(--bright); }
+.brand-text small { color:var(--dim); font-weight:600; font-size:9px; letter-spacing:.1em; text-transform:uppercase; }
+.tbtn { background:none; border:1px solid var(--seam); color:var(--read); padding:5px 12px;
+        cursor:pointer; font-size:12px; font-family:inherit; }
+.tbtn:hover { border-color:var(--flux); color:var(--flux); }
+.langs { display:flex; border:1px solid var(--seam); }
+.langs button { background:none; border:none; color:var(--dim); padding:5px 10px;
+                cursor:pointer; font-size:12px; font-family:'JetBrains Mono',monospace; }
+.langs button.on { background:var(--seam); color:var(--bright); }
+.icon-btn { width:28px; height:28px; display:grid; place-items:center; background:none;
+            border:1px solid var(--seam); color:var(--dim); cursor:pointer; }
+.icon-btn:hover { color:var(--amber); border-color:var(--amber); }
+.icon-btn svg { width:14px; height:14px; }
+body:not(.light) .ic-sun, body.light .ic-moon { display:none; }
+
+.wrap { max-width:1100px; margin:0 auto; padding:18px 16px 40px; }
+#messages .msg { padding:8px 12px; margin-bottom:12px; border:1px solid var(--seam); font-size:12px; }
+.msg.bad { border-color:var(--alarm); color:var(--alarm); }
+.msg.ok { border-color:var(--calm); color:var(--calm); }
+
+.step-card { background:var(--hull); border:1px solid var(--seam); margin-bottom:16px; }
+.step-head { display:flex; align-items:center; gap:10px; padding:11px 14px; border-bottom:1px solid var(--seam); flex-wrap:wrap; }
+.step-title { font-weight:600; font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--bright); }
+.step-count { margin-left:auto; color:var(--amber); font-size:11px; font-family:'JetBrains Mono',monospace; }
+.step-body { padding:14px; }
+
+.picker-bar { display:flex; gap:8px; align-items:center; margin-bottom:10px; flex-wrap:wrap; }
+.picker-bar input[type=search] { flex:1; min-width:160px; background:var(--void);
+  border:1px solid var(--seam); color:var(--read); padding:5px 8px; font-size:12px; font-family:inherit; }
+.picker-bar input[type=search]:focus { outline:none; border-color:var(--amber); }
+.picker-bar select { background:var(--void); border:1px solid var(--seam); color:var(--read);
+  padding:5px 8px; font-size:12px; font-family:inherit; }
+
+table { border-collapse:collapse; width:100%; }
+th, td { border-bottom:1px solid var(--seam); padding:6px 8px; text-align:left; font-size:12px; }
+th { color:var(--dim); font-weight:600; text-transform:uppercase; letter-spacing:.04em; font-size:10px; }
+tbody tr:hover { background:var(--hover); }
+.status-ready { color:var(--calm); }
+.status-no_data { color:var(--dim); }
+.mini { background:none; border:1px solid var(--seam); color:var(--dim); padding:3px 8px;
+        cursor:pointer; font-size:11px; white-space:nowrap; font-family:inherit; }
+.mini:hover { color:var(--amber); border-color:var(--amber); }
+.mini.accent { border-color:var(--amber); color:var(--amber); }
+.mini.accent:hover { background:var(--amber); color:var(--void); }
+input[type=number], input[type=text] { background:var(--void); border:1px solid var(--seam);
+  color:var(--read); padding:3px 6px; font-size:12px; font-family:inherit; }
+input[type=number] { width:70px; }
+input[type=text] { width:110px; }
+
+#regionDetail { display:none; }
+.detail-actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:12px; }
 </style>
 </head>
 <body>
-<h1>PI Director — плотность сырья по регионам (admin)</h1>
+
+<div class="topbar">
+  <div class="brand">
+    <img class="brand-avatar" src="logo.png" alt="">
+    <div class="brand-text">
+      <span class="brand-title">PI Director</span>
+      <small data-i18n="adminSub">admin</small>
+    </div>
+  </div>
+  <button class="tbtn" onclick="location.href='/'" data-i18n="backToApp">← На главную</button>
+  <div class="langs" id="langGroup">
+    <button data-lang="ru" class="on">RU</button><button data-lang="en">EN</button>
+  </div>
+  <button class="icon-btn" id="themeBtn" onclick="toggleTheme()" title="Тема" data-i18n-title="themeTitle">
+    <svg class="ic-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+      <circle cx="12" cy="12" r="4.2"/>
+      <path d="M12 2v2.6M12 19.4V22M2 12h2.6M19.4 12H22M4.9 4.9l1.9 1.9M17.2 17.2l1.9 1.9M19.1 4.9l-1.9 1.9M6.8 17.2l-1.9 1.9"/>
+    </svg>
+    <svg class="ic-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7">
+      <path d="M20.5 14.4A8.6 8.6 0 0 1 9.6 3.5a8.6 8.6 0 1 0 10.9 10.9z"/>
+    </svg>
+  </button>
+</div>
+
+<div class="wrap">
 <div id="messages"></div>
 
-<h2>Регионы</h2>
-<table id="regionsTable">
-  <thead><tr><th>Регион</th><th>Статус</th><th>Планет</th><th></th></tr></thead>
-  <tbody id="regionsBody"></tbody>
-</table>
-
-<div id="regionDetail" style="display:none">
-  <h2 id="regionTitle"></h2>
-  <div class="row">
-    <button onclick="downloadTemplate()">Скачать CSV-шаблон</button>
-    <input type="file" id="uploadFile" accept=".csv">
-    <button onclick="uploadTemplate()">Загрузить CSV</button>
-    <button onclick="markReady()">Готово (сделать регион ready)</button>
+<div class="step-card">
+  <div class="step-head">
+    <span class="step-title" data-i18n="regionsTitle">Регионы</span>
+    <span class="step-count" id="regionsCount"></span>
   </div>
-  <table id="planetsTable">
-    <thead><tr><th>Система</th><th>№</th><th>Тип</th><th>Радиус, км</th><th>POCO %</th><th>Владелец</th></tr></thead>
-    <tbody id="planetsBody"></tbody>
-  </table>
+  <div class="step-body">
+    <div class="picker-bar">
+      <input type="search" id="regionSearch" data-i18n-ph="searchPh" placeholder="Поиск по названию…" oninput="renderRegions()">
+      <select id="statusFilter" onchange="renderRegions()">
+        <option value="" data-i18n="statusAll">Все статусы</option>
+        <option value="ready" data-i18n="statusReady">ready</option>
+        <option value="no_data" data-i18n="statusNoData">no_data</option>
+      </select>
+    </div>
+    <table>
+      <thead><tr>
+        <th data-i18n="colRegion">Регион</th><th data-i18n="colStatus">Статус</th>
+        <th data-i18n="colPlanets">Планет</th><th></th>
+      </tr></thead>
+      <tbody id="regionsBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="step-card" id="regionDetail">
+  <div class="step-head">
+    <span class="step-title" id="regionTitle"></span>
+  </div>
+  <div class="step-body">
+    <div class="detail-actions">
+      <button class="mini" onclick="downloadTemplate()" data-i18n="downloadTemplate">Скачать CSV-шаблон</button>
+      <input type="file" id="uploadFile" accept=".csv">
+      <button class="mini" onclick="uploadTemplate()" data-i18n="uploadTemplate">Загрузить CSV</button>
+      <button class="mini accent" onclick="markReady()" data-i18n="markReady">Готово — сделать ready</button>
+    </div>
+    <table>
+      <thead><tr>
+        <th data-i18n="colSystem">Система</th><th data-i18n="colNumber">№</th>
+        <th data-i18n="colType">Тип</th><th data-i18n="colRadius">Радиус, км</th>
+        <th data-i18n="colPocoRate">POCO %</th><th data-i18n="colPocoOwner">Владелец</th>
+      </tr></thead>
+      <tbody id="planetsBody"></tbody>
+    </table>
+  </div>
+</div>
 </div>
 
 <script>
 const API = '/api/admin';
 let currentRegionId = null;
+let allRegions = [];
+let lang = 'ru';
 
-function msg(text, bad) {
-  document.getElementById('messages').innerHTML =
-    `<div class="msg ${bad ? 'bad' : 'ok'}">${text}</div>`;
+const store = {
+  get(k, fallback){ try{ return localStorage.getItem(k) ?? fallback; }catch(e){ return fallback; } },
+  set(k, v){ try{ localStorage.setItem(k, v); }catch(e){} },
+};
+
+const T = {
+  ru: {
+    adminSub:'admin', backToApp:'← На главную', themeTitle:'Тема',
+    regionsTitle:'Регионы', searchPh:'Поиск по названию…',
+    statusAll:'Все статусы', statusReady:'ready', statusNoData:'no_data',
+    colRegion:'Регион', colStatus:'Статус', colPlanets:'Планет', open:'Открыть',
+    downloadTemplate:'Скачать CSV-шаблон', uploadTemplate:'Загрузить CSV',
+    markReady:'Готово — сделать ready',
+    colSystem:'Система', colNumber:'№', colType:'Тип', colRadius:'Радиус, км',
+    colPocoRate:'POCO %', colPocoOwner:'Владелец',
+    noFile:'Выберите файл', uploadError:'Ошибка загрузки', saved:'Сохранено', error:'Ошибка',
+    notFound:'Не найдено', regionSetReady:'Регион переключён в ready',
+    updatedCount:'Обновлено планет: {n}.', notMatched:'Не найдено в этом регионе: {list}.',
+  },
+  en: {
+    adminSub:'admin', backToApp:'← Back to app', themeTitle:'Theme',
+    regionsTitle:'Regions', searchPh:'Search by name…',
+    statusAll:'All statuses', statusReady:'ready', statusNoData:'no_data',
+    colRegion:'Region', colStatus:'Status', colPlanets:'Planets', open:'Open',
+    downloadTemplate:'Download CSV template', uploadTemplate:'Upload CSV',
+    markReady:'Done — mark ready',
+    colSystem:'System', colNumber:'#', colType:'Type', colRadius:'Radius, km',
+    colPocoRate:'POCO %', colPocoOwner:'Owner',
+    noFile:'Choose a file', uploadError:'Upload failed', saved:'Saved', error:'Error',
+    notFound:'Not found', regionSetReady:'Region switched to ready',
+    updatedCount:'Planets updated: {n}.', notMatched:'Not found in this region: {list}.',
+  },
+};
+function t(key){ return (T[lang] && T[lang][key]) || key; }
+function fmt(template, values){
+  return Object.entries(values).reduce((s,[k,v]) => s.replace(`{${k}}`, v), template);
 }
 
-async function loadRegions() {
+function applyLang(){
+  document.documentElement.lang = lang;
+  document.querySelectorAll('[data-i18n]').forEach(el => el.textContent = t(el.dataset.i18n));
+  document.querySelectorAll('[data-i18n-ph]').forEach(el => el.placeholder = t(el.dataset.i18nPh));
+  document.querySelectorAll('[data-i18n-title]').forEach(el => el.title = t(el.dataset.i18nTitle));
+  document.querySelectorAll('.langs button').forEach(b => b.classList.toggle('on', b.dataset.lang === lang));
+  store.set('pi-lang', lang);
+  renderRegions();
+}
+document.querySelectorAll('.langs button').forEach(b => b.onclick = () => { lang = b.dataset.lang; applyLang(); });
+
+function toggleTheme(){ setTheme(document.body.classList.contains('light') ? 'dark' : 'light'); }
+function setTheme(name){
+  const root = document.documentElement;
+  root.classList.add('theme-switching');
+  document.body.classList.toggle('light', name === 'light');
+  void document.body.offsetWidth;
+  requestAnimationFrame(() => requestAnimationFrame(() => root.classList.remove('theme-switching')));
+  store.set('pi-theme', name);
+}
+setTheme(store.get('pi-theme', 'dark'));
+lang = store.get('pi-lang', 'ru');
+
+function msg(text, bad){
+  document.getElementById('messages').innerHTML = `<div class="msg ${bad ? 'bad' : 'ok'}">${text}</div>`;
+}
+
+async function loadRegions(){
   const r = await fetch(`${API}/regions`);
-  if (r.status === 404) {
-    document.body.innerHTML = '<h1>Не найдено</h1>';
+  if (r.status === 404){
+    document.body.innerHTML = `<div style="padding:20px">${t('notFound')}</div>`;
     return;
   }
   const d = await r.json();
-  const body = document.getElementById('regionsBody');
-  body.innerHTML = (d.regions || []).map(reg => `
+  allRegions = d.regions || [];
+  applyLang();
+}
+
+function renderRegions(){
+  const q = (document.getElementById('regionSearch').value || '').toLowerCase();
+  const statusFilter = document.getElementById('statusFilter').value;
+  const filtered = allRegions.filter(reg =>
+    reg.name.toLowerCase().includes(q) && (!statusFilter || reg.status === statusFilter));
+
+  document.getElementById('regionsCount').textContent = `${filtered.length} / ${allRegions.length}`;
+  document.getElementById('regionsBody').innerHTML = filtered.map(reg => `
     <tr>
       <td>${reg.name}</td>
       <td class="status-${reg.status}">${reg.status}</td>
-      <td>${reg.planet_count}</td>
-      <td><button onclick="openRegion(${reg.id}, '${reg.name}')">Открыть</button></td>
+      <td class="num">${reg.planet_count}</td>
+      <td><button class="mini" onclick="openRegion(${reg.id}, '${reg.name.replace(/'/g, "\\'")}')">${t('open')}</button></td>
     </tr>`).join('');
 }
 
-async function openRegion(id, name) {
+async function openRegion(id, name){
   currentRegionId = id;
-  document.getElementById('regionDetail').style.display = '';
+  document.getElementById('regionDetail').style.display = 'block';
   document.getElementById('regionTitle').textContent = name;
+  document.getElementById('regionDetail').scrollIntoView({behavior:'smooth', block:'start'});
   await loadPlanets();
 }
 
-async function loadPlanets() {
+async function loadPlanets(){
   const r = await fetch(`${API}/regions/${currentRegionId}/planets`);
   const d = await r.json();
-  const body = document.getElementById('planetsBody');
-  body.innerHTML = (d.planets || []).map(p => `
+  document.getElementById('planetsBody').innerHTML = (d.planets || []).map(p => `
     <tr>
-      <td>${p.system}</td><td>${p.planet_number}</td><td>${p.planet_type}</td>
-      <td>${p.radius_km ?? ''}</td>
+      <td>${p.system}</td><td class="num">${p.planet_number}</td><td>${p.planet_type}</td>
+      <td class="num">${p.radius_km ?? ''}</td>
       <td><input type="number" step="0.1" value="${p.poco_tax_rate ?? ''}"
           onchange="patchPlanet(${p.id}, 'poco_tax_rate', this.value ? parseFloat(this.value) : null)"></td>
       <td><input type="text" value="${p.poco_owner ?? ''}"
@@ -95,39 +292,39 @@ async function loadPlanets() {
     </tr>`).join('');
 }
 
-async function patchPlanet(id, field, value) {
+async function patchPlanet(id, field, value){
   const r = await fetch(`${API}/planets/${id}`, {
     method: 'PATCH', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({[field]: value}),
   });
   const d = await r.json();
-  msg(d.status === 'success' ? 'Сохранено' : (d.message || 'Ошибка'), d.status !== 'success');
+  msg(d.status === 'success' ? t('saved') : (d.message || t('error')), d.status !== 'success');
 }
 
-function downloadTemplate() {
+function downloadTemplate(){
   window.location = `${API}/regions/${currentRegionId}/template.csv`;
 }
 
-async function uploadTemplate() {
+async function uploadTemplate(){
   const input = document.getElementById('uploadFile');
-  if (!input.files.length) { msg('Выберите файл', true); return; }
+  if (!input.files.length){ msg(t('noFile'), true); return; }
   const form = new FormData();
   form.append('file', input.files[0]);
   const r = await fetch(`${API}/regions/${currentRegionId}/upload`, {method: 'POST', body: form});
   const d = await r.json();
-  if (d.status !== 'success') { msg(d.message || 'Ошибка загрузки', true); return; }
+  if (d.status !== 'success'){ msg(d.message || t('uploadError'), true); return; }
   const unmatchedNote = d.unmatched.length
-    ? ` Не найдено в этом регионе: ${d.unmatched.map(u => `${u.system} ${u.planet}`).join(', ')}.`
+    ? ' ' + fmt(t('notMatched'), {list: d.unmatched.map(u => `${u.system} ${u.planet}`).join(', ')})
     : '';
-  msg(`Обновлено планет: ${d.updated}.${unmatchedNote}`, d.unmatched.length > 0);
+  msg(fmt(t('updatedCount'), {n: d.updated}) + unmatchedNote, d.unmatched.length > 0);
   await loadPlanets();
 }
 
-async function markReady() {
+async function markReady(){
   const r = await fetch(`${API}/regions/${currentRegionId}/ready`, {method: 'POST'});
   const d = await r.json();
-  if (d.status !== 'success') { msg(d.message || 'Ошибка', true); return; }
-  msg('Регион переключён в ready');
+  if (d.status !== 'success'){ msg(d.message || t('error'), true); return; }
+  msg(t('regionSetReady'));
   await loadRegions();
 }
 
