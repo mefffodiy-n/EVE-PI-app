@@ -467,16 +467,6 @@ class PlanetBook:
             "_density", ascending=False
         )
 
-    def best_direct_p2_planet(self, p2_product: str, constellations: list[str] | None = None) -> pd.Series | None:
-        """
-        Планета для сценария "прямое R0 -> P2" (правая часть CSV-матрицы).
-
-        В v1 эта часть данных загружалась, но нигде не использовалась —
-        это отдельный пункт Фазы 4 в docs/ROADMAP.md, сюда добавляется метод
-        уже сейчас, чтобы структура не менялась задним числом.
-        """
-        raise NotImplementedError("TODO(Фаза 4): сценарий прямого R0->P2")
-
 
 def _normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
     """Устранить опечатки в заголовках, привести имена колонок к виду из recipes.json."""

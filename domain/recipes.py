@@ -61,22 +61,6 @@ class RecipeBook:
     def __iter__(self):
         return iter(self._recipes.values())
 
-    def by_tier(self, tier: str) -> list[Recipe]:
-        """Все продукты заданного тира (например, все P4 для выбора цели производства)."""
-        raise NotImplementedError(
-            "TODO(Фаза 1): вернуть список Recipe с recipe.tier == tier"
-        )
-
-    def raw_materials_for(self, product_name: str) -> dict[str, int]:
-        """
-        Рекурсивно развернуть продукт до сырья R0 с суммарными количествами
-        на один цикл верхнего продукта.
-
-        Заменяет build_chain()/aggregate_reqs() из старого main.py, но без
-        побочной привязки к фабрикам/персонажам — это чистая функция дерева.
-        """
-        raise NotImplementedError("TODO(Фаза 1): перенести и протестировать логику разворота дерева")
-
 
 def _validate_raw(raw: dict) -> None:
     """Базовая валидация структуры recipes.json перед созданием Recipe-объектов."""
