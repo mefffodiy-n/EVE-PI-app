@@ -548,6 +548,9 @@ class TestPlansIsolation:
         # hits/misses — счётчики на весь процесс, не сбрасываются
         # clear() и растут от других тестов в этом же прогоне — сравниваем
         # прирост, не абсолютные числа.
+        import api.blueprints.admin as admin_module
+
+        monkeypatch.setattr(admin_module, "_is_admin", lambda: True)
         before = client.get("/api/cache-stats").get_json()["plan_cache"]
         client.post("/api/calculate", json=payload)
         clock[0] += cache_module.PLAN_CACHE_TTL_SECONDS + 1
