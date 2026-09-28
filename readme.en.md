@@ -86,7 +86,9 @@ python -m venv .venv
 
 `requirements.lock.txt` — exact versions, verified in production on both
 dev and prod (`requirements.txt` only holds lower bounds — a
-compatibility intent, not what actually gets installed).
+compatibility intent, not what actually gets installed). For development
+and tests use `pip install -r requirements-dev.lock.txt` (same versions plus
+pytest, ruff, mypy, pytest-cov); production does not install these tools.
 
 ## First-time data
 
