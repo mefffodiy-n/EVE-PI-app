@@ -72,6 +72,18 @@ TOKEN_ENCRYPTION_KEY = os.environ.get("PI_TOKEN_KEY") or None
 # Сгенерировать: python -c "import secrets; print(secrets.token_hex(32))"
 SESSION_SECRET_KEY = os.environ.get("PI_SESSION_KEY") or None
 
+# Персонажи, которым разрешён admin-раздел (Фаза 3 мультирегиональности,
+# 28.09.2026) — правка плотности сырья/POCO влияет на расчёт для ВСЕХ
+# пользователей приложения, поэтому не открыта всем подряд. Список
+# character_id через запятую, как ESI_SCOPES — список через пробел, тот
+# же принцип парсинга многозначной переменной окружения. Пустой набор
+# по умолчанию — раздел не заведён никем, `api/blueprints/admin.py`
+# отдаёт 404 всем (правило: неавторизованным 404, не 403 — не выдавать
+# даже факт существования раздела).
+ADMIN_CHARACTER_IDS = frozenset(
+    int(x) for x in os.environ.get("PI_ADMIN_CHARACTER_IDS", "").split(",") if x.strip()
+)
+
 
 def sso_configured() -> bool:
     """Готов ли auth-слой к работе (есть client_id и ключ шифрования)."""

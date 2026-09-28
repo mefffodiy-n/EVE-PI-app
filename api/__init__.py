@@ -59,6 +59,7 @@ def create_app(config: dict | None = None) -> Flask:
         from infra.logging import configure
         configure("web")
 
+    from api.blueprints.admin import bp as admin_bp
     from api.blueprints.export import bp as export_bp
     from api.blueprints.market import bp as market_bp
     from api.blueprints.auth import bp as auth_bp
@@ -72,6 +73,7 @@ def create_app(config: dict | None = None) -> Flask:
     app.register_blueprint(market_bp, url_prefix="/api")
     app.register_blueprint(export_bp, url_prefix="/api")
     app.register_blueprint(auth_bp, url_prefix="/api")
+    app.register_blueprint(admin_bp, url_prefix="/api/admin")
 
     _register_error_handlers(app)
     _register_dev_cors(app)

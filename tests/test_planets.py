@@ -144,6 +144,61 @@ class TestNoDataRegionsExcluded:
         assert "57-KJB" in set(book.dataframe["System"])  # ready-регион остаётся
 
 
+class TestLoadRegionForAdmin:
+    """
+    28.09.2026, Фаза 3 мультирегиональности: admin-панели нужно видеть
+    именно `no_data`-регионы, которые `load_planets()` сознательно
+    прячет — `load_region_for_admin()` не фильтрует по статусу и не
+    кэшируется (правки должны быть видны немедленно).
+    """
+
+    def test_sees_no_data_region_unlike_load_planets(self):
+        from domain.planets import load_region_for_admin
+        from infra.db import session_scope
+        from infra.models import Planet, Region
+
+        with session_scope() as session:
+            region = Region(name="Testonia", status="no_data")
+            session.add(region)
+            session.flush()
+            session.add(Planet(
+                region_id=region.id, constellation="NEWVALE", system="N3W-SY",
+                planet_number=1, planet_type="Barren", radius_km=5000.0,
+            ))
+            region_id = region.id
+
+        book = load_region_for_admin(region_id)
+        assert book.radius_km("N3W-SY", 1) == 5000.0
+
+    def test_unknown_region_id_gives_empty_book_not_exception(self):
+        from domain.planets import load_region_for_admin
+
+        book = load_region_for_admin(999999)
+        assert book.dataframe.empty
+
+    def test_not_cached_between_calls(self):
+        """Правки в admin-панели должны быть видны немедленно, без TTL."""
+        from domain.planets import load_region_for_admin
+        from infra.db import session_scope
+        from infra.models import Planet, Region
+
+        with session_scope() as session:
+            region = Region(name="Testonia", status="no_data")
+            session.add(region)
+            session.flush()
+            region_id = region.id
+
+        assert load_region_for_admin(region_id).dataframe.empty
+
+        with session_scope() as session:
+            session.add(Planet(
+                region_id=region_id, constellation="NEWVALE", system="N3W-SY",
+                planet_number=1, planet_type="Barren", radius_km=5000.0,
+            ))
+
+        assert not load_region_for_admin(region_id).dataframe.empty
+
+
 class TestCacheTtl:
     """
     21.09.2026, Фаза 2 мультирегиональности: `scripts/refresh_sde.py`
