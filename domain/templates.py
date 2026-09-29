@@ -268,3 +268,85 @@ def load_all_templates(templates_dir: Path = DEFAULT_TEMPLATES_DIR) -> dict[str,
             # miner_p1.json из первой версии обрушивал весь разбор.
             _SKIPPED.append(path.name)
     return result
+
+
+# Как называется структура в type_ids.json после типа планеты
+# («Barren Advanced Industry Facility»).
+_KIND_DISPLAY_NAMES = {
+    "launchpad": "Launchpad",
+    "storage_facility": "Storage Facility",
+    "basic_industry_facility": "Basic Industry Facility",
+    "advanced_industry_facility": "Advanced Industry Facility",
+    "high_tech_industry_facility": "High-Tech Production Plant",
+}
+
+# Единственное расхождение имени файла с продуктом: опечатка в источнике.
+_MINER_FILE_ALIASES = {"Chiral Structures": "Chiral Stuctures"}
+
+TYPE_IDS_PATH = Path(__file__).resolve().parent.parent / "data" / "type_ids.json"
+
+
+class GameTemplateUnavailable(LookupError):
+    """Шаблона нет или он не подходит планете. `code` — ключ api/errors.py."""
+
+    def __init__(self, code: str, **params):
+        super().__init__(code)
+        self.code = code
+        self.params = params
+
+
+def game_template_for(
+    product: str,
+    planet_type: str,
+    ccu: int | None = None,
+    templates_dir: Path = DEFAULT_TEMPLATES_DIR,
+) -> tuple[str, dict, bool]:
+    """
+    Игровой JSON-шаблон застройки под продукт колонии: (имя файла, словарь, адаптирован).
+
+    Файл берётся из data/templates/ как есть: игра принимает шаблон только
+    для планеты того типа, под который он сохранён ("Pln"). Фабричные
+    шаблоны сохранены под Barren, а планировщик ставит переработку и на
+    Temperate и др.: для них type_id структур (они у каждого типа планеты
+    свои) заменяются на структуры нужного типа — `adapted=True`. В игре
+    такая замена НЕ проверена (правило 1) — интерфейс говорит об этом.
+    Шаблон добычи привязан к сырью планеты (экстрактор), поэтому под
+    другой тип планеты не переделывается — отказ `game_template_planet_mismatch`.
+    `ccu` (0-5) выставляет "CmdCtrLv" — уровень ЦУ персонажа.
+    """
+    templates = load_all_templates(templates_dir)
+    stems = (
+        f"Factory - {product}",
+        f"Miner - 00 - {_MINER_FILE_ALIASES.get(product, product)}",
+    )
+    stem = next((s for s in stems if s in templates), None)
+    if stem is None:
+        raise GameTemplateUnavailable("game_template_none", product=product)
+    template = templates[stem]
+    data = template.with_command_center_level(template.command_center_level if ccu is None else ccu)
+
+    type_ids = json.loads(TYPE_IDS_PATH.read_text(encoding="utf-8"))
+    planet_ids = {k[len("planet:"):]: v for k, v in type_ids.items() if k.startswith("planet:")}
+    target_id = planet_ids.get(planet_type)
+    if target_id is None:
+        raise GameTemplateUnavailable("game_template_planet_unknown", planet_type=planet_type)
+    if target_id == template.planet_type_id:
+        return f"{stem}.json", data, False
+    if stem.startswith("Miner"):
+        source = next((n for n, i in planet_ids.items() if i == template.planet_type_id), "?")
+        raise GameTemplateUnavailable(
+            "game_template_planet_mismatch", product=product, planet_type=planet_type, template_type=source
+        )
+
+    categories = _category_by_type_id()
+    for pin in data["P"]:
+        kind = categories.get(int(pin["T"]))
+        name = _KIND_DISPLAY_NAMES.get(kind or "")
+        new_id = type_ids.get(f"{planet_type} {name}") if name else None
+        if new_id is None:
+            raise GameTemplateUnavailable(
+                "game_template_planet_unknown", planet_type=planet_type
+            )
+        pin["T"] = new_id
+    data["Pln"] = target_id
+    return f"{stem}.json", data, True

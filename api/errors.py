@@ -112,6 +112,20 @@ _CATALOG: dict[str, dict[str, str]] = {
         "en": "The constellation list is empty",
     },
     "system_missing": {"ru": "Не указана система", "en": "No system specified"},
+    "game_template_none": {
+        "ru": "Для продукта «{product}» нет игрового шаблона",
+        "en": "There is no in-game template for \"{product}\"",
+    },
+    "game_template_planet_unknown": {
+        "ru": "Не удалось подобрать шаблон под тип планеты «{planet_type}»",
+        "en": "Could not build a template for planet type \"{planet_type}\"",
+    },
+    "game_template_planet_mismatch": {
+        "ru": "Шаблон добычи «{product}» сохранён под планету типа {template_type} и привязан к её "
+              "сырью — для {planet_type} его не переделать",
+        "en": "The \"{product}\" mining template is saved for a {template_type} planet and tied to its "
+              "resource — it cannot be adapted to {planet_type}",
+    },
     "ccu_out_of_range": {
         "ru": "Уровень Command Center Upgrades должен быть от 0 до 5",
         "en": "Command Center Upgrades level must be between 0 and 5",

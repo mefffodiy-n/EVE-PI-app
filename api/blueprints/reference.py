@@ -281,6 +281,39 @@ def system_planets():
     return json_ok(system=system, planets=planets)
 
 
+@bp.get("/game-template")
+def game_template():
+    """
+    Игровой шаблон застройки для колонии — файл для импорта в игру
+    (domain/templates.py::game_template_for). Читает только файлы из репозитория.
+    """
+    from flask import Response, request as flask_request
+
+    from domain.templates import GameTemplateUnavailable, game_template_for
+
+    args = flask_request.args
+    product = (args.get("product") or "").strip()
+    planet_type = (args.get("planet_type") or "").strip().capitalize()
+    if not product or not planet_type:
+        return json_error("field_missing", field="product" if not product else "planet_type")
+    ccu = None
+    if args.get("ccu") not in (None, ""):
+        try:
+            ccu = int(args["ccu"])
+        except ValueError:
+            return json_error("ccu_out_of_range")
+        if not 0 <= ccu <= 5:
+            return json_error("ccu_out_of_range")
+    try:
+        filename, data, adapted = game_template_for(product, planet_type, ccu)
+    except GameTemplateUnavailable as exc:
+        return json_error(exc.code, status=404, **exc.params)
+    resp = Response(json.dumps(data, ensure_ascii=False), mimetype="application/json")
+    resp.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+    resp.headers["X-Template-Adapted"] = "1" if adapted else "0"
+    return resp
+
+
 @bp.get("/thresholds/<int:ccu_level>")
 @with_etag
 def thresholds(ccu_level: int):

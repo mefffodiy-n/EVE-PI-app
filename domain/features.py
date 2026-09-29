@@ -317,5 +317,15 @@ FEATURES = FEATURES + (
 )
 
 
+FEATURES = FEATURES + (
+    Feature(
+        "game_template_download", "Скачать игровой шаблон застройки для колонии из панели колонии",
+        ("шаблон для игры", "шаблон застройки этой колонии"),
+        ("in-game template", "build template of that colony"),
+        "0.13.29", "help",
+    ),
+)
+
+
 def by_section(section: str) -> tuple[Feature, ...]:
     return tuple(f for f in FEATURES if f.where == section)

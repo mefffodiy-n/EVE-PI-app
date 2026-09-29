@@ -1423,3 +1423,30 @@ class TestSecurityHeaders:
         assert "Strict-Transport-Security" not in client.get("/api/meta").headers
         r = client.get("/api/meta", headers={"X-Forwarded-Proto": "https"})
         assert "max-age=" in r.headers["Strict-Transport-Security"]
+
+
+class TestGameTemplate:
+    def test_barren_factory_template_as_is(self, client):
+        r = client.get("/api/game-template?product=Biocells&planet_type=Barren&ccu=3")
+        assert r.status_code == 200
+        assert "Factory - Biocells.json" in r.headers["Content-Disposition"]
+        assert r.headers["X-Template-Adapted"] == "0"
+        data = r.get_json(force=True)
+        assert data["CmdCtrLv"] == 3 and data["Pln"] == 2016
+
+    def test_other_planet_type_swaps_structure_ids(self, client):
+        r = client.get("/api/game-template?product=Biocells&planet_type=temperate")
+        data = r.get_json(force=True)
+        assert r.headers["X-Template-Adapted"] == "1"
+        assert data["Pln"] == 11
+        assert {p["T"] for p in data["P"]} == {2256, 2480}
+
+    def test_miner_template_refused_for_other_planet_type(self, client):
+        r = client.get("/api/game-template?product=Water&planet_type=Ice&lang=en")
+        assert r.status_code == 404
+        assert "cannot be adapted" in r.get_json()["message"]
+
+    def test_unknown_product_and_bad_ccu(self, client):
+        assert client.get("/api/game-template?product=Nope&planet_type=Barren").status_code == 404
+        assert client.get("/api/game-template?product=Biocells&planet_type=Barren&ccu=9").status_code == 400
+        assert client.get("/api/game-template?planet_type=Barren").status_code == 400
