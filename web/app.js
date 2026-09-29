@@ -130,7 +130,7 @@ const T={
   themeTitle:'Тема',moreTitle:'Ещё',viewList:'Список по персонажам',viewGrid:'Сетка',sortTitle:'Сортировка',loadLbl:'Загрузка',
   inGameColonies:'Мои колонии в игре',cycOver:'программа завершена',cycIdle:'программа не запущена',
   hUnit:'ч',minUnit:'мин',dUnit:'д',pPin:['пин','пина','пинов'],
-  progEnds:'до конца программы экстрактора',syncedColony:'колония в игре',
+  progEnds:'до конца программы экстрактора',syncedColony:'колония в игре',tplDownload:'Шаблон для игры',tplHint:'Скачать JSON-шаблон застройки этой колонии для импорта в игру (уровень ЦУ — персонажа).',tplAdaptHint:'Планета не Barren: типы структур в шаблоне заменены под её тип — в игре не проверено.',
   procCycleLbl:'до конца цикла переработки',
   procDepletionLbl:'до конца запаса сырья в причале',
   cycNoFactory:'ESI не отдаёт состояние фабрик — только экстракторы',
@@ -214,7 +214,7 @@ const T={
   themeTitle:'Theme',moreTitle:'More',viewList:'By character',viewGrid:'Grid',sortTitle:'Sort',loadLbl:'Load',
   inGameColonies:'My in-game colonies',cycOver:'program ended',cycIdle:'no program running',
   hUnit:'h',minUnit:'min',dUnit:'d',pPin:['pin','pins','pins'],
-  progEnds:'until the extraction program ends',syncedColony:'built in game',
+  progEnds:'until the extraction program ends',syncedColony:'built in game',tplDownload:'In-game template',tplHint:'Download this colony\'s build template as JSON for in-game import (command center level = the character\'s).',tplAdaptHint:'Not a Barren planet: structure types in the template are swapped for its type — not verified in game.',
   procCycleLbl:'until the processing cycle ends',
   procDepletionLbl:'until raw materials in the launchpad run out',
   cycNoFactory:'ESI does not expose factory state — extractors only',
@@ -2433,6 +2433,29 @@ async function exportPlan(){
   finally{ btn.disabled=false; }
 }
 
+/* Игровой шаблон застройки для колонии плана: файл для импорта в игру
+   (/api/game-template). Ошибку — например, шаблон добычи не подходит
+   планете другого типа — показываем текстом сервера на языке интерфейса. */
+async function downloadGameTemplate(id){
+  const p=plan.find(x=>x.id===id); if(!p) return;
+  const char=crew.find(c=>c.name===p.character);
+  const q=new URLSearchParams({product:p.res_out, planet_type:p.planet_type});
+  if(char&&Number.isInteger(char.ccu)) q.set('ccu',char.ccu);
+  try{
+    const r=await fetch(`${API}/game-template?${q}`);
+    if(!r.ok){
+      const d=await r.json().catch(()=>({}));
+      throw new Error(d.message||`HTTP ${r.status}`);
+    }
+    const blob=await r.blob();
+    const url=URL.createObjectURL(blob), a=document.createElement('a');
+    a.href=url;
+    a.download=((r.headers.get('Content-Disposition')||'').match(/filename="?([^";]+)"?/)||[])[1]||'template.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  }catch(e){ alert(e.message); }
+}
+
 /* ── Панель колонии: разбор по структурам, как в игре ─────────── */
 let currentColony=null;
 
@@ -2730,7 +2753,11 @@ function openColony(id){
           ${real?`<span class="synced">${t('syncedColony')}${real.upgrade_level?` · CC${real.upgrade_level}`:''}</span>`:''}
         </div>
       </div>
-      <button class="back" onclick="closeColony()">${t('back')}</button>
+      <div class="cp-actions">
+        <button class="back" title="${t('tplHint')}${p.planet_type!=='Barren'?' '+t('tplAdaptHint'):''}"
+          onclick="downloadGameTemplate('${p.id}')">${t('tplDownload')}</button>
+        <button class="back" onclick="closeColony()">${t('back')}</button>
+      </div>
     </div>
     ${(p.shared_extraction_count||1)>1?`<div class="msg" style="margin:0 16px 8px">
       ${t('sharedExtract').replace('{n}',p.shared_extraction_count)}</div>`:''}
@@ -2882,6 +2909,13 @@ const DOC={
     (без сводки и проверки — командные центры уже куплены). Если построены и план, и
     колонии есть — оба набора листов в одной книге.</div>
    </div>
+   <p>В панели колонии из плана есть кнопка «Шаблон для игры»: она скачивает
+   JSON-шаблон застройки этой колонии (по продукту), который можно импортировать
+   в игровое окно планеты. Уровень командного центра в файле — уровень CCU
+   персонажа-исполнителя. Игра принимает шаблон только для планеты того типа,
+   под который он сохранён: фабричные шаблоны сохранены под Barren, для других
+   типов планет программа заменяет типы структур, но в игре это не проверено.
+   Шаблон добычи привязан к сырью планеты и для другого типа не переделывается.</p>
 
    <h3 id="h-staffing">Если персонажей не хватает или слишком много</h3>
    <p>Как только вы отметили целевые продукты, программа считает, поместится ли
@@ -3142,6 +3176,13 @@ const DOC={
     check — the command centres are already bought). With both a plan and colonies, the
     workbook has both sets of sheets.</div>
    </div>
+   <p>The panel of a planned colony has an "In-game template" button: it downloads
+   the JSON build template of that colony (by product) that you can import into
+   the in-game planet window. The command center level in the file is the CCU level
+   of the assigned character. The game accepts a template only for the planet type
+   it was saved for: factory templates are saved for Barren, and for other planet
+   types the program swaps structure types, but this is not verified in game.
+   A mining template is tied to the planet's resource and is not converted to another type.</p>
 
    <h3 id="h-staffing">If you have too few or too many characters</h3>
    <p>As soon as you tick the target products, the app checks whether a full cycle
