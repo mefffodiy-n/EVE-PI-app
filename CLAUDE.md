@@ -139,13 +139,14 @@ domain/           расчёты, без Flask и без сети
   advice.py       подсказки по вместимости пула персонажей
   direct_p2.py    P2 целиком на добывающей планете (приостановлено, см. docs/ROADMAP.md)
   plan_storage.py сохранение и сравнение планов (таблица plans)
+  price_history.py история цен (price_samples) и динамика выручки плана
   plan_messages.py каталог сообщений RU/EN (код+параметры, см. правило 9)
   features.py     реестр возможностей (см. правило 6)
 
 infra/            конфиг окружения и доступ к БД (общий для domain/api/scripts)
   config.py       PI_ENV, PI_DATABASE_URL, настройки EVE SSO — чтение env
   db.py           движок SQLAlchemy, session_scope, декларативная база
-  models.py       ORM-модели: characters, plans, credentials, colonies,
+  models.py       ORM-модели: characters, plans, credentials, colonies, price_samples,
                   regions/planets (справочник планет, см. domain/planets.py)
   crypto.py       шифрование токенов ESI перед записью в БД (Fernet)
   credentials.py  запись зашифрованных токенов (общее для auth и refresh_tokens)

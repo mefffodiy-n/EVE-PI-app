@@ -130,7 +130,7 @@ const T={
   themeTitle:'Тема',moreTitle:'Ещё',viewList:'Список по персонажам',viewGrid:'Сетка',sortTitle:'Сортировка',loadLbl:'Загрузка',
   inGameColonies:'Мои колонии в игре',cycOver:'программа завершена',cycIdle:'программа не запущена',
   hUnit:'ч',minUnit:'мин',dUnit:'д',pPin:['пин','пина','пинов'],
-  progEnds:'до конца программы экстрактора',syncedColony:'колония в игре',tplDownload:'Шаблон для игры',tplHint:'Скачать JSON-шаблон застройки этой колонии для импорта в игру (уровень ЦУ — персонажа).',tplAdaptHint:'Планета не Barren: типы структур в шаблоне заменены под её тип — в игре не проверено.',
+  progEnds:'до конца программы экстрактора',syncedColony:'колония в игре',pocoTrendPriceCol:'Цена, 30 дн.',pocoTrendTitle:'Динамика выручки по ценам Jita buy ({n} дн. с данными):',pocoTrendNoHistory:'История цен копится — динамика появится, когда наберётся хотя бы два дня.',tplDownload:'Шаблон для игры',tplHint:'Скачать JSON-шаблон застройки этой колонии для импорта в игру (уровень ЦУ — персонажа).',tplAdaptHint:'Планета не Barren: типы структур в шаблоне заменены под её тип — в игре не проверено.',
   procCycleLbl:'до конца цикла переработки',
   procDepletionLbl:'до конца запаса сырья в причале',
   cycNoFactory:'ESI не отдаёт состояние фабрик — только экстракторы',
@@ -214,7 +214,7 @@ const T={
   themeTitle:'Theme',moreTitle:'More',viewList:'By character',viewGrid:'Grid',sortTitle:'Sort',loadLbl:'Load',
   inGameColonies:'My in-game colonies',cycOver:'program ended',cycIdle:'no program running',
   hUnit:'h',minUnit:'min',dUnit:'d',pPin:['pin','pins','pins'],
-  progEnds:'until the extraction program ends',syncedColony:'built in game',tplDownload:'In-game template',tplHint:'Download this colony\'s build template as JSON for in-game import (command center level = the character\'s).',tplAdaptHint:'Not a Barren planet: structure types in the template are swapped for its type — not verified in game.',
+  progEnds:'until the extraction program ends',syncedColony:'built in game',pocoTrendPriceCol:'Price, 30 d',pocoTrendTitle:'Revenue trend at Jita buy prices ({n} days with data):',pocoTrendNoHistory:'Price history is still accumulating — the trend appears after at least two days.',tplDownload:'In-game template',tplHint:'Download this colony\'s build template as JSON for in-game import (command center level = the character\'s).',tplAdaptHint:'Not a Barren planet: structure types in the template are swapped for its type — not verified in game.',
   procCycleLbl:'until the processing cycle ends',
   procDepletionLbl:'until raw materials in the launchpad run out',
   cycNoFactory:'ESI does not expose factory state — extractors only',
@@ -2210,14 +2210,16 @@ async function renderPocoProfit(){
         <div class="step-body">
           ${(d.revenue_by_product&&d.revenue_by_product.length)?`<table class="purchase-list-table">
             <thead><tr><th>${t('purchaseListProduct')}</th><th class="r">${t('pocoRevenueByProductQty')}</th>
-              <th class="r">${t('pocoRevenueByProductPrice')}</th><th class="r">${t('pocoRevenueByProductRevenue')}</th></tr></thead>
+              <th class="r">${t('pocoRevenueByProductPrice')}</th><th class="r">${t('pocoTrendPriceCol')}</th><th class="r">${t('pocoRevenueByProductRevenue')}</th></tr></thead>
             <tbody>${d.revenue_by_product.map(it=>`<tr>
               <td>${it.product}</td>
               <td class="r num">${nloc(Math.round(it.monthly_units))}</td>
               <td class="r num">${it.price==null?t('purchaseListNoPrice'):nloc(Math.round(it.price))}</td>
+              <td class="r" data-trend="${it.product}"></td>
               <td class="r num">${it.monthly_revenue==null?'—':isk(it.monthly_revenue)}</td>
             </tr>`).join('')}</tbody>
-          </table>`:`<div class="poco-profit-note">${t('noData')}</div>`}
+          </table>
+          <div class="poco-profit-note" id="revenueTrend"></div>`:`<div class="poco-profit-note">${t('noData')}</div>`}
         </div>
       </div>
       ${(d.purchase_items&&d.purchase_items.length)?'<div id="purchaseList"></div>':''}
@@ -2230,6 +2232,7 @@ async function renderPocoProfit(){
     </div>
   </div>`;
   renderPurchaseList(d);
+  loadRevenueTrend(d.revenue_by_product||[]);
 }
 
 /* ── Список закупки сырья P1 (19.09.2026, по прямому запросу
@@ -2454,6 +2457,36 @@ async function downloadGameTemplate(id){
     document.body.appendChild(a); a.click(); a.remove();
     URL.revokeObjectURL(url);
   }catch(e){ alert(e.message); }
+}
+
+/* Мини-график по точкам [{v}]: линия цены/выручки, без осей. Пустой ряд — ничего. */
+function sparklineSVG(values, w, h){
+  if(values.length<2) return '';
+  const lo=Math.min(...values), hi=Math.max(...values), span=(hi-lo)||1;
+  const pts=values.map((v,i)=>`${(i*(w-2)/(values.length-1)+1).toFixed(1)},${(h-1-(v-lo)*(h-2)/span).toFixed(1)}`).join(' ');
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><polyline points="${pts}" fill="none" stroke="var(--amber)" stroke-width="1.5"/></svg>`;
+}
+
+/* Динамика цен и выручки плана по истории, которую копит сборщик цен
+   (/api/plan-revenue-trend). Пока истории меньше двух дней — честная
+   подпись вместо графика. Ответ мог устареть, пока шёл запрос (план
+   пересчитали) — тогда его не рисуем. */
+async function loadRevenueTrend(items){
+  const box=document.getElementById('revenueTrend'); if(!box||!items.length) return;
+  try{
+    const r=await fetch(`${API}/plan-revenue-trend`,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({days:30,items:items.filter(i=>i.monthly_units>0).map(i=>({product:i.product,monthly_units:i.monthly_units}))})});
+    const d=await r.json();
+    if(!r.ok||!document.getElementById('revenueTrend')) return;
+    document.querySelectorAll('[data-trend]').forEach(td=>{
+      const series=(d.by_product[td.dataset.trend]||[]).map(x=>x.price);
+      td.innerHTML=sparklineSVG(series,70,18);
+    });
+    if(d.points.length<2){ box.textContent=t('pocoTrendNoHistory'); return; }
+    const sign=d.change_pct>0?'+':'';
+    box.innerHTML=`${t('pocoTrendTitle').replace('{n}',d.points.length)} ${sparklineSVG(d.points.map(p=>p.revenue),140,24)}
+      <b>${d.change_pct==null?'':sign+d.change_pct+'%'}</b>`;
+  }catch(e){ /* история вторична: без неё панель работает как раньше */ }
 }
 
 /* ── Панель колонии: разбор по структурам, как в игре ─────────── */
@@ -3007,6 +3040,12 @@ const DOC={
    «Выручка по продуктам», отдельного примечания под ней для этого
    нет.</p>
 
+   <p>Под таблицей выручки по продуктам показана динамика: график цены каждого
+   целевого продукта за 30 дней и общая динамика выручки плана по ценам покупки
+   в Jita. История копится сборщиком цен раз в час, поэтому в первые дни после
+   запуска графиков нет — программа так и пишет. Дни, где нет цены хотя бы у
+   одного продукта, в общую выручку не входят.</p>
+
    <h3 id="h-purchase-list">Список закупки сырья (P1)</h3>
    <p>Панель под прогнозом прибыльности — показывается только в режиме
    «покупать P1 на бирже»: по каждому виду сырья P1 — сколько единиц
@@ -3269,6 +3308,12 @@ const DOC={
    product. The same material is neither counted twice nor dropped
    entirely — the split itself shows up in the numbers in the "Revenue
    by product" card, there is no separate note about it underneath.</p>
+
+   <p>Below the revenue-by-product table the panel shows the trend: a 30-day price chart
+   for each target product and the plan's overall revenue trend at Jita buy prices.
+   The history is collected hourly by the price collector, so there are no charts in the
+   first days after it starts — the program says so. Days on which any product has no
+   price are left out of the overall revenue.</p>
 
    <h3 id="h-purchase-list">Raw material purchase list (P1)</h3>
    <p>A panel below the profitability forecast — shown only in "buy all P1 on the
