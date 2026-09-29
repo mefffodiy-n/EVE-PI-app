@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, BigInteger, Float, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import JSON, BigInteger, Boolean, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from infra.db import Base, UtcDateTime
@@ -369,3 +369,44 @@ class PriceSample(Base):
     buy_max: Mapped[float | None] = mapped_column(Float, nullable=True)
     sell_min: Mapped[float | None] = mapped_column(Float, nullable=True)
     sampled_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow, index=True)
+
+
+class AlertSubscription(Base):
+    """
+    Подписка аккаунта на оповещения в Discord (Фаза C3). Одна на аккаунт.
+    URL вебхука — секрет (по нему пишут в канал), хранится зашифрованным
+    тем же Fernet, что и токены ESI (infra/crypto.py). Рассылает сборщик
+    scripts/send_alerts.py, а не обработчик (правило 3).
+    """
+
+    __tablename__ = "alert_subscriptions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    account_id: Mapped[str] = mapped_column(String(64), unique=True)
+    webhook_url_enc: Mapped[str] = mapped_column(Text)
+    lang: Mapped[str] = mapped_column(String(2), default="ru")
+    expiry_lead_hours: Mapped[int] = mapped_column(Integer, default=2)
+    on_expiry: Mapped[bool] = mapped_column(Boolean, default=True)
+    on_deficit: Mapped[bool] = mapped_column(Boolean, default=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    last_error: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    last_sent_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
+    last_test_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow)
+
+
+class AlertSent(Base):
+    """
+    Что уже отправлено по подписке: повтор только при смене состояния.
+    key — событие («deficit:персонаж:планета:пин»), token — его состояние
+    (для истечения — время окончания и «скоро/закончилось», так что новая
+    программа экстрактора оповещается заново). Строки событий, которых
+    больше нет, сборщик удаляет — повторное возникновение оповестит снова.
+    """
+
+    __tablename__ = "alert_sent"
+
+    subscription_id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)
+    key: Mapped[str] = mapped_column(String(128), primary_key=True)
+    token: Mapped[str] = mapped_column(String(64))
+    sent_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow)

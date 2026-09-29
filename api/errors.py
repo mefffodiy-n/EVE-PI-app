@@ -126,6 +126,30 @@ _CATALOG: dict[str, dict[str, str]] = {
         "en": "The \"{product}\" mining template is saved for a {template_type} planet and tied to its "
               "resource — it cannot be adapted to {planet_type}",
     },
+    "alerts_unavailable": {
+        "ru": "Оповещения недоступны: на сервере не задан PI_TOKEN_KEY (нечем шифровать адрес вебхука)",
+        "en": "Alerts are unavailable: PI_TOKEN_KEY is not set on the server (nothing to encrypt the webhook URL with)",
+    },
+    "alerts_bad_webhook": {
+        "ru": "Нужен адрес вебхука Discord вида https://discord.com/api/webhooks/…",
+        "en": "A Discord webhook URL like https://discord.com/api/webhooks/… is required",
+    },
+    "alerts_no_subscription": {
+        "ru": "Оповещения ещё не настроены — сначала сохраните адрес вебхука",
+        "en": "Alerts are not set up yet — save a webhook URL first",
+    },
+    "alerts_bad_lead": {
+        "ru": "Недопустимое значение «за сколько часов предупреждать»: {allowed}",
+        "en": "Invalid value for the warning lead time in hours: {allowed}",
+    },
+    "alerts_test_too_soon": {
+        "ru": "Тест можно отправлять раз в минуту — подождите немного",
+        "en": "The test can be sent once a minute — please wait a bit",
+    },
+    "alerts_webhook_failed": {
+        "ru": "Discord не принял сообщение: {detail}",
+        "en": "Discord did not accept the message: {detail}",
+    },
     "ccu_out_of_range": {
         "ru": "Уровень Command Center Upgrades должен быть от 0 до 5",
         "en": "Command Center Upgrades level must be between 0 and 5",
