@@ -327,5 +327,15 @@ FEATURES = FEATURES + (
 )
 
 
+FEATURES = FEATURES + (
+    Feature(
+        "price_history_trend", "История цен и динамика выручки плана",
+        ("динамика выручки", "график цены"),
+        ("revenue trend", "price chart"),
+        "0.13.30", "help",
+    ),
+)
+
+
 def by_section(section: str) -> tuple[Feature, ...]:
     return tuple(f for f in FEATURES if f.where == section)

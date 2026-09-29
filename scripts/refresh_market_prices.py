@@ -150,6 +150,24 @@ def save(prices: dict[str, dict], station_key: str, error: str | None = None) ->
     SNAPSHOT.write_text(json.dumps(snapshot, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
+def _record_history(prices: dict[str, dict], station_key: str) -> None:
+    """
+    Дописать снимок в историю цен (таблица price_samples). Сбой БД не должен
+    ронять сбор цен: снимок для приложения уже сохранён выше.
+    """
+    try:
+        sys.path.insert(0, str(ROOT))
+        from domain import price_history
+        from infra.db import session_scope
+
+        with session_scope() as session:
+            written = price_history.record(session, prices, station_key, pi_type_ids())
+            price_history.prune(session)
+        print(f"  история цен: записано {written}")
+    except Exception as exc:  # noqa: BLE001 — история вторична
+        print(f"  история цен не записана: {type(exc).__name__}: {exc}")
+
+
 def main(station_key: str | None = None) -> int:
     """
     Собрать цены.
@@ -188,6 +206,7 @@ def main(station_key: str | None = None) -> int:
         if type_id in by_id
     }
     save(prices, station_key)
+    _record_history(prices, station_key)
 
     with_price = sum(1 for e in prices.values() if e["buy_max"])
     print(f"Сохранено: {SNAPSHOT}")

@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, BigInteger, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, BigInteger, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from infra.db import Base, UtcDateTime
@@ -346,4 +346,26 @@ class ExtractionSample(Base):
     qty_per_cycle: Mapped[int | None] = mapped_column(nullable=True)
     cycle_seconds: Mapped[int | None] = mapped_column(nullable=True)
 
+    sampled_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow, index=True)
+
+
+class PriceSample(Base):
+    """
+    Один снимок цен продукта PI в торговом узле — копится сборщиком цен
+    (scripts/refresh_market_prices.py) каждый запуск; снимок в
+    data/cache/market_prices.json перезаписывается и истории не хранит.
+    Нужен для динамики цен и выручки плана (domain/price_history.py).
+    Старше 90 дней чистится там же.
+    """
+
+    __tablename__ = "price_samples"
+    __table_args__ = (
+        Index("ix_price_samples_lookup", "station", "product_type_id", "sampled_at"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    station: Mapped[str] = mapped_column(String(32))
+    product_type_id: Mapped[int] = mapped_column(Integer)
+    buy_max: Mapped[float | None] = mapped_column(Float, nullable=True)
+    sell_min: Mapped[float | None] = mapped_column(Float, nullable=True)
     sampled_at: Mapped[datetime] = mapped_column(UtcDateTime, default=_utcnow, index=True)

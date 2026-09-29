@@ -74,6 +74,33 @@ def _age_minutes(iso: str | None) -> int | None:
     return int((datetime.now(timezone.utc) - taken).total_seconds() // 60)
 
 
+@bp.post("/plan-revenue-trend")
+def plan_revenue_trend():
+    """
+    Динамика выручки плана и цен его целевых продуктов за `days` суток
+    (по умолчанию 30, максимум 90) — из истории, которую копит сборщик
+    цен. Строки — [{product, monthly_units}] из revenue_by_product.
+    """
+    from api.cache import json_error, parse_json_body
+    from domain import price_history
+    from infra.db import session_scope
+
+    payload, error = parse_json_body({"items": list})
+    if error:
+        return json_error(error)
+    items = payload["items"]
+    if not all(isinstance(i, dict) for i in items):
+        return json_error("items_not_objects", field="items")
+    try:
+        days = max(2, min(price_history.KEEP_DAYS, int(payload.get("days", 30))))
+    except (TypeError, ValueError):
+        days = 30
+    station = str((_load_snapshot() or {}).get("station") or "jita")
+    with session_scope() as session:
+        result = price_history.revenue_trend(session, station, items[:50], days)
+    return json_ok(**result, station=station)
+
+
 @bp.get("/market/best-product")
 def best_product():
     """
