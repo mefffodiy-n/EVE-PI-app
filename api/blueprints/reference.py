@@ -25,6 +25,7 @@ from pathlib import Path
 from flask import Blueprint
 
 from api.cache import json_error, json_ok, parse_json_body, with_etag
+from domain import alerts
 from domain.factory_site import describe_thresholds
 from domain.planets import load_planets
 from domain.recipes import load_recipes
@@ -145,12 +146,7 @@ def _initial_payload() -> dict:
     # потребляет — recipes.json это уже знает и проверено по источникам
     # (правило 2), выдумывать не приходится. У P1 вход один — R0-сырьё,
     # лежит в поле source, а не inputs (см. domain/recipes.py).
-    recipe_inputs: dict[str, list[str]] = {}
-    for r in load_recipes():
-        if r.inputs:
-            recipe_inputs[r.name] = sorted(r.inputs.keys())
-        elif r.source:
-            recipe_inputs[r.name] = [r.source]
+    recipe_inputs = alerts.recipe_inputs()
 
     payload = {
         "products": products,
