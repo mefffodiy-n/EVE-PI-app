@@ -337,5 +337,15 @@ FEATURES = FEATURES + (
 )
 
 
+FEATURES = FEATURES + (
+    Feature(
+        "discord_alerts", "Оповещения в Discord о дефиците добычи и истечении экстракторов",
+        ("оповещения в discord", "вебхук"),
+        ("discord alerts", "webhook"),
+        "0.13.32", "help",
+    ),
+)
+
+
 def by_section(section: str) -> tuple[Feature, ...]:
     return tuple(f for f in FEATURES if f.where == section)

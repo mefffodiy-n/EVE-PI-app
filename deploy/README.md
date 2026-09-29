@@ -244,6 +244,11 @@ pg_restore --no-owner --clean --if-exists -d pidirector pi-backup-*/pidirector.d
 CREATE DATABASE — структура дампа, Postgres — оглавление `pg_restore`).
 Результат — в журнале `verify_backup`, сбой виден в `/api/meta`.
 
+Оповещения в Discord (`scripts/send_alerts.py`, раз в 30 минут в планировщике) требуют
+`PI_TOKEN_KEY`: адрес вебхука шифруется тем же ключом, что и токены ESI. Без ключа
+`PUT /api/alerts` отвечает 503, сборщик пропускает подписки, которые не расшифровать.
+После обновления — `alembic upgrade head` (таблицы `alert_subscriptions`, `alert_sent`).
+
 ## 6. nginx
 
 `deploy/nginx.conf.sample` — проксирует `/` на waitress, статику `web/`

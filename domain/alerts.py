@@ -170,3 +170,101 @@ def find_expiring(
                        pin.get("product"), expires, expires <= at)
             )
     return found
+
+
+# ── Отбор событий, вебхук, тексты ────────────────────────────────────────
+
+import re  # noqa: E402
+
+# Только настоящие вебхуки Discord: пользователь вводит адрес, а запрос
+# шлёт наш сервер — произвольный URL позволил бы обращаться из него к
+# внутренним адресам (SSRF).
+_WEBHOOK_RE = re.compile(r"^https://(?:discord|discordapp)\.com/api/webhooks/\d+/[A-Za-z0-9_\-]+$")
+ALLOWED_LEAD_HOURS = (1, 2, 4, 6, 12, 24)
+MAX_MESSAGE_CHARS = 1900   # у Discord лимит 2000 на сообщение
+
+
+def is_valid_webhook_url(url: str) -> bool:
+    return bool(_WEBHOOK_RE.match(url or ""))
+
+
+def collect_events(
+    colonies: list[dict[str, Any]],
+    at: datetime,
+    *,
+    on_expiry: bool,
+    on_deficit: bool,
+    lead_hours: float,
+    inputs: dict[str, list[str]] | None = None,
+) -> list[tuple[str, str, Deficit | Expiry]]:
+    """[(ключ события, токен состояния, событие)] — см. AlertSent."""
+    events: list[tuple[str, str, Deficit | Expiry]] = []
+    if on_deficit:
+        for d in find_deficits(colonies, at, inputs):
+            key = f"deficit:{d.character_id}:{d.planet_id}:{d.pin_id}"
+            events.append((key, "deficit", d))
+    if on_expiry:
+        for e in find_expiring(colonies, at, lead_hours):
+            key = f"expiry:{e.character_id}:{e.planet_id}:{e.pin_id}"
+            token = f"{e.expires_at.isoformat()}:{'expired' if e.expired else 'soon'}"
+            events.append((key, token[:64], e))
+    return events
+
+
+_TEXT = {
+    "ru": {
+        "title": "PI Director — требует внимания:",
+        "deficit": "дефицит добычи: {place} ({who}) — {product}, {rate} ед./ч (порог {limit})",
+        "risk": "; под угрозой: {chain}",
+        "soon": "экстрактор скоро остановится: {place} ({who}) — {product}, окончание {when} UTC",
+        "expired": "экстрактор остановился: {place} ({who}) — {product}, с {when} UTC",
+        "more": "…и ещё {n}",
+        "test": "PI Director: тестовое сообщение — оповещения подключены.",
+        "unknown": "ресурс неизвестен",
+    },
+    "en": {
+        "title": "PI Director — needs attention:",
+        "deficit": "extraction deficit: {place} ({who}) — {product}, {rate} u/h (threshold {limit})",
+        "risk": "; chain at risk: {chain}",
+        "soon": "extractor stops soon: {place} ({who}) — {product}, ends {when} UTC",
+        "expired": "extractor stopped: {place} ({who}) — {product}, since {when} UTC",
+        "more": "…and {n} more",
+        "test": "PI Director: test message — alerts are connected.",
+        "unknown": "unknown resource",
+    },
+}
+
+
+def webhook_test_message(lang: str) -> str:
+    return _TEXT["en" if lang == "en" else "ru"]["test"]
+
+
+def render_message(events: list[Deficit | Expiry], names: dict[int, str], lang: str) -> str:
+    """Одно сообщение на все новые события; обрезается до лимита Discord."""
+    tx = _TEXT["en" if lang == "en" else "ru"]
+    lines = [tx["title"]]
+    used = len(lines[0])
+    shown = 0
+    for ev in events:
+        place = f"{ev.system} {ev.planet_index}" if ev.planet_index else ev.system
+        who = names.get(ev.character_id, str(ev.character_id))
+        product = ev.product or tx["unknown"]
+        if isinstance(ev, Deficit):
+            line = "• " + tx["deficit"].format(
+                place=place, who=who, product=product,
+                rate=f"{ev.rate_per_hour:,.0f}".replace(",", " "), limit=DEFICIT_UNITS_PER_HOUR,
+            )
+            if ev.at_risk:
+                line += tx["risk"].format(chain=", ".join(ev.at_risk))
+        else:
+            when = ev.expires_at.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M")
+            line = "• " + tx["expired" if ev.expired else "soon"].format(
+                place=place, who=who, product=product, when=when
+            )
+        if used + len(line) + 1 > MAX_MESSAGE_CHARS - 40:
+            lines.append(tx["more"].format(n=len(events) - shown))
+            break
+        lines.append(line)
+        used += len(line) + 1
+        shown += 1
+    return "\n".join(lines)

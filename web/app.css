@@ -1091,3 +1091,9 @@ thead .group th small { color:var(--dim); }
 .rolebadge.excess { color:var(--amber); background:rgba(212,160,74,.15); }
 .rolebadge.direct { color:var(--t-p2); background:var(--t-p2-bg); }
 body.light .rolebadge.excess { background:rgba(154,107,18,.12); }
+
+/* Оповещения в Discord (настройки) */
+#alertsCard { margin-top:12px; }
+#alertsCard input[type=password] { width:100%; max-width:520px; box-sizing:border-box; margin:6px 0; }
+.alerts-row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin:6px 0; }
+.alerts-row label { display:flex; gap:6px; align-items:center; }

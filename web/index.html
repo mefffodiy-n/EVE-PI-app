@@ -197,6 +197,33 @@
       </div>
     </div>
 
+    <div class="step-card hud-corner" id="alertsCard">
+      <div class="step-head">
+        <span class="step-title" data-i18n="alertsTitle">Оповещения в Discord</span>
+        <button type="button" class="help-tag" onclick="openModal('help','h-alerts')"
+                data-i18n-title="help" title="Справка">?</button>
+      </div>
+      <div class="step-body">
+        <div class="poco-profit-note" data-i18n="alertsIntro"></div>
+        <div id="alertsStatus" class="poco-profit-note"></div>
+        <input id="alertsUrl" type="password" autocomplete="off" spellcheck="false"
+               data-i18n-ph="alertsUrlPh" placeholder="https://discord.com/api/webhooks/…">
+        <div class="alerts-row">
+          <label><input type="checkbox" id="alertsOnExpiry" checked>
+            <span data-i18n="alertsOnExpiry">Истечение экстрактора за</span></label>
+          <select id="alertsLead"></select>
+          <label><input type="checkbox" id="alertsOnDeficit" checked>
+            <span data-i18n="alertsOnDeficit">Дефицит добычи</span></label>
+        </div>
+        <div class="alerts-row">
+          <button class="mini" onclick="saveAlerts()" data-i18n="alertsSave">Сохранить</button>
+          <button class="mini" id="alertsTestBtn" onclick="testAlerts()" data-i18n="alertsTest">Тест</button>
+          <button class="mini" id="alertsToggleBtn" onclick="toggleAlerts()"></button>
+          <button class="mini" id="alertsDeleteBtn" onclick="deleteAlerts()" data-i18n="alertsDelete">Удалить</button>
+        </div>
+      </div>
+    </div>
+
     <div class="action-bar">
       <button class="run" onclick="calculate()" data-i18n="build">Построить план</button>
       <div class="save-inline">

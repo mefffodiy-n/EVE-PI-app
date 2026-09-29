@@ -92,7 +92,7 @@ const T={
   jobsNever:'ни разу не запускался',jobsFailingCount:'падает {n}-й раз подряд',
   jobServerStatus:'Статус сервера',jobMarketPrices:'Рыночные цены',
   jobRefreshTokens:'Обновление токенов ESI',jobSyncSkills:'Скиллы персонажей',
-  jobSyncColonies:'Статус колоний',jobBackup:'Резервная копия',jobRefreshSde:'Скелет планет из SDE',jobVerifyBackup:'Проверка копии',
+  jobSyncColonies:'Статус колоний',jobBackup:'Резервная копия',jobRefreshSde:'Скелет планет из SDE',jobVerifyBackup:'Проверка копии',jobSendAlerts:'Оповещения в Discord',
   unlinkedRevoked:'Персонаж отвязан, доступ отозван и на стороне CCP',
   unlinkedLocalOnly:'Персонаж отвязан на нашей стороне (секрет приложения не задан — настоящий отзыв недоступен)',
   planetSlots:'слотов планет',purchaseP1:'Покупать весь P1 на бирже (не строить добычу)',wholeRegion:'Весь регион',clearAll:'Снять всё',nothingChosen:'ничего не выбрано',systems:'систем',selectAll:'Выбрать все',pickProducts:'Выберите хотя бы один продукт',pickConst:'Выберите хотя бы одно созвездие',export:'Экспорт в Excel',jumpPlan:'↑ План',jumpColonies:'↓ Мои колонии',jumpShopping:'↓ Список закупки',shopping:'Список закупки: командные центры',shopTotal:'Всего командных центров',exportEmpty:'Нечего экспортировать: нет ни плана, ни колоний',exportFail:'Не удалось выгрузить файл',profitTitle:'Что выгоднее производить',collectedAgo:'снимок собран',minutesAgo:'мин назад',stale:'устарел',colProduct:'Продукт',colColonies:'Планет',colPerColony:'ISK / колония-час',colPerHour:'ISK / час',colPrice:'Цена за единицу',noPrice:'нет цены',noSnapshot:'Снимок цен не собран',advDeficit:'Персонажей не хватает на эту цепочку',advSurplus:'Персонажей больше, чем нужно',advDeficitLead:'Полный цикл требует {need} колоний, а в пуле {have} слотов. Вот что поместится целиком:',advSurplusLead:'Выбранное занимает {need} колоний из {have}. Свободно {spare} — можно добавить:',advTake:'Взять',advIgnoreDeficit:'Строить как есть',advIgnoreSurplus:'Занять свободных добычей',advIgnoreDeficitHint:'план будет с дефицитом сырья',advIgnoreSurplusHint:'добыча сырья той же цепочки, по убыванию дефицитности',advDuplicateChain:'Можно продублировать всю цепочку ещё {n} раз(а)',linesPerTarget:'Линий на цепочку',colonies3:'колоний',excess:'Добыча (избыток)',mSpread:'Разброс по системам',logi:'всего задействовано',systemsAvg:'систем на персонажа',sysOne:'система',sysFew:'системы',sysMany:'систем',logiGood:'колонии собраны компактно',logiPoor:'урожай придётся собирать в разъездах',mColonies:'Колоний в плане',mChars:'Персонажей занято',mPeak:'Самая нагруженная',mShort:'Не хватает персонажей',planClosed:'план закрыт',fitsUpTo:'двойной шаблон помещается на планеты до',km:'км',suitableHere:'подходящих планет в системе',ofThem:'из них',decisionTitle:'План упёрся в размер планет',decisionText:'В выбранной домашней системе двойной шаблон не помещается ни на одну планету. Выберите, как поступить.',chooseOther:'Выбрать другую систему',useSingle:'Ставить по одному шаблону',singleNote:'планет и персонажей потребуется вдвое больше',savedPlans:'Сохранённые планы',save:'Сохранить',load:'Открыть',del:'Удалить',compare:'Сравнить',noSaved:'Пока ничего не сохранено',saveFirst:'Сначала постройте план',pickTwo:'Отметьте два плана для сравнения',cmpTitle:'Разница',colonies2:'колоний',chars2:'персонажей',peak2:'пиковая загрузка',onlyLeft:'Только в первом',onlyRight:'Только во втором',same:'Совпало',
@@ -130,7 +130,7 @@ const T={
   themeTitle:'Тема',moreTitle:'Ещё',viewList:'Список по персонажам',viewGrid:'Сетка',sortTitle:'Сортировка',loadLbl:'Загрузка',
   inGameColonies:'Мои колонии в игре',cycOver:'программа завершена',cycIdle:'программа не запущена',
   hUnit:'ч',minUnit:'мин',dUnit:'д',pPin:['пин','пина','пинов'],
-  progEnds:'до конца программы экстрактора',syncedColony:'колония в игре',pocoTrendPriceCol:'Цена, 30 дн.',pocoTrendTitle:'Динамика выручки по ценам Jita buy ({n} дн. с данными):',pocoTrendNoHistory:'История цен копится — динамика появится, когда наберётся хотя бы два дня.',tplDownload:'Шаблон для игры',tplHint:'Скачать JSON-шаблон застройки этой колонии для импорта в игру (уровень ЦУ — персонажа).',tplAdaptHint:'Планета не Barren: типы структур в шаблоне заменены под её тип — в игре не проверено.',
+  progEnds:'до конца программы экстрактора',syncedColony:'колония в игре',alertsTitle:'Оповещения в Discord',alertsIntro:'Сообщение в ваш Discord-канал, когда колония в дефиците добычи или экстрактор скоро остановится. Проверка раз в 30 минут, каждое событие приходит один раз.',alertsUrlPh:'Адрес вебхука Discord (https://discord.com/api/webhooks/…)',alertsOnExpiry:'Истечение экстрактора за',alertsHours:'ч',alertsOnDeficit:'Дефицит добычи',alertsSave:'Сохранить',alertsTest:'Тест',alertsDisable:'Выключить',alertsEnable:'Включить',alertsDelete:'Удалить',alertsSigninNeeded:'Войдите через EVE SSO, чтобы настроить оповещения.',alertsNotSet:'Не настроено.',alertsActive:'Включено, вебхук {hint}',alertsOff:'Выключено, вебхук {hint}',alertsLastSent:'последняя отправка: {when}',alertsLastError:'последняя ошибка: {err}',alertsSaved:'Сохранено.',alertsTestSent:'Тестовое сообщение отправлено.',alertsErr_gone:'вебхук недействителен, подписка отключена — сохраните новый адрес',alertsErr_rate:'Discord ограничил частоту, повтор при следующей проверке',alertsErr_error:'не удалось отправить, повтор при следующей проверке',alertsErr_decrypt:'адрес вебхука не расшифровывается — сохраните его заново',pocoTrendPriceCol:'Цена, 30 дн.',pocoTrendTitle:'Динамика выручки по ценам Jita buy ({n} дн. с данными):',pocoTrendNoHistory:'История цен копится — динамика появится, когда наберётся хотя бы два дня.',tplDownload:'Шаблон для игры',tplHint:'Скачать JSON-шаблон застройки этой колонии для импорта в игру (уровень ЦУ — персонажа).',tplAdaptHint:'Планета не Barren: типы структур в шаблоне заменены под её тип — в игре не проверено.',
   procCycleLbl:'до конца цикла переработки',
   procDepletionLbl:'до конца запаса сырья в причале',
   cycNoFactory:'ESI не отдаёт состояние фабрик — только экстракторы',
@@ -176,7 +176,7 @@ const T={
   jobsNever:'never ran',jobsFailingCount:'failing {n} time(s) in a row',
   jobServerStatus:'Server status',jobMarketPrices:'Market prices',
   jobRefreshTokens:'ESI token refresh',jobSyncSkills:'Character skills',
-  jobSyncColonies:'Colony status',jobBackup:'Backup',jobRefreshSde:'Planet skeleton from SDE',jobVerifyBackup:'Backup check',
+  jobSyncColonies:'Colony status',jobBackup:'Backup',jobRefreshSde:'Planet skeleton from SDE',jobVerifyBackup:'Backup check',jobSendAlerts:'Discord alerts',
   unlinkedRevoked:'Character unlinked — access revoked on CCP’s side too',
   unlinkedLocalOnly:'Character unlinked on our side (no app secret configured — real revocation unavailable)',
   planetSlots:'planet slots',purchaseP1:'Buy all P1 on the market (do not build extraction)',wholeRegion:'Whole region',clearAll:'Clear all',nothingChosen:'nothing selected',systems:'systems',selectAll:'Select all',pickProducts:'Select at least one product',pickConst:'Select at least one constellation',export:'Export to Excel',jumpPlan:'↑ Plan',jumpColonies:'↓ My colonies',jumpShopping:'↓ Shopping list',shopping:'Shopping list: command centres',shopTotal:'Command centres in total',exportEmpty:'Nothing to export: no plan and no colonies',exportFail:'Export failed',profitTitle:'What is most profitable to produce',collectedAgo:'snapshot taken',minutesAgo:'min ago',stale:'stale',colProduct:'Product',colColonies:'Planets',colPerColony:'ISK / colony-hour',colPerHour:'ISK / hour',colPrice:'Unit price',noPrice:'no price',noSnapshot:'No price snapshot yet',advDeficit:'Not enough characters for this chain',advSurplus:'More characters than needed',advDeficitLead:'A full cycle needs {need} colonies, the pool has {have} slots. These fit entirely:',advSurplusLead:'Your choice takes {need} of {have} colonies. {spare} free — you could add:',advTake:'Take',advIgnoreDeficit:'Build as is',advIgnoreSurplus:'Put spare on extraction',advIgnoreDeficitHint:'the plan will report a raw material shortage',advIgnoreSurplusHint:'extraction of the same chain, scarcest first',advDuplicateChain:'You can repeat the whole chain {n} more time(s)',linesPerTarget:'Lines per chain',colonies3:'colonies',excess:'Extraction (surplus)',mSpread:'Systems per character',logi:'systems used in total',systemsAvg:'systems each',sysOne:'system',sysFew:'systems',sysMany:'systems',logiGood:'colonies are compact',logiPoor:'harvesting will need travel',mColonies:'Colonies in the plan',mChars:'Characters used',mPeak:'Most loaded',mShort:'Characters missing',planClosed:'plan is complete',fitsUpTo:'a double template fits planets up to',km:'km',suitableHere:'suitable planets in this system',ofThem:'of them',decisionTitle:'The plan hit planet size limits',decisionText:'No planet in the chosen home system fits a double template. Pick how to proceed.',chooseOther:'Pick another system',useSingle:'Use single templates',singleNote:'twice as many planets and characters will be needed',savedPlans:'Saved plans',save:'Save',load:'Open',del:'Delete',compare:'Compare',noSaved:'Nothing saved yet',saveFirst:'Build a plan first',pickTwo:'Tick two plans to compare',cmpTitle:'Difference',colonies2:'colonies',chars2:'characters',peak2:'peak load',onlyLeft:'Only in the first',onlyRight:'Only in the second',same:'Unchanged',
@@ -214,7 +214,7 @@ const T={
   themeTitle:'Theme',moreTitle:'More',viewList:'By character',viewGrid:'Grid',sortTitle:'Sort',loadLbl:'Load',
   inGameColonies:'My in-game colonies',cycOver:'program ended',cycIdle:'no program running',
   hUnit:'h',minUnit:'min',dUnit:'d',pPin:['pin','pins','pins'],
-  progEnds:'until the extraction program ends',syncedColony:'built in game',pocoTrendPriceCol:'Price, 30 d',pocoTrendTitle:'Revenue trend at Jita buy prices ({n} days with data):',pocoTrendNoHistory:'Price history is still accumulating — the trend appears after at least two days.',tplDownload:'In-game template',tplHint:'Download this colony\'s build template as JSON for in-game import (command center level = the character\'s).',tplAdaptHint:'Not a Barren planet: structure types in the template are swapped for its type — not verified in game.',
+  progEnds:'until the extraction program ends',syncedColony:'built in game',alertsTitle:'Discord alerts',alertsIntro:'A message to your Discord channel when a colony is in an extraction deficit or an extractor is about to stop. Checked every 30 minutes; each event is sent once.',alertsUrlPh:'Discord webhook URL (https://discord.com/api/webhooks/…)',alertsOnExpiry:'Extractor expiry within',alertsHours:'h',alertsOnDeficit:'Extraction deficit',alertsSave:'Save',alertsTest:'Test',alertsDisable:'Turn off',alertsEnable:'Turn on',alertsDelete:'Delete',alertsSigninNeeded:'Sign in with EVE SSO to set up alerts.',alertsNotSet:'Not set up.',alertsActive:'On, webhook {hint}',alertsOff:'Off, webhook {hint}',alertsLastSent:'last sent: {when}',alertsLastError:'last error: {err}',alertsSaved:'Saved.',alertsTestSent:'Test message sent.',alertsErr_gone:'the webhook is invalid, the subscription was turned off — save a new URL',alertsErr_rate:'Discord rate-limited us, will retry on the next check',alertsErr_error:'could not send, will retry on the next check',alertsErr_decrypt:'the webhook URL cannot be decrypted — save it again',pocoTrendPriceCol:'Price, 30 d',pocoTrendTitle:'Revenue trend at Jita buy prices ({n} days with data):',pocoTrendNoHistory:'Price history is still accumulating — the trend appears after at least two days.',tplDownload:'In-game template',tplHint:'Download this colony\'s build template as JSON for in-game import (command center level = the character\'s).',tplAdaptHint:'Not a Barren planet: structure types in the template are swapped for its type — not verified in game.',
   procCycleLbl:'until the processing cycle ends',
   procDepletionLbl:'until raw materials in the launchpad run out',
   cycNoFactory:'ESI does not expose factory state — extractors only',
@@ -240,7 +240,7 @@ function applyLang(){
   document.querySelectorAll('.lang button').forEach(b=>b.classList.toggle('on',b.dataset.lang===lang));
   store.set('pi-lang',lang);
   renderDataChip(); renderMeta();
-  buildSortMenu(); renderCrew(); renderDash(); renderShopping(); renderProfit(); renderPocoProfit(); renderColonies(); renderColoniesProfit(); renderSaved();
+  renderAlerts(); buildSortMenu(); renderCrew(); renderDash(); renderShopping(); renderProfit(); renderPocoProfit(); renderColonies(); renderColoniesProfit(); renderSaved();
   if(allProducts.length){ renderProducts(); renderConstellations(); } if(plan.length){renderAnswers(); renderTable();}
   if(document.getElementById('modal').classList.contains('on')) openModal(currentModal);
   if(currentColony && document.getElementById('colonyPage').classList.contains('on')) openColony(currentColony);
@@ -2489,6 +2489,80 @@ async function loadRevenueTrend(items){
   }catch(e){ /* история вторична: без неё панель работает как раньше */ }
 }
 
+/* ── Оповещения в Discord (C3) ───────────────────────────────────
+   Настройки подписки аккаунта; рассылает сборщик send_alerts.py, здесь
+   только сохранение и кнопка «Тест». Адрес вебхука после сохранения
+   приходит обратно только маской. */
+let alertsState=null, alertsMsg='';
+async function alertsApi(method,body,path){
+  const r=await fetch(`${API}/alerts${path||''}`,{method,headers:{'Content-Type':'application/json'},
+    body:body?JSON.stringify(Object.assign({lang},body)):undefined});
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(d.message||`HTTP ${r.status}`);
+  return d;
+}
+async function loadAlerts(){
+  try{ alertsState=await alertsApi('GET'); }catch(e){ alertsState=null; alertsMsg=''; }
+  renderAlerts();
+}
+function alertsErrText(raw){
+  if(!raw) return '';
+  const i=raw.indexOf(':'), code=i<0?raw:raw.slice(0,i), detail=i<0?'':raw.slice(i+1);
+  return t('alertsErr_'+code)+(detail&&detail!=='invalid_url'?` (${detail})`:'');
+}
+function renderAlerts(){
+  const card=document.getElementById('alertsCard'); if(!card) return;
+  const sel=document.getElementById('alertsLead');
+  const st=document.getElementById('alertsStatus');
+  const s=alertsState;
+  const lead=s&&s.configured?s.expiry_lead_hours:2;
+  sel.innerHTML=((s&&s.allowed_lead_hours)||[1,2,4,6,12,24]).map(h=>`<option value="${h}"${h===lead?' selected':''}>${h} ${t('alertsHours')}</option>`).join('');
+  const bits=[];
+  if(!s) bits.push(t('alertsSigninNeeded'));
+  else if(!s.configured) bits.push(t('alertsNotSet'));
+  else{
+    bits.push(fmt(t(s.enabled?'alertsActive':'alertsOff'),{hint:s.webhook_hint}));
+    if(s.last_sent_at) bits.push(fmt(t('alertsLastSent'),{when:new Date(s.last_sent_at).toLocaleString(lang==='en'?'en-GB':'ru-RU')}));
+    if(s.last_error) bits.push(`<span style="color:var(--alarm)">${fmt(t('alertsLastError'),{err:alertsErrText(s.last_error)})}</span>`);
+  }
+  if(alertsMsg) bits.push(alertsMsg);
+  st.innerHTML=bits.join(' · ');
+  if(s&&s.configured){
+    document.getElementById('alertsOnExpiry').checked=s.on_expiry;
+    document.getElementById('alertsOnDeficit').checked=s.on_deficit;
+  }
+  const on=!!(s&&s.configured);
+  ['alertsTestBtn','alertsToggleBtn','alertsDeleteBtn'].forEach(id=>document.getElementById(id).style.display=on?'':'none');
+  document.getElementById('alertsToggleBtn').textContent=t(on&&s.enabled?'alertsDisable':'alertsEnable');
+  ['alertsUrl','alertsOnExpiry','alertsLead','alertsOnDeficit'].forEach(id=>document.getElementById(id).disabled=!s);
+}
+async function saveAlerts(){
+  const url=document.getElementById('alertsUrl').value.trim();
+  const body={on_expiry:document.getElementById('alertsOnExpiry').checked,
+    on_deficit:document.getElementById('alertsOnDeficit').checked,
+    expiry_lead_hours:parseInt(document.getElementById('alertsLead').value,10)};
+  if(url) body.webhook_url=url;
+  try{
+    alertsState=await alertsApi('PUT',body); alertsMsg=t('alertsSaved');
+    document.getElementById('alertsUrl').value='';
+  }catch(e){ alertsMsg=`<span style="color:var(--alarm)">${e.message}</span>`; }
+  renderAlerts();
+}
+async function testAlerts(){
+  try{ await alertsApi('POST',{},'/test'); alertsMsg=t('alertsTestSent'); }
+  catch(e){ alertsMsg=`<span style="color:var(--alarm)">${e.message}</span>`; }
+  renderAlerts();
+}
+async function toggleAlerts(){
+  try{ alertsState=await alertsApi('PUT',{enabled:!(alertsState&&alertsState.enabled)}); alertsMsg=''; }
+  catch(e){ alertsMsg=`<span style="color:var(--alarm)">${e.message}</span>`; }
+  renderAlerts();
+}
+async function deleteAlerts(){
+  try{ await alertsApi('DELETE'); await loadAlerts(); alertsMsg=''; }
+  catch(e){ alertsMsg=`<span style="color:var(--alarm)">${e.message}</span>`; renderAlerts(); }
+}
+
 /* ── Панель колонии: разбор по структурам, как в игре ─────────── */
 let currentColony=null;
 
@@ -2950,6 +3024,17 @@ const DOC={
    типов планет программа заменяет типы структур, но в игре это не проверено.
    Шаблон добычи привязан к сырью планеты и для другого типа не переделывается.</p>
 
+   <h3 id="h-alerts">Оповещения в Discord</h3>
+   <p>В «Настройках» можно подключить вебхук Discord-канала: программа напишет туда, когда
+   колония в дефиците добычи (меньше 48 000 ед./ч; если цепочку держит настоящая колония —
+   с её названием) или программа экстрактора скоро закончится (за 1–24 часа на выбор) либо
+   уже закончилась. Проверка идёт раз в 30 минут, каждое событие приходит один раз и
+   повторяется, только если состояние изменилось. Оповещения относятся ко всем персонажам
+   вашего аккаунта. Принимается только адрес вида discord.com/api/webhooks/…; после
+   сохранения он показывается лишь маской. Кнопка «Тест» шлёт одно сообщение в ваш канал
+   (не чаще раза в минуту). Если вебхук удалён, подписка отключится сама — об этом будет
+   сказано здесь же. Нужно, чтобы на сервере был задан ключ шифрования токенов.</p>
+
    <h3 id="h-staffing">Если персонажей не хватает или слишком много</h3>
    <p>Как только вы отметили целевые продукты, программа считает, поместится ли
    полный цикл в ваш пул. Учитываются не только слоты планет, но и прокачка:
@@ -3222,6 +3307,16 @@ const DOC={
    it was saved for: factory templates are saved for Barren, and for other planet
    types the program swaps structure types, but this is not verified in game.
    A mining template is tied to the planet's resource and is not converted to another type.</p>
+
+   <h3 id="h-alerts">Discord alerts</h3>
+   <p>In "Settings" you can connect a Discord channel webhook: the program writes there when a
+   colony is in an extraction deficit (below 48,000 u/h; with the chain's name if a real colony
+   holds it) or an extractor program is about to end (1–24 hours ahead, your choice) or has
+   already ended. It checks every 30 minutes, each event is sent once and repeats only when its
+   state changes. Alerts cover all characters of your account. Only a discord.com/api/webhooks/…
+   address is accepted; after saving it is shown only as a mask. The "Test" button sends one
+   message to your channel (at most once a minute). If the webhook is deleted the subscription
+   turns itself off — this is shown here. The server needs the token encryption key set.</p>
 
    <h3 id="h-staffing">If you have too few or too many characters</h3>
    <p>As soon as you tick the target products, the app checks whether a full cycle
@@ -3571,7 +3666,7 @@ function renderMeta(){
 const JOB_LABEL_KEYS={
   server_status:'jobServerStatus',market_prices:'jobMarketPrices',
   refresh_tokens:'jobRefreshTokens',sync_skills:'jobSyncSkills',
-  sync_colonies:'jobSyncColonies',backup:'jobBackup',refresh_sde:'jobRefreshSde',verify_backup:'jobVerifyBackup',
+  sync_colonies:'jobSyncColonies',backup:'jobBackup',refresh_sde:'jobRefreshSde',verify_backup:'jobVerifyBackup',send_alerts:'jobSendAlerts',
 };
 function renderJobsChip(){
   const chip=document.getElementById('chipJobs'); if(!chip) return;
@@ -4268,7 +4363,7 @@ lang=store.get('pi-lang','ru');
 
 measureTopbar(); measureTools();
 handleAuthRedirect();
-boot(); loadMeta(); loadCrew(); checkAdminAccess(); loadProfit(); loadColonies(); loadSaved(); applyLang();
+boot(); loadMeta(); loadCrew(); checkAdminAccess(); loadProfit(); loadColonies(); loadSaved(); loadAlerts(); applyLang();
 // Онлайн меняется медленно; снимок обновляет фоновый сборщик,
 // поэтому опрашиваем раз в минуту и только читаем готовое.
 setInterval(loadMeta, 60000);

@@ -96,6 +96,11 @@ def _backup() -> int:
     return run()
 
 
+def _send_alerts() -> int:
+    from scripts.send_alerts import main as run
+    return run()
+
+
 def _verify_backup() -> int:
     from scripts.verify_backup import main as run
     return run()
@@ -119,6 +124,8 @@ JOBS = [
     Job("Статус колоний", "sync_colonies", _sync_colonies, 30,
         "таймеры экстракторов; фронт считает обратный отсчёт сам, "
         "сбор нужен на случай перезапуска программы"),
+    Job("Оповещения в Discord", "send_alerts", _send_alerts, 30,
+        "идёт после статуса колоний: дефицит и истечение экстракторов, повтор только при смене состояния"),
     Job("Резервная копия", "backup", _backup, 1440,
         "раз в сутки: база и снимки кэша, старые чистятся"),
     Job("Проверка копии", "verify_backup", _verify_backup, 10080,

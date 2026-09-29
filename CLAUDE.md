@@ -40,7 +40,7 @@ Polyaramids) и удалён несуществующий `Positron Cord`.
 страницы читают готовые снимки. Проверяется тестом: `urlopen` подменяется на
 исключение, и эндпоинт всё равно обязан ответить.
 
-Исключение — `/api/auth/*` (Фаза 3), и оно двойное:
+Исключение — `/api/auth/*` (Фаза 3), и оно двойное (плюс кнопка «Тест» оповещений — см. ниже):
 
 1. Обмен OAuth-кода на токен — синхронный вызов к `login.eveonline.com`
    прямо в обработчике: без него колбэк не имеет смысла. Разовое
@@ -58,6 +58,13 @@ Polyaramids) и удалён несуществующий `Positron Cord`.
    повторным.
 
 Дальше токены обновляет фоновый `refresh_tokens`, а не обработчик.
+
+Ещё одно разовое действие пользователя — кнопка «Тест» оповещений
+(`POST /api/alerts/test`, C3): один POST в ЕГО же вебхук Discord, не
+чаще раза в минуту на аккаунт. Адрес вебхука принимается только вида
+`https://discord.com|discordapp.com/api/webhooks/…` (`domain/alerts.py`,
+защита от SSRF: пользователь вводит адрес, запрос шлёт наш сервер).
+Сами оповещения рассылает только сборщик `scripts/send_alerts.py`.
 
 **4. Flask, не FastAPI. Никакого Docker.** Обычное WSGI-приложение за nginx.
 БД — SQLAlchemy 2.0 + Alembic, адрес в `PI_DATABASE_URL` (`infra/config.py`).
@@ -137,7 +144,7 @@ domain/           расчёты, без Flask и без сети
   poco_tax.py     прибыльность плана и настоящих колоний с учётом POCO
   logistics.py    пропускная способность причала между тирами (см. docs/DOMAIN.md)
   advice.py       подсказки по вместимости пула персонажей
-  alerts.py       события оповещений: дефицит добычи и истечение экстракторов (C3)
+  alerts.py       оповещения (C3): дефицит добычи, истечение экстракторов, тексты RU/EN, проверка адреса вебхука
   direct_p2.py    P2 целиком на добывающей планете (приостановлено, см. docs/ROADMAP.md)
   plan_storage.py сохранение и сравнение планов (таблица plans)
   price_history.py история цен (price_samples) и динамика выручки плана
@@ -147,7 +154,7 @@ domain/           расчёты, без Flask и без сети
 infra/            конфиг окружения и доступ к БД (общий для domain/api/scripts)
   config.py       PI_ENV, PI_DATABASE_URL, настройки EVE SSO — чтение env
   db.py           движок SQLAlchemy, session_scope, декларативная база
-  models.py       ORM-модели: characters, plans, credentials, colonies, price_samples,
+  models.py       ORM-модели: characters, plans, credentials, colonies, price_samples, alert_subscriptions/alert_sent,
                   regions/planets (справочник планет, см. domain/planets.py)
   crypto.py       шифрование токенов ESI перед записью в БД (Fernet)
   credentials.py  запись зашифрованных токенов (общее для auth и refresh_tokens)
@@ -161,7 +168,8 @@ api/              Flask, только чтение готовых данных
   __init__.py     фабрика приложения, отдача web/, обработка ошибок
   cache.py        LRU-кэш, ETag, разбор тела запроса
   blueprints/     reference, plans, market, export, meta (+ /colonies), auth (правило 3),
-                  admin (/api/admin — allowlist PI_ADMIN_CHARACTER_IDS, Фаза 3)
+                  admin (/api/admin — allowlist PI_ADMIN_CHARACTER_IDS, Фаза 3),
+                  alerts (/api/alerts — подписка аккаунта на Discord, C3)
 
 scripts/          всё, что ходит в сеть или готовит данные
   esi_client.py            единая точка обращений к ESI-API
@@ -176,6 +184,7 @@ scripts/          всё, что ходит в сеть или готовит д
   serve.py                 production-запуск через waitress (не run.py)
   backup.py                копия БД и снимков кэша, чистка старых
   verify_backup.py         раз в неделю: последняя копия разворачивается на пустой БД
+  send_alerts.py           оповещения в Discord: дефицит и истечение экстракторов (C3)
   extract_schematics.py    количества вход/выход из шаблонов
   seed_dev_characters.py   заглушки персонажей (нет ESI-токенов)
   diagnose.py              самодиагностика
