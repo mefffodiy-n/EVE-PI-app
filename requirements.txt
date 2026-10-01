@@ -32,7 +32,7 @@ psycopg[binary]>=3.1
 # EVE SSO (OAuth2 + PKCE, Фаза 3): шифрование токенов at rest и проверка
 # JWT по JWKS. Без действующего client_id auth-слой отдаёт 503.
 cryptography>=42
-PyJWT[crypto]>=2.8
+PyJWT[crypto]>=2.15.0
 
 # WSGI-сервер для production. Docker не используется — приложение
 # разворачивается как обычный процесс за nginx.
